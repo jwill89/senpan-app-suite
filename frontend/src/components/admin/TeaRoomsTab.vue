@@ -28,7 +28,7 @@ import { useTeaRoomsStore } from '@/stores/teaRooms'
 import { useUiStore } from '@/stores/ui'
 import { assetUrl } from '@/lib/assets'
 import { formatServerTimestamp } from '@/lib/datetime'
-import type { TeaRoom } from '@/types/api'
+import type { TeaRoom } from '@/api/client'
 
 const store = useTeaRoomsStore()
 const ui = useUiStore()
@@ -40,7 +40,7 @@ const ui = useUiStore()
  * (apps.senpan.cafe in production).
  */
 function publicApiUrl(roomNumber?: string): string {
-  const base = `${window.location.origin}/api/tea-rooms/public`
+  const base = `${window.location.origin}/api/v1/tea-rooms/public`
   return roomNumber ? `${base}/${encodeURIComponent(roomNumber)}` : base
 }
 function copyApiLink(roomNumber?: string): void {
@@ -64,14 +64,14 @@ function onReorder(): void {
 /** Cost line for a room, halved (50% off) with a note when discounted. */
 function costText(t: TeaRoom): string {
   if (t.discounted) {
-    return `${Math.floor(t.cost_per_half_hour / 2).toLocaleString()} gil/half hour (50% off)`
+    return `${Math.floor(t.costPerHalfHour / 2).toLocaleString()} gil/half hour (50% off)`
   }
-  return `${t.cost_per_half_hour.toLocaleString()} gil/half hour`
+  return `${t.costPerHalfHour.toLocaleString()} gil/half hour`
 }
 
 /** Lock line for a room: when the lock lifts, or that it waits on a person. */
 function lockText(t: TeaRoom): string {
-  const at = formatServerTimestamp(t.locked_until)
+  const at = formatServerTimestamp(t.lockedUntil)
   return at ? `Locked until ${at}` : 'Locked'
 }
 
@@ -256,8 +256,8 @@ async function submitWebhook(): Promise<void> {
 
             <h4 class="list-row-title">
               {{ t.name }}
-              <span v-if="t.room_number" class="text-muted fw-normal"
-                >- Room {{ t.room_number }}</span
+              <span v-if="t.roomNumber" class="text-muted fw-normal"
+                >- Room {{ t.roomNumber }}</span
               >
             </h4>
             <p v-if="t.subtitle" class="text-sm text-muted list-row-meta list-row-meta--inline">
@@ -331,7 +331,7 @@ async function submitWebhook(): Promise<void> {
                 class="btn-view btn-sm"
                 aria-label="Copy this room's API link"
                 title="Copy this room's API link"
-                @click="copyApiLink(t.room_number)"
+                @click="copyApiLink(t.roomNumber)"
               >
                 <font-awesome-icon :icon="['fas', 'link']" />
               </button>

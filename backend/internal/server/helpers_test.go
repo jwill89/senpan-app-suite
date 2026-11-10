@@ -16,25 +16,33 @@ import (
 // raffle-enter and garapon-draw handlers tell their page themselves.
 func TestAdminMutationResource(t *testing.T) {
 	mapped := map[string]string{
-		"/api/garapons":                              "garapons",
-		"/api/garapons/5/players":                    "garapons",
-		"/api/raffles":                               "raffles",
-		"/api/raffles/9/entries":                     "raffles",
-		"/api/v1/presets/4":                          "presets",
-		"/api/users":                                 "users",
-		"/api/v1/users/7":                            "users",
-		"/api/announcements":                         "announcements",
-		"/api/announcement-types":                    "announcements",
-		"/api/announcement-roles":                    "announcements",
-		"/api/book-clubs/yaoi/reading-lists":         "bookclub-yaoi",
-		"/api/book-clubs/yuri/reading-lists/3/items": "bookclub-yuri",
-		"/api/v1/winners-log/all":                    "winners-log",
-		"/api/fonts":                                 "fonts",
-		"/api/fonts/upload":                          "fonts",
-		"/api/carrd/projects":                        "carrd",
-		"/api/images":                                "images",
-		"/api/images/upload":                         "images",
-		"/api/image-categories":                      "images",
+		"/api/garapons":                                 "garapons",
+		"/api/garapons/5/players":                       "garapons",
+		"/api/v1/raffles":                               "raffles",
+		"/api/v1/raffles/9/entries":                     "raffles",
+		"/api/v1/raffles/9/entries/4/settle":            "raffles",
+		"/api/v1/presets/4":                             "presets",
+		"/api/v1/affiliates/2/post":                     "affiliates",
+		"/api/v1/affiliates/reorder":                    "affiliates",
+		"/api/v1/tea-rooms":                             "tea-rooms",
+		"/api/v1/tea-rooms/3/post":                      "tea-rooms",
+		"/api/v1/tea-rooms/reorder":                     "tea-rooms",
+		"/api/users":                                    "users",
+		"/api/v1/users/7":                               "users",
+		"/api/v1/announcements":                         "announcements",
+		"/api/v1/announcements/4/send":                  "announcements",
+		"/api/v1/announcement-types":                    "announcements",
+		"/api/v1/announcement-roles/2":                  "announcements",
+		"/api/v1/book-clubs/yaoi/reading-lists":         "bookclub-yaoi",
+		"/api/v1/book-clubs/yuri/reading-lists/3/items": "bookclub-yuri",
+		"/api/v1/book-clubs/yuri/webhook":               "bookclub-yuri",
+		"/api/v1/winners-log/all":                       "winners-log",
+		"/api/fonts":                                    "fonts",
+		"/api/fonts/upload":                             "fonts",
+		"/api/carrd/projects":                           "carrd",
+		"/api/images":                                   "images",
+		"/api/images/upload":                            "images",
+		"/api/image-categories":                         "images",
 	}
 	for path, want := range mapped {
 		got, ok := server.AdminMutationResourceForTest(path)
@@ -45,7 +53,8 @@ func TestAdminMutationResource(t *testing.T) {
 
 	excluded := []string{
 		"/api/garapon/abc123/draw", // public draw - its handler tells garapons
-		"/api/raffles/9/enter",     // public sign-up - its handler tells raffles
+		"/api/v1/raffles/9/enter",  // public sign-up - its operation tells raffles
+		"/api/v1/raffles/9/lookup", // public search - changes nothing
 		"/api/garapon/abc123",      // public token view
 		"/api/v1/auth/login",       // signing in
 		"/api/v1/me/token",         // self-service
@@ -56,7 +65,7 @@ func TestAdminMutationResource(t *testing.T) {
 		"/api/v1/settings",         // settings_changed
 		"/api/v1/patterns/2/move",  // patterns_changed
 		"/api/v1/pattern-categories",
-		"/api/book-clubs",
+		"/api/v1/book-clubs",
 		"/api/unknown",
 	}
 	for _, path := range excluded {
@@ -160,35 +169,4 @@ func TestSanitizeGaraponPrizes(t *testing.T) {
 			t.Error("expected error for multiple grand prizes")
 		}
 	})
-}
-
-// -- isDiscordSnowflake -------------------------------------------------------
-
-func TestIsDiscordSnowflake(t *testing.T) {
-	if !server.IsDiscordSnowflakeForTest("123456789012345678") {
-		t.Error("all-digit id should be a snowflake")
-	}
-	for _, bad := range []string{"", "12a45", " 123", "12.3", "abc"} {
-		if server.IsDiscordSnowflakeForTest(bad) {
-			t.Errorf("%q should not be a snowflake", bad)
-		}
-	}
-}
-
-// -- parseRaffleTime ----------------------------------------------------------
-
-func TestParseRaffleTime(t *testing.T) {
-	if _, ok := server.ParseRaffleTimeForTest(""); ok {
-		t.Error("empty string should report ok=false (no constraint)")
-	}
-	if _, ok := server.ParseRaffleTimeForTest("not-a-date"); ok {
-		t.Error("garbage should report ok=false")
-	}
-	rfc, ok := server.ParseRaffleTimeForTest("2026-06-13T20:00:00.000Z")
-	if !ok || rfc.Location().String() != "UTC" {
-		t.Errorf("RFC-3339 parse failed: ok=%v loc=%v", ok, rfc.Location())
-	}
-	if legacy, ok := server.ParseRaffleTimeForTest("2026-06-13T20:00"); !ok || legacy.Location().String() != "UTC" {
-		t.Errorf("legacy naive parse failed: ok=%v loc=%v", ok, legacy.Location())
-	}
 }

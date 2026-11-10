@@ -35,22 +35,3 @@ type AffiliateHour struct {
 	Start string `json:"start"` // wall-clock "HH:MM"
 	End   string `json:"end"`   // optional wall-clock "HH:MM"
 }
-
-// AffiliatesResponse is the body of GET /api/affiliates. It also carries the
-// single shared Discord webhook every affiliate posts to - safe to include here
-// because the endpoint is permission-gated (it is kept out of public settings).
-type AffiliatesResponse struct {
-	Affiliates []Affiliate `json:"affiliates"`
-	WebhookURL string      `json:"webhook_url"`
-}
-
-// AffiliateResponse is the body of POST /api/affiliates (create) and
-// POST /api/affiliates/{id}/post when a single affiliate is echoed back.
-type AffiliateResponse struct {
-	Affiliate Affiliate `json:"affiliate"`
-}
-
-// AffiliateWebhookResponse is the body of PUT /api/affiliates/webhook.
-type AffiliateWebhookResponse struct {
-	WebhookURL string `json:"webhook_url"`
-}

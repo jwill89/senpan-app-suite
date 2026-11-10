@@ -267,8 +267,8 @@ func TestEma_FailedPostKeepsThePlaquePending(t *testing.T) {
 	f.env.srv.SetWebhookPolicy(hook.serve(t, http.StatusBadRequest).URL, false)
 
 	resp := f.env.postJSON(t, fmt.Sprintf("/api/ema-boards/%d/plaques/%d/approve", f.boardID, int(plaque["id"].(float64))), nil)
-	if resp.StatusCode != http.StatusBadGateway {
-		t.Errorf("approve with Discord refusing = %d; want 502", resp.StatusCode)
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Errorf("approve with Discord refusing = %d; want 500", resp.StatusCode)
 	}
 	resp.Body.Close()
 	list := decodeBody(t, f.env.get(t, fmt.Sprintf("/api/ema-boards/%d/plaques", f.boardID)))["plaques"].([]any)
@@ -449,8 +449,8 @@ func TestEma_FailedArtistPostReopensTheRequest(t *testing.T) {
 	f.env.srv.SetWebhookPolicy(hook.serve(t, http.StatusBadRequest).URL, false)
 
 	resp := f.postFinished(t, f.env.client, int(req["id"].(float64)), plaquePNG(t))
-	if resp.StatusCode != http.StatusBadGateway {
-		t.Errorf("post with Discord refusing = %d; want 502", resp.StatusCode)
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Errorf("post with Discord refusing = %d; want 500", resp.StatusCode)
 	}
 	resp.Body.Close()
 	queue := decodeBody(t, f.env.get(t, "/api/ema-requests"))["plaques"].([]any)

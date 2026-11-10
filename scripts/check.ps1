@@ -111,7 +111,17 @@ if ($run.backend) {
         }
         Invoke-Step "backend: go build" { go build ./... }
         Invoke-Step "backend: go vet" { go vet ./... }
-        Invoke-Step "backend: go test" { go test ./... }
+        # Coverage is counted across packages, as CI's backend job counts it: the API's
+        # request tests live in internal/server and exercise internal/api. The floor and
+        # the exclusions are that job's (.github/workflows/ci.yml).
+        $coverProfile = Join-Path ([IO.Path]::GetTempPath()) 'app-suite-coverage.out'
+        Invoke-Step "backend: go test" {
+            go test -shuffle=on -covermode=atomic '-coverpkg=./...' "-coverprofile=$coverProfile" ./...
+        }
+        Invoke-Step "backend: coverage floor" {
+            & ../shared/test/go/Test-CoverageFloor.ps1 -ProfilePath $coverProfile -Floor 77.5 `
+                -Exclude '/internal/db/(db|models)\.go$', '/internal/db/[^/]+\.sql\.go$'
+        }
         # Known Go vulnerabilities that reach the code, at the release go.yml runs.
         Invoke-Step "backend: govulncheck" { go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./... }
     } finally { Pop-Location }

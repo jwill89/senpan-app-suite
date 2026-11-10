@@ -4,6 +4,277 @@
  */
 
 export interface paths {
+  '/affiliates': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Every affiliate */
+    get: operations['list-affiliates']
+    put?: never
+    /** Make an affiliate */
+    post: operations['create-affiliate']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/affiliates/reorder': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Put the affiliates in a new order */
+    post: operations['reorder-affiliates']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/affiliates/webhook': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** The Discord webhook affiliates are posted to */
+    get: operations['get-affiliate-webhook']
+    /** Set the Discord webhook affiliates are posted to */
+    put: operations['set-affiliate-webhook']
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/affiliates/{id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    /** Replace an affiliate */
+    put: operations['update-affiliate']
+    post?: never
+    /**
+     * Delete an affiliate
+     * @description A pitch occupant that named this affiliate and nothing else takes its name as its title.
+     */
+    delete: operations['delete-affiliate']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/affiliates/{id}/post': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Post an affiliate to Discord */
+    post: operations['post-affiliate']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/announcement-roles': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Every taggable role */
+    get: operations['list-announcement-roles']
+    put?: never
+    /** Make a taggable role */
+    post: operations['create-announcement-role']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/announcement-roles/{id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    /** Replace a taggable role */
+    put: operations['update-announcement-role']
+    post?: never
+    /**
+     * Delete a taggable role
+     * @description A role announcements still tag can't be deleted (409).
+     */
+    delete: operations['delete-announcement-role']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/announcement-types': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Every announcement type */
+    get: operations['list-announcement-types']
+    put?: never
+    /** Make an announcement type */
+    post: operations['create-announcement-type']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/announcement-types/{id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    /** Replace an announcement type */
+    put: operations['update-announcement-type']
+    post?: never
+    /**
+     * Delete an announcement type
+     * @description A type announcements still use can't be deleted (409).
+     */
+    delete: operations['delete-announcement-type']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/announcements': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Every announcement */
+    get: operations['list-announcements']
+    put?: never
+    /** Make an announcement */
+    post: operations['create-announcement']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/announcements/reorder': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Put the announcements in order
+     * @description Answers every announcement, in their new order.
+     */
+    post: operations['reorder-announcements']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/announcements/{id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    /**
+     * Replace an announcement
+     * @description How many occurrences are skipped and when it was last posted are kept. A one-time announcement that has already gone out is not armed again unless its date moves to the future.
+     */
+    put: operations['update-announcement']
+    post?: never
+    /**
+     * Delete an announcement
+     * @description Its pictures stay in the image library.
+     */
+    delete: operations['delete-announcement']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/announcements/{id}/send': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Post an announcement to Discord now
+     * @description Posts to its type's webhook and stamps it as posted, without moving its schedule.
+     */
+    post: operations['send-announcement']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/announcements/{id}/skip': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Skip an announcement's upcoming occurrences
+     * @description Sets how many occurrences to pass over; the schedule uses one each time it comes due. Only a scheduled announcement can be skipped (409).
+     */
+    post: operations['skip-announcement']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/auth/login': {
     parameters: {
       query?: never
@@ -134,6 +405,154 @@ export interface paths {
      */
     get: operations['stream-board-events']
     put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/book-clubs/{club}/lookup': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Look a title up on AniList
+     * @description Searches by q, or fetches one title by its AniList id, and answers items to start from. Exactly one of q and id is given. AniList being unreachable is a 503, rate limiting a 429, and a refusal (the API disabled, an address it has blocked) a 500, each saying why.
+     */
+    get: operations['look-up-title']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/book-clubs/{club}/reading-lists': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** A book club's reading lists */
+    get: operations['list-reading-lists']
+    put?: never
+    /** Make a reading list */
+    post: operations['create-reading-list']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/book-clubs/{club}/reading-lists/{id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * A reading list with its items
+     * @description A list of another club is a 404.
+     */
+    get: operations['get-reading-list']
+    /** Rename a reading list */
+    put: operations['update-reading-list']
+    post?: never
+    /**
+     * Delete a reading list
+     * @description Its items go with it, and the uploaded covers no other item uses are deleted.
+     */
+    delete: operations['delete-reading-list']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/book-clubs/{club}/reading-lists/{id}/items': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Add an item to a reading list
+     * @description It goes to the end of the list.
+     */
+    post: operations['create-reading-list-item']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/book-clubs/{club}/reading-lists/{id}/items/{itemId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    /**
+     * Replace an item
+     * @description An item of another list is a 404.
+     */
+    put: operations['update-reading-list-item']
+    post?: never
+    /**
+     * Remove an item
+     * @description Its uploaded cover is deleted if no other item uses it.
+     */
+    delete: operations['delete-reading-list-item']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/book-clubs/{club}/reading-lists/{id}/publish': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Post a reading list to Discord
+     * @description Posts every item as its own embed to the club's webhook, in order. A list with no items is a 409. A failure part-way says how many were posted before it.
+     */
+    post: operations['publish-reading-list']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/book-clubs/{club}/webhook': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** The Discord webhook a club's lists are published to */
+    get: operations['get-book-club-webhook']
+    /**
+     * Set the Discord webhook a club's lists are published to
+     * @description An empty webhook clears it.
+     */
+    put: operations['set-book-club-webhook']
     post?: never
     delete?: never
     options?: never
@@ -819,6 +1238,279 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/raffles': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * The raffles a caller may see
+     * @description Anyone gets the raffles open now inside their window. An account holding the Raffles page gets every raffle, with the winner and the gil collected.
+     */
+    get: operations['list-raffles']
+    put?: never
+    /**
+     * Make a raffle
+     * @description It starts open.
+     */
+    post: operations['create-raffle']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/raffles/{id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * One raffle
+     * @description Anyone gets a closed raffle or one open inside its window; a raffle not open yet is a 404, so guessing its id reveals nothing. An account holding the Raffles page gets any.
+     */
+    get: operations['get-raffle']
+    /**
+     * Replace a raffle's editable fields
+     * @description Its status and winner are kept.
+     */
+    put: operations['update-raffle']
+    post?: never
+    /**
+     * Delete a raffle
+     * @description Its entries go with it. Its pictures stay in the image library.
+     */
+    delete: operations['delete-raffle']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/raffles/{id}/close': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Close a raffle
+     * @description Without confirming a winner: for one that drew no entries, or a details-only raffle drawn elsewhere. A winner already recorded is kept.
+     */
+    post: operations['close-raffle']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/raffles/{id}/enter': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Sign up for a raffle
+     * @description Anyone may: 201 for a new entry, 200 when the tickets join the character's existing one. Twenty tries from one address in ten minutes, made or not (429, with Retry-After). A raffle that is closed, outside its window or details-only, or tickets past the allowance, is a 409.
+     */
+    post: operations['enter-raffle']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/raffles/{id}/entries': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** A raffle's entries */
+    get: operations['list-raffle-entries']
+    put?: never
+    /**
+     * Add an entry
+     * @description Staff add tickets for a character at any time while the raffle is open, inside its window or not. 201 when it makes a new entry, 200 when the tickets join the character's existing entry (matched on the whole name and world, ignoring case). A closed raffle, or tickets past the allowance, is a 409.
+     */
+    post: operations['add-raffle-entry']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/raffles/{id}/entries/{entryId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    post?: never
+    /**
+     * Delete an entry
+     * @description If it was the pending winner, the raffle has none again.
+     */
+    delete: operations['delete-raffle-entry']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/raffles/{id}/entries/{entryId}/settle': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Record a payment on an entry
+     * @description Settles every ticket, or paidEntries of them for a part payment, and adds waived to the gil forgiven. A payment only moves forward: settling an entry with nothing outstanding changes nothing.
+     */
+    post: operations['settle-raffle-entry']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/raffles/{id}/entries/{entryId}/unsettle': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Clear an entry's payment
+     * @description Nothing settled and nothing waived, so a mistake leaves no waiver credited against an unpaid entry.
+     */
+    post: operations['unsettle-raffle-entry']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/raffles/{id}/lookup': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Find an entry by name
+     * @description Have I already entered? Entries merge on the whole name and world, so a returning entrant needs the exact spelling they used. Matches part of the name, ignoring case. Thirty searches from one address in ten minutes (429, with Retry-After). Only for a raffle the caller can see.
+     */
+    post: operations['look-up-raffle-entries']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/raffles/{id}/pick-another': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Draw another winner
+     * @description Replaces the pending winner with another entry. If the pending winner isn't the one named (another console changed it) nothing changes (409). With no other entry to draw, the raffle is left with no pending winner (409).
+     */
+    post: operations['pick-another-raffle-winner']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/raffles/{id}/pick-winner': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Draw the pending winner
+     * @description An entry chosen at random, one chance per ticket settled (per ticket held in a details-only raffle). A raffle that already has a pending winner is a 409: confirm them or pick another.
+     */
+    post: operations['pick-raffle-winner']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/raffles/{id}/reopen': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Open a closed raffle again
+     * @description The undo of a close. A winner recorded is kept.
+     */
+    post: operations['reopen-raffle']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/raffles/{id}/verify-winner': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Confirm the winner and close the raffle
+     * @description The pending winner becomes the raffle's winner and the raffle closes. With no pending winner, or one that isn't the entry named, nothing happens (409).
+     */
+    post: operations['verify-raffle-winner']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/settings': {
     parameters: {
       query?: never
@@ -850,9 +1542,9 @@ export interface paths {
       path?: never
       cookie?: never
     }
-    /** The keys and webhooks the server uses */
+    /** The keys the server uses with outside services */
     get: operations['get-integrations']
-    /** Replace the keys and webhooks the server uses */
+    /** Replace the keys the server uses with outside services */
     put: operations['update-integrations']
     post?: never
     delete?: never
@@ -998,6 +1690,156 @@ export interface paths {
      * @description Every client wears it at once.
      */
     post: operations['activate-style']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/tea-rooms': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Every tea room */
+    get: operations['list-tea-rooms']
+    put?: never
+    /**
+     * Make a tea room
+     * @description A room number another room has is refused (409).
+     */
+    post: operations['create-tea-room']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/tea-rooms/public': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Every tea room, for sites outside the app
+     * @description Open to anyone. A page on a site in the allowed list (System -> Settings) may read it from a browser; the answer is revalidated with its ETag.
+     */
+    get: operations['list-public-tea-rooms']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/tea-rooms/public/{number}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * One tea room by its room number, for sites outside the app
+     * @description Open to anyone, with the same cross-origin and revalidation rules as the list.
+     */
+    get: operations['get-public-tea-room']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/tea-rooms/reorder': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Put the tea rooms in order
+     * @description Answers every room, in their new order.
+     */
+    post: operations['reorder-tea-rooms']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/tea-rooms/webhook': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** The Discord webhook tea rooms post to */
+    get: operations['get-tea-room-webhook']
+    /**
+     * Set the Discord webhook tea rooms post to
+     * @description An empty webhook clears it.
+     */
+    put: operations['set-tea-room-webhook']
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/tea-rooms/{id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    /**
+     * Replace a tea room
+     * @description Where it sits in the order is kept. A room number another room has is refused (409).
+     */
+    put: operations['update-tea-room']
+    post?: never
+    /**
+     * Delete a tea room
+     * @description Its image stays in the image library.
+     */
+    delete: operations['delete-tea-room']
+    options?: never
+    head?: never
+    /**
+     * Open, discount, lock or unlock a tea room
+     * @description Only what is sent changes.
+     */
+    patch: operations['change-tea-room']
+    trace?: never
+  }
+  '/tea-rooms/{id}/post': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Post a tea room to Discord now
+     * @description Sends its embed to the webhook tea rooms post to.
+     */
+    post: operations['post-tea-room']
     delete?: never
     options?: never
     head?: never
@@ -1152,6 +1994,281 @@ export interface components {
       credential: unknown
       /** @description What to call it, such as the device it lives on; "Passkey" when left out. */
       name?: string
+    }
+    Affiliate: {
+      /** @description A Carrd or other site link, always http(s). */
+      carrdLink: string
+      /** @description When it was made, RFC 3339 in UTC. */
+      createdAt: string | null
+      /** @description About it, in Markdown. */
+      details: string
+      /** @description A Discord invite or link, always http(s). */
+      discordLink: string
+      /** @description The accent of its Discord embed, #rrggbb; empty for the brand color. */
+      embedColor: string
+      /** @description When it is open. */
+      hours: components['schemas']['AffiliateHour'][]
+      /**
+       * Format: int64
+       * @description The affiliate's id.
+       */
+      id: number
+      /** @description Where it is, as free text. */
+      location: string
+      /** @description The logo: a root-relative path in the image library. */
+      logo: string
+      /** @description The establishment's name. */
+      name: string
+      /** @description The owners' names. */
+      owners: string[]
+      /** @description A picture of the establishment: a root-relative path in the image library. */
+      screenshot: string
+      /**
+       * Format: int64
+       * @description Its place in the manual order, lowest first.
+       */
+      sortOrder: number
+      /** @description A second line under the name, in any script. */
+      subtitle: string
+      /** @description The IANA timezone its opening hours are in. */
+      timezone: string
+    }
+    AffiliateHour: {
+      /** @description When it closes, wall-clock HH:MM; empty for open-ended. */
+      end: string
+      /** @description What the row covers, such as Mon-Fri; empty for none. */
+      label: string
+      /** @description When it opens, wall-clock HH:MM in the affiliate's timezone. A row with no start is dropped. */
+      start: string
+    }
+    AffiliateInput: {
+      /** @description A Carrd or other site link; one with no http(s) scheme is saved with https:// before it. */
+      carrdLink: string
+      /** @description About it, in Markdown. */
+      details: string
+      /** @description A Discord invite or link; one with no http(s) scheme is saved with https:// before it. */
+      discordLink: string
+      /** @description The accent of its Discord embed, #rrggbb; empty for the brand color. */
+      embedColor: string
+      /** @description When it is open. */
+      hours: components['schemas']['AffiliateHour'][]
+      /** @description Where it is, as free text. */
+      location: string
+      /** @description The logo: a root-relative path in the image library; empty for none. */
+      logo: string
+      /** @description The establishment's name. */
+      name: string
+      /** @description The owners' names; blank ones are dropped. */
+      owners: string[]
+      /** @description A picture of the establishment: a root-relative path in the image library; empty for none. */
+      screenshot: string
+      /** @description A second line under the name, in any script; empty for none. */
+      subtitle: string
+      /** @description The IANA timezone its opening hours are in; empty for UTC. */
+      timezone: string
+    }
+    AffiliateList: {
+      /** @description Every affiliate, in their manual order and then by name. */
+      affiliates: components['schemas']['Affiliate'][]
+    }
+    AffiliateOrder: {
+      /** @description The affiliates' ids, top first. */
+      orderedIds: number[]
+    }
+    Announcement: {
+      /** @description Whether its schedule is live. */
+      active: boolean
+      /** @description The link buttons under the embed. */
+      buttons: components['schemas']['AnnouncementButton'][]
+      /** @description The embed's accent, #rrggbb; empty for the brand color. */
+      color: string
+      /** @description When it was made, RFC 3339 in UTC. */
+      createdAt: string | null
+      /** @description The body, in Markdown. */
+      details: string
+      /** @description Whether each post moves the event onto the day it is posted, keeping the times of day, so a recurring day-of post always shows its own occurrence. */
+      dynamicDates: boolean
+      /** @description The event's end as an instant, RFC 3339 in UTC; null for none. */
+      endAt: string | null
+      /** @description The Discord timestamp style of the end: t, T, d, D, f, F or R. */
+      endFormat: string
+      /** @description When the event ends, wall-clock in timezone; empty for none. */
+      endLocal: string
+      /**
+       * Format: int64
+       * @description The announcement's id.
+       */
+      id: number
+      /** @description A full-width picture at the bottom of the embed; empty for none. */
+      image: string
+      /** @description When it was last posted, by the schedule or by hand, RFC 3339 in UTC; null if never. */
+      lastPostedAt: string | null
+      /** @description Where it happens, as free text; empty for none. */
+      location: string
+      /** @description Who the post tags in its text, above the embed: empty for nobody, everyone, or role:<id> for a managed role. */
+      mention: string
+      /** @description When it posts next, RFC 3339 in UTC; null when nothing is scheduled. */
+      nextPostAt: string | null
+      /** @description For a once schedule, when it posts, wall-clock in timezone. */
+      onceLocal: string
+      /** @description How it posts on its own: once, daily, weekly or monthly; empty for by hand only. */
+      scheduleKind: string
+      /**
+       * Format: int64
+       * @description For a recurring schedule, the time of day it posts, in minutes after midnight in timezone.
+       */
+      scheduleMinutes: number
+      /**
+       * Format: int64
+       * @description For a monthly schedule, which weekday of the month: 1 to 5, or -1 for the last.
+       */
+      scheduleWeekOfMonth: number
+      /** @description For a weekly or monthly schedule, the weekdays as comma-separated numbers, 0 for Sunday to 6 for Saturday. A monthly schedule uses the first. */
+      scheduleWeekdays: string
+      /**
+       * Format: int64
+       * @description How many upcoming occurrences to pass over before posting again; 0 posts as scheduled. A save never changes it.
+       */
+      skipCount: number
+      /** @description The event's start as an instant, RFC 3339 in UTC; null for none. */
+      startAt: string | null
+      /** @description The Discord timestamp style of the start: t, T, d, D, f, F or R. */
+      startFormat: string
+      /** @description When the event starts, wall-clock YYYY-MM-DDTHH:MM in timezone; empty for none. */
+      startLocal: string
+      /** @description A small picture at the embed's top right; empty for none. */
+      thumbnail: string
+      /** @description The IANA timezone every wall-clock time is in. */
+      timezone: string
+      /** @description The embed's title. */
+      title: string
+      /**
+       * Format: int64
+       * @description The type it posts as, which names the webhook.
+       */
+      typeId: number
+      /** @description The type's name; empty if the type is gone. */
+      typeName: string
+    }
+    AnnouncementButton: {
+      /** @description A Unicode emoji, or a custom one as <:name:id> or <a:name:id>; empty for none. */
+      emoji: string
+      /** @description The button's text. */
+      label: string
+      /** @description Where it goes: an http or https address. */
+      url: string
+    }
+    AnnouncementInput: {
+      /** @description The link buttons under the embed. A button needs a label and an http(s) address, and only the first five that do are kept. */
+      buttons: components['schemas']['AnnouncementButton'][]
+      /** @description The embed's accent, #rrggbb; empty for the brand color. */
+      color: string
+      /** @description The body, in Markdown. Required. */
+      details: string
+      /** @description Whether each post moves the event onto the day it is posted, keeping the times of day. */
+      dynamicDates: boolean
+      /** @description The Discord timestamp style of the end; empty for t. */
+      endFormat: string
+      /** @description When the event ends, wall-clock in timezone; empty for none. */
+      endLocal: string
+      /** @description A full-width picture at the bottom of the embed; empty for none. */
+      image: string
+      /** @description Where it happens, as free text; empty for none. */
+      location: string
+      /** @description Who the post tags in its text, above the embed: empty for nobody, everyone, or role:<id> for a managed role. */
+      mention: string
+      /** @description For a once schedule, when it posts, wall-clock in timezone. A date already past arms a new announcement to post on the next sweep; an edit arms one only for a date in the future, so fixing a typo never posts it again. */
+      onceLocal: string
+      /** @description How it posts on its own: once, daily, weekly or monthly; empty for by hand only. */
+      scheduleKind: string
+      /**
+       * Format: int64
+       * @description For a recurring schedule, the time of day it posts, in minutes after midnight in timezone.
+       */
+      scheduleMinutes: number
+      /**
+       * Format: int64
+       * @description For a monthly schedule, which weekday of the month: 1 to 5, or -1 for the last.
+       */
+      scheduleWeekOfMonth: number
+      /** @description For a weekly or monthly schedule, the weekdays as comma-separated numbers, 0 for Sunday to 6 for Saturday. */
+      scheduleWeekdays: string
+      /** @description The Discord timestamp style of the start: t, T, d, D, f, F or R; empty for F. */
+      startFormat: string
+      /** @description When the event starts, wall-clock YYYY-MM-DDTHH:MM in timezone; empty for none. */
+      startLocal: string
+      /** @description A small picture at the embed's top right; empty for none. */
+      thumbnail: string
+      /** @description The IANA timezone every wall-clock time is in. Required when there is any time. */
+      timezone: string
+      /** @description The embed's title. */
+      title: string
+      /**
+       * Format: int64
+       * @description The type it posts as.
+       */
+      typeId: number
+    }
+    AnnouncementList: {
+      /** @description Every announcement, in the staff's order. */
+      announcements: components['schemas']['Announcement'][]
+    }
+    AnnouncementOrder: {
+      /** @description The announcements' ids, top first. */
+      orderedIds: number[]
+    }
+    AnnouncementRole: {
+      /** @description When it was made, RFC 3339 in UTC. */
+      createdAt: string | null
+      /**
+       * Format: int64
+       * @description The role's id here, which an announcement's mention names as role:<id>.
+       */
+      id: number
+      /** @description What staff call the role. */
+      name: string
+      /** @description The role's Discord id, digits only; kept as text since it is too big for a JavaScript number. */
+      roleId: string
+    }
+    AnnouncementRoleInput: {
+      /** @description What staff call the role. */
+      name: string
+      /** @description The role's Discord id, digits only. */
+      roleId: string
+    }
+    AnnouncementRoleList: {
+      /** @description Every role, newest first. */
+      roles: components['schemas']['AnnouncementRole'][]
+    }
+    AnnouncementSkip: {
+      /**
+       * Format: int64
+       * @description How many upcoming occurrences to skip, one each time the schedule comes due. 0 clears a pending skip; left out, it is 1.
+       */
+      count?: number
+    }
+    AnnouncementType: {
+      /** @description When it was made, RFC 3339 in UTC. */
+      createdAt: string | null
+      /**
+       * Format: int64
+       * @description The type's id.
+       */
+      id: number
+      /** @description What staff call the destination, such as the channel's name. */
+      name: string
+      /** @description The Discord webhook of the channel its announcements post to; empty for none. A webhook grants posting access to a channel, so only staff with the page see it. */
+      webhookUrl: string
+    }
+    AnnouncementTypeInput: {
+      /** @description What staff call the destination. */
+      name: string
+      /** @description The Discord webhook of the channel: https, on Discord, under /api/webhooks/. Empty for none. */
+      webhookUrl: string
+    }
+    AnnouncementTypeList: {
+      /** @description Every type, newest first. */
+      types: components['schemas']['AnnouncementType'][]
     }
     AppVersion: {
       /**
@@ -1364,6 +2481,10 @@ export interface components {
        * @description How many were deleted.
        */
       deleted: number
+    }
+    DiscordWebhook: {
+      /** @description The Discord webhook: https, on Discord, under /api/webhooks/. Empty for none. A webhook grants posting access to a channel, so only staff with the page see it. */
+      webhookUrl: string
     }
     DrawDelayEvent: {
       /**
@@ -1818,10 +2939,6 @@ export interface components {
       minigame: boolean
     }
     Integrations: {
-      /** @description Each book club's reading-list Discord webhook, by the club's slug: https, on Discord, under /api/webhooks/. Empty for none. */
-      bookClubWebhooks: {
-        [key: string]: string
-      }
       /** @description The Google Fonts API key the header-font picker lists fonts with. Empty for none. */
       googleFontsApiKey: string
     }
@@ -2145,6 +3262,464 @@ export interface components {
       /** @description The themes players may pick, by name. */
       styles: components['schemas']['PublicStyle'][]
     }
+    PublicTeaRoom: {
+      /** @description The accent color of its embed, #rrggbb; empty for the default. */
+      color: string
+      /**
+       * Format: int64
+       * @description The price in gil per half hour. A discounted room charges half.
+       */
+      costPerHalfHour: number
+      /** @description When it was made, RFC 3339 in UTC. */
+      createdAt: string | null
+      /** @description The room's description (Markdown). */
+      description: string
+      /** @description Whether the room is on its half-price offer. */
+      discounted: boolean
+      /** @description The room's hashtags, space-separated and each starting with #. */
+      hashtags: string
+      /**
+       * Format: int64
+       * @description The room's id.
+       */
+      id: number
+      /** @description The room's image. */
+      image: string
+      /** @description Whether the room can be locked, booked out for an extra fee. */
+      lockable: boolean
+      /** @description Whether the room is locked right now. */
+      locked: boolean
+      /** @description When the lock lifts, RFC 3339 in UTC; null when it has no set end. */
+      lockedUntil: string | null
+      /** @description The room's name. */
+      name: string
+      /** @description Whether the room is open. */
+      open: boolean
+      /** @description The room's public number. */
+      roomNumber: string
+      /** @description The character who owns the room. */
+      roomOwner: string
+      /** @description Whether the room is seasonal rather than permanent. */
+      seasonal: boolean
+      /**
+       * Format: int64
+       * @description Where it sits in the staff's order.
+       */
+      sortOrder: number
+      /** @description A short line under the name. */
+      subtitle: string
+    }
+    PublicTeaRoomList: {
+      /** @description Every room, in the staff's order. */
+      teaRooms: components['schemas']['PublicTeaRoom'][]
+    }
+    PublishResult: {
+      /**
+       * Format: int64
+       * @description How many items were posted, one embed each.
+       */
+      published: number
+    }
+    Raffle: {
+      /** @description When it opens, RFC 3339 in UTC; null for always. */
+      availableFrom: string | null
+      /** @description When it stops taking entries, RFC 3339 in UTC; null for no end. */
+      availableTo: string | null
+      /**
+       * Format: int64
+       * @description The gil every ticket costs in single mode; 0 in the others.
+       */
+      costPerEntry: number
+      /** @description When it was made, RFC 3339 in UTC. */
+      createdAt: string | null
+      /** @description What it is about (Markdown). */
+      description: string
+      /**
+       * @description How it prices tickets and takes sign-ups: details publishes it for reference and is entered elsewhere, single charges every ticket costPerEntry, custom prices each ticket from tierCosts in order.
+       * @enum {string}
+       */
+      entryMode: 'details' | 'single' | 'custom'
+      /**
+       * Format: int64
+       * @description The festival it belongs to; null for none.
+       */
+      festivalMapId: number | null
+      /** @description The festival's title; empty for none. */
+      festivalMapName: string
+      /**
+       * Format: int64
+       * @description The raffle's id.
+       */
+      id: number
+      /**
+       * Format: int64
+       * @description The most tickets one person may hold. In custom mode it is the length of the price ladder.
+       */
+      maxEntries: number
+      /**
+       * Format: int64
+       * @description The stall on that festival's plan it is assigned to; null for none.
+       */
+      occupantId: number | null
+      /**
+       * Format: int64
+       * @description The gil collected: every settled ticket priced by the entry mode, less what was waived. Filled by list-raffles for an account holding the Raffles page; null for anyone else.
+       */
+      paidTotal: number | null
+      /** @description A screenshot showing where to pay, shown under the sign-up instructions: a path from the image library. */
+      payImage: string
+      /** @description The prize's picture: a path from the image library. */
+      prizeImage: string
+      /** @description Its rules (Markdown). */
+      rules: string
+      /** @description How to pay and sign up (Markdown). A details-only raffle shows them in place of a sign-up form; the others after signing up. */
+      signupInstructions: string
+      /** @description The stall's title; empty for none. */
+      stallName: string
+      /**
+       * @description open is on the public list while inside its window; closed shows its winner.
+       * @enum {string}
+       */
+      status: 'open' | 'closed'
+      /** @description The gil the first, second, third... ticket costs in custom mode; empty in the others. */
+      tierCosts: number[]
+      /** @description The raffle's title. */
+      title: string
+      /**
+       * Format: int64
+       * @description The entry picked as the winner; null until one is picked. Only a closed raffle's winner is public.
+       */
+      winnerEntryId: number | null
+      /** @description The winner as Character @ World. Filled by list-raffles for an account holding the Raffles page; null for anyone else. */
+      winnerName: string | null
+    }
+    RaffleDetail: {
+      /** @description The raffle. */
+      raffle: components['schemas']['Raffle']
+      /**
+       * Format: int64
+       * @description The tickets held across all its entries.
+       */
+      totalEntries: number
+      /** @description The winner: set only for a closed raffle that has one, and without any payment detail. */
+      winnerEntry: components['schemas']['RaffleWinner'] | null
+    }
+    RaffleEnterInput: {
+      /** @description The character signing up. */
+      characterName: string
+      /**
+       * Format: int64
+       * @description The tickets to add to the character's entry.
+       */
+      numEntries: number
+      /** @description The Cloudflare Turnstile response, when the check is on (GET /config gives its site key). */
+      turnstileToken?: string
+      /** @description Their home world. */
+      world: string
+    }
+    RaffleEnterResult: {
+      /**
+       * Format: int64
+       * @description What they still have to pay: the price of the tickets not yet settled. It says nothing of why it is lower than the total.
+       */
+      amountDue: number
+      /** @description Signed up, or entries added to an existing entry. */
+      message: string
+      /** @description How to pay (Markdown). */
+      signupInstructions: string
+      /**
+       * Format: int64
+       * @description The sticker price of every ticket they hold.
+       */
+      totalCost: number
+      /**
+       * Format: int64
+       * @description The tickets the character now holds.
+       */
+      totalEntries: number
+    }
+    RaffleEntry: {
+      /**
+       * Format: int64
+       * @description The gil forgiven across all its settlements.
+       */
+      amountWaived: number
+      /** @description The character. */
+      characterName: string
+      /** @description When it was made, RFC 3339 in UTC. */
+      createdAt: string | null
+      /**
+       * Format: int64
+       * @description The entry's id.
+       */
+      id: number
+      /**
+       * Format: int64
+       * @description The tickets held.
+       */
+      numEntries: number
+      /** @description Whether nothing is outstanding. */
+      paid: boolean
+      /**
+       * Format: int64
+       * @description How many of them are settled.
+       */
+      paidEntries: number
+      /**
+       * @description unpaid when none is settled, partial when some are (more were bought since), paid when all are.
+       * @enum {string}
+       */
+      paymentState: 'unpaid' | 'partial' | 'paid'
+      /**
+       * Format: int64
+       * @description The raffle it is in.
+       */
+      raffleId: number
+      /** @description Their home world. */
+      world: string
+    }
+    RaffleEntryInput: {
+      /**
+       * Format: int64
+       * @description The gil to forgive on that settlement. Ignored unless paid.
+       */
+      amountWaived?: number
+      /** @description The character. */
+      characterName: string
+      /**
+       * Format: int64
+       * @description The tickets to add.
+       */
+      numEntries: number
+      /** @description Whether to settle the tickets just added at once. */
+      paid?: boolean
+      /** @description Their home world. */
+      world: string
+    }
+    RaffleEntryList: {
+      /** @description Every entry, oldest first. */
+      entries: components['schemas']['RaffleEntry'][]
+    }
+    RaffleInput: {
+      /**
+       * Format: date-time
+       * @description When it opens, RFC 3339; null or left out for always.
+       */
+      availableFrom?: string | null
+      /**
+       * Format: date-time
+       * @description When it stops taking entries, RFC 3339; null or left out for no end.
+       */
+      availableTo?: string | null
+      /**
+       * Format: int64
+       * @description The gil every ticket costs in single mode; ignored in the others.
+       */
+      costPerEntry: number
+      /** @description What it is about (Markdown); empty for none. */
+      description: string
+      /**
+       * @description How it prices tickets and takes sign-ups: details publishes it for reference and is entered elsewhere, single charges every ticket costPerEntry, custom prices each ticket from tierCosts in order.
+       * @enum {string}
+       */
+      entryMode: 'details' | 'single' | 'custom'
+      /**
+       * Format: int64
+       * @description The festival to file it under; null or left out for none. One that no longer exists is refused.
+       */
+      festivalMapId?: number | null
+      /**
+       * Format: int64
+       * @description The most tickets one person may hold, 100 at most; below 1 holds 1. In custom mode it is set to the length of tierCosts.
+       */
+      maxEntries: number
+      /**
+       * Format: int64
+       * @description The stall on that festival's plan to assign it to; null or left out for none. A stall that isn't on the festival is dropped, and the festival's absence clears it.
+       */
+      occupantId?: number | null
+      /** @description A screenshot showing where to pay: a path from the image library; empty for none. */
+      payImage: string
+      /** @description The prize's picture: a path from the image library; empty for none. */
+      prizeImage: string
+      /** @description Its rules (Markdown); empty for none. */
+      rules: string
+      /** @description How to pay and sign up (Markdown); empty for none. */
+      signupInstructions: string
+      /** @description The gil the first, second, third... ticket costs in custom mode, each 0 or more and at least one; ignored in the others. */
+      tierCosts: number[]
+      /** @description The raffle's title. */
+      title: string
+    }
+    RaffleList: {
+      /** @description For the public, the raffles open now inside their window. For an account holding the Raffles page, every raffle with its winnerName and paidTotal. Newest first. */
+      raffles: components['schemas']['Raffle'][]
+    }
+    RaffleLookup: {
+      /** @description Entries whose character name contains the search, by name, without an id or any gil figure. At most 50. */
+      entries: components['schemas']['RaffleLookupEntry'][]
+      /** @description Whether more matched than are listed: narrow the search. */
+      truncated: boolean
+    }
+    RaffleLookupEntry: {
+      /** @description The character, spelled as they signed up. */
+      characterName: string
+      /**
+       * Format: int64
+       * @description The tickets held.
+       */
+      numEntries: number
+      /**
+       * Format: int64
+       * @description How many of them are settled.
+       */
+      paidEntries: number
+      /**
+       * @description How far it is settled.
+       * @enum {string}
+       */
+      paymentState: 'unpaid' | 'partial' | 'paid'
+      /** @description Their home world. */
+      world: string
+    }
+    RaffleLookupInput: {
+      /** @description Part of the character name they signed up with: at least 2 characters, not counting spaces around it. */
+      name: string
+    }
+    RaffleSettlement: {
+      /**
+       * Format: int64
+       * @description How many of the entry's tickets this settles, for a part payment. Left out, it settles every ticket; more than it holds settles all.
+       */
+      paidEntries?: number
+      /**
+       * Format: int64
+       * @description The gil forgiven now. It is added to what the entry has had waived, never replacing it.
+       */
+      waived?: number
+    }
+    RaffleWinner: {
+      /** @description The winning character. */
+      characterName: string
+      /**
+       * Format: int64
+       * @description How many tickets they held.
+       */
+      numEntries: number
+      /** @description Their home world. */
+      world: string
+    }
+    RaffleWinnerChoice: {
+      /**
+       * Format: int64
+       * @description The entry that is the pending winner now. If it isn't, another console changed it and nothing happens.
+       */
+      replaces: number
+    }
+    RaffleWinnerConfirm: {
+      /**
+       * Format: int64
+       * @description The entry the staff confirm as the winner. If it isn't the pending winner, another console changed it and nothing happens.
+       */
+      winnerEntryId: number
+    }
+    ReadingList: {
+      /** @description The slug of the book club it belongs to. */
+      club: string
+      /** @description When it was made, RFC 3339 in UTC. */
+      createdAt: string | null
+      /**
+       * Format: int64
+       * @description The list's id.
+       */
+      id: number
+      /** @description Its titles, in the order they are published. */
+      items: components['schemas']['ReadingListItem'][]
+      /** @description The list's name. */
+      title: string
+    }
+    ReadingListItem: {
+      /** @description How long it is, as free text such as 156 or 156 (ongoing). */
+      chapters: string
+      /** @description The curator's comments, in Markdown. */
+      comments: string
+      /** @description The cover: a full address, either an upload on this site or one from AniList. */
+      coverImage: string
+      /** @description Manga, Manhwa, Manhua, Danmei, Novel and so on. */
+      format: string
+      /** @description The genres, comma-separated. */
+      genres: string
+      /**
+       * Format: int64
+       * @description The item's id.
+       */
+      id: number
+      /**
+       * Format: int64
+       * @description The list it is on.
+       */
+      listId: number
+      /**
+       * Format: int64
+       * @description Its place in the list, lowest first.
+       */
+      sortOrder: number
+      /** @description Where to read it. */
+      sources: components['schemas']['ReadingListSource'][]
+      /** @description What it is about, in Markdown, which Discord renders when it is published. */
+      summary: string
+      /** @description The title. */
+      title: string
+      /** @description The tropes, comma-separated. */
+      tropes: string
+    }
+    ReadingListItemInput: {
+      /** @description How long it is, as free text. */
+      chapters: string
+      /** @description The curator's comments, in Markdown. */
+      comments: string
+      /** @description The cover: a full address; empty for none. */
+      coverImage: string
+      /** @description Manga, Manhwa, Manhua, Danmei, Novel and so on. */
+      format: string
+      /** @description The genres, comma-separated. */
+      genres: string
+      /** @description Where to read it. Rows with no address are dropped. */
+      sources: components['schemas']['ReadingListSource'][]
+      /** @description What it is about, in Markdown. */
+      summary: string
+      /** @description The title. */
+      title: string
+      /** @description The tropes, comma-separated. */
+      tropes: string
+    }
+    ReadingListSource: {
+      /** @description What the link is called; empty to show the address. */
+      title: string
+      /** @description Where it goes. A source with no address is dropped. */
+      url: string
+    }
+    ReadingListSummary: {
+      /** @description The slug of the book club it belongs to. */
+      club: string
+      /** @description When it was made, RFC 3339 in UTC. */
+      createdAt: string | null
+      /**
+       * Format: int64
+       * @description The list's id.
+       */
+      id: number
+      /** @description The list's name. */
+      title: string
+    }
+    ReadingListSummaryList: {
+      /** @description The club's lists, newest first, without their items. */
+      readingLists: components['schemas']['ReadingListSummary'][]
+    }
+    ReadingListTitle: {
+      /** @description The list's name. */
+      title: string
+    }
     ResourceChangedEvent: {
       /**
        * Format: date-time
@@ -2230,6 +3805,8 @@ export interface components {
       hideBingo: boolean
       /** @description Whether the custom card request is hidden while the rest of bingo stays. */
       hideCustomCards: boolean
+      /** @description The sites whose pages may read the public tea-room API from a browser, each as an origin such as https://senpan.cafe. https://*.example.com covers every subdomain of example.com. Empty for none. */
+      teaRoomOrigins: string[]
       /** @description When the settings were last saved, as read. Sent with a save, it must still be the latest: a save made from an older copy is answered 409, so a page left open can't undo what was saved since. Left out, the save is not checked. */
       updatedAt?: string
       /** @description The uploaded fonts, each with a serving token, for the header-font picker and the pages that use one. */
@@ -2297,6 +3874,8 @@ export interface components {
       hideBingo: boolean
       /** @description Whether the custom card request is hidden while the rest of bingo stays. */
       hideCustomCards: boolean
+      /** @description The sites whose pages may read the public tea-room API from a browser, each as an origin such as https://senpan.cafe. https://*.example.com covers every subdomain of example.com. Empty for none. */
+      teaRoomOrigins: string[]
       /** @description When the settings were last saved, as read. Sent with a save, it must still be the latest: a save made from an older copy is answered 409, so a page left open can't undo what was saved since. Left out, the save is not checked. */
       updatedAt?: string
       /**
@@ -2380,6 +3959,112 @@ export interface components {
       /** @description The theme's name. */
       name: string
     }
+    TeaRoom: {
+      /** @description The accent color of its embed, #rrggbb; empty for the default. */
+      color: string
+      /**
+       * Format: int64
+       * @description The price in gil per half hour. A discounted room charges half.
+       */
+      costPerHalfHour: number
+      /** @description When it was made, RFC 3339 in UTC. */
+      createdAt: string | null
+      /** @description The room's description (Markdown), the body of its embed. */
+      description: string
+      /** @description Whether the room is on its half-price offer. */
+      discounted: boolean
+      /** @description The room's hashtags, space-separated and each starting with #. */
+      hashtags: string
+      /**
+       * Format: int64
+       * @description The room's id.
+       */
+      id: number
+      /** @description The room's image, from the image library; shown full width in its embed. */
+      image: string
+      /** @description Whether the room can be locked, booked out for an extra fee. */
+      lockable: boolean
+      /** @description Whether the room is locked right now. */
+      locked: boolean
+      /** @description When the lock lifts on its own, RFC 3339 in UTC; null when it stands until staff unlock the room. Only set while the room is locked. */
+      lockedUntil: string | null
+      /** @description The room's name, the title of its embed. */
+      name: string
+      /** @description Whether the room is open. */
+      open: boolean
+      /** @description The room's public number: unique, and the key the public API finds it by. */
+      roomNumber: string
+      /** @description The character who owns the room; informational. */
+      roomOwner: string
+      /** @description Whether the room is seasonal rather than permanent. */
+      seasonal: boolean
+      /**
+       * Format: int64
+       * @description Where it sits in the staff's order.
+       */
+      sortOrder: number
+      /** @description A short line under the name, such as a phrase in another script. */
+      subtitle: string
+    }
+    TeaRoomChanges: {
+      /** @description Put the room on its half-price offer, or take it off. */
+      discounted?: boolean
+      /** @description Lock or unlock the room. Locking sets the lock afresh: it lasts until lockedUntil when that is sent beside it, otherwise until staff unlock it. Unlocking clears the unlock time. */
+      locked?: boolean
+      /**
+       * Format: date-time
+       * @description When the lock lifts on its own. Sent alone, it moves the unlock time of a locked room. Ignored unless the room ends up locked.
+       */
+      lockedUntil?: string
+      /** @description Open or close the room. */
+      open?: boolean
+    }
+    TeaRoomInput: {
+      /** @description The accent color of its embed, #rrggbb; empty for the default. */
+      color: string
+      /**
+       * Format: int64
+       * @description The price in gil per half hour.
+       */
+      costPerHalfHour: number
+      /** @description The room's description (Markdown); empty for none. */
+      description: string
+      /** @description Whether the room is on its half-price offer. */
+      discounted: boolean
+      /** @description Hashtags, separated by spaces or commas; they are stored as a list of #tags, repeats dropped, at most 30. */
+      hashtags: string
+      /** @description The room's image from the image library; empty for none. */
+      image: string
+      /** @description Whether the room can be locked. */
+      lockable: boolean
+      /** @description Whether the room is locked. */
+      locked: boolean
+      /**
+       * Format: date-time
+       * @description When the lock lifts on its own; null for a lock that stands until staff unlock the room. Ignored unless the room is locked.
+       */
+      lockedUntil: string | null
+      /** @description The room's name. */
+      name: string
+      /** @description Whether the room is open. */
+      open: boolean
+      /** @description The room's public number. No other room may have it. */
+      roomNumber: string
+      /** @description The character who owns the room; empty for none. */
+      roomOwner: string
+      /** @description Whether the room is seasonal rather than permanent. */
+      seasonal: boolean
+      /** @description A short line under the name; empty for none. */
+      subtitle: string
+    }
+    TeaRoomList: {
+      /** @description Every room, in the staff's order. */
+      teaRooms: components['schemas']['TeaRoom'][]
+    }
+    TeaRoomOrder: {
+      /** @description The rooms' ids, top first. A room not named keeps its place. */
+      orderedIds: number[]
+    }
     TeaRoomUnlockedEvent: {
       /**
        * Format: date-time
@@ -2458,6 +4143,10 @@ export interface components {
        * @description The theme made, changed, deleted or made the site's; null when the site went back to the default look.
        */
       styleId: number | null
+    }
+    TitleLookup: {
+      /** @description The matches as items to start from, best first; none when AniList doesn't know the title. */
+      results: components['schemas']['ReadingListItemInput'][]
     }
     TokenSummary: {
       /** @description When it was made, RFC 3339 in UTC. */
@@ -2630,6 +4319,1484 @@ export interface components {
 }
 export type $defs = Record<string, never>
 export interface operations {
+  'list-affiliates': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AffiliateList']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'create-affiliate': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AffiliateInput']
+      }
+    }
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Affiliate']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'reorder-affiliates': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AffiliateOrder']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AffiliateList']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'get-affiliate-webhook': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['DiscordWebhook']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'set-affiliate-webhook': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['DiscordWebhook']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['DiscordWebhook']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'update-affiliate': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The affiliate's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AffiliateInput']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Affiliate']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'delete-affiliate': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The affiliate's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'post-affiliate': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The affiliate's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Affiliate']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'list-announcement-roles': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AnnouncementRoleList']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'create-announcement-role': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AnnouncementRoleInput']
+      }
+    }
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AnnouncementRole']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'update-announcement-role': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The role's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AnnouncementRoleInput']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AnnouncementRole']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'delete-announcement-role': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The role's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'list-announcement-types': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AnnouncementTypeList']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'create-announcement-type': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AnnouncementTypeInput']
+      }
+    }
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AnnouncementType']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'update-announcement-type': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The type's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AnnouncementTypeInput']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AnnouncementType']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'delete-announcement-type': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The type's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'list-announcements': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AnnouncementList']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'create-announcement': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AnnouncementInput']
+      }
+    }
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Announcement']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'reorder-announcements': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AnnouncementOrder']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['AnnouncementList']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'update-announcement': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The announcement's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AnnouncementInput']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Announcement']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'delete-announcement': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The announcement's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'send-announcement': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The announcement's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Announcement']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'skip-announcement': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The announcement's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['AnnouncementSkip']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Announcement']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
   'sign-in': {
     parameters: {
       query?: never
@@ -3160,6 +6327,915 @@ export interface operations {
       }
       /** @description Service Unavailable */
       503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'look-up-title': {
+    parameters: {
+      query?: {
+        /** @description A title to search for. Give this or id. */
+        q?: string
+        /** @description An AniList id to fetch. Give this or q. */
+        id?: number
+      }
+      header?: never
+      path: {
+        /** @description The book club's slug. */
+        club: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['TitleLookup']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'list-reading-lists': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The book club's slug. */
+        club: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ReadingListSummaryList']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'create-reading-list': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The book club's slug. */
+        club: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ReadingListTitle']
+      }
+    }
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ReadingList']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'get-reading-list': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The book club's slug. */
+        club: string
+        /** @description The reading list's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ReadingList']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'update-reading-list': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The book club's slug. */
+        club: string
+        /** @description The reading list's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ReadingListTitle']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ReadingList']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'delete-reading-list': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The book club's slug. */
+        club: string
+        /** @description The reading list's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'create-reading-list-item': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The book club's slug. */
+        club: string
+        /** @description The reading list's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ReadingListItemInput']
+      }
+    }
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ReadingListItem']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'update-reading-list-item': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The book club's slug. */
+        club: string
+        /** @description The reading list's id. */
+        id: number
+        /** @description The item's id. */
+        itemId: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ReadingListItemInput']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ReadingListItem']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'delete-reading-list-item': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The book club's slug. */
+        club: string
+        /** @description The reading list's id. */
+        id: number
+        /** @description The item's id. */
+        itemId: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'publish-reading-list': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The book club's slug. */
+        club: string
+        /** @description The reading list's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PublishResult']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Request Timeout */
+      408: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'get-book-club-webhook': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The book club's slug. */
+        club: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['DiscordWebhook']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'set-book-club-webhook': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The book club's slug. */
+        club: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['DiscordWebhook']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['DiscordWebhook']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
         headers: {
           [name: string]: unknown
         }
@@ -5993,6 +10069,1181 @@ export interface operations {
       }
     }
   }
+  'list-raffles': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RaffleList']
+        }
+      }
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'create-raffle': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RaffleInput']
+      }
+    }
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Raffle']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'get-raffle': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The raffle's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RaffleDetail']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'update-raffle': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The raffle's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RaffleInput']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Raffle']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'delete-raffle': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The raffle's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'close-raffle': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The raffle's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Raffle']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'enter-raffle': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The raffle's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RaffleEnterInput']
+      }
+    }
+    responses: {
+      /** @description The tickets joined the character's existing entry. */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RaffleEnterResult']
+        }
+      }
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RaffleEnterResult']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'list-raffle-entries': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The raffle's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RaffleEntryList']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'add-raffle-entry': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The raffle's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RaffleEntryInput']
+      }
+    }
+    responses: {
+      /** @description The tickets joined the character's existing entry. */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RaffleEntry']
+        }
+      }
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RaffleEntry']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'delete-raffle-entry': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The raffle's id. */
+        id: number
+        /** @description The entry's id. */
+        entryId: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'settle-raffle-entry': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The raffle's id. */
+        id: number
+        /** @description The entry's id. */
+        entryId: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RaffleSettlement']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RaffleEntry']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'unsettle-raffle-entry': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The raffle's id. */
+        id: number
+        /** @description The entry's id. */
+        entryId: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RaffleEntry']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'look-up-raffle-entries': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The raffle's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RaffleLookupInput']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RaffleLookup']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'pick-another-raffle-winner': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The raffle's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RaffleWinnerChoice']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RaffleEntry']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'pick-raffle-winner': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The raffle's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['RaffleEntry']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'reopen-raffle': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The raffle's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Raffle']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'verify-raffle-winner': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The raffle's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RaffleWinnerConfirm']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Raffle']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
   'get-settings': {
     parameters: {
       query?: never
@@ -6725,6 +11976,673 @@ export interface operations {
       }
       /** @description Internal Server Error */
       500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'list-tea-rooms': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['TeaRoomList']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'create-tea-room': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['TeaRoomInput']
+      }
+    }
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['TeaRoom']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'list-public-tea-rooms': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PublicTeaRoomList']
+        }
+      }
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'get-public-tea-room': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The room's public number. */
+        number: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PublicTeaRoom']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'reorder-tea-rooms': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['TeaRoomOrder']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['TeaRoomList']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'get-tea-room-webhook': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['DiscordWebhook']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'set-tea-room-webhook': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['DiscordWebhook']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['DiscordWebhook']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'update-tea-room': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The room's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['TeaRoomInput']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['TeaRoom']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'delete-tea-room': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The room's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'change-tea-room': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The room's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['TeaRoomChanges']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['TeaRoom']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'post-tea-room': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The room's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['TeaRoom']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Service Unavailable */
+      503: {
         headers: {
           [name: string]: unknown
         }

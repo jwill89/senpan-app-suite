@@ -92,6 +92,38 @@ func TestSettingsSaveValidatesAndRefusesAStaleCopy(t *testing.T) {
 	}
 }
 
+// The tea-room origins start as the migration seeded them, are saved normalized and
+// without repeats, and an entry that isn't an origin is a 422 at its place in the list.
+func TestSettingsTeaRoomOrigins(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	if got := siteSettings(t, env)["teaRoomOrigins"]; fmt.Sprint(got) != "[https://senpan.cafe https://*.senpan.cafe]" {
+		t.Errorf("seeded origins = %v", got)
+	}
+
+	var saved map[string]any
+	decodeInto(t, saveSettings(t, env, map[string]any{"teaRoomOrigins": []string{"HTTPS://Senpan.Cafe/", "https://*.senpan.cafe", "https://senpan.cafe"}}), http.StatusOK, &saved)
+	if got := fmt.Sprint(saved["teaRoomOrigins"]); got != "[https://senpan.cafe https://*.senpan.cafe]" {
+		t.Errorf("saved origins = %s; want normalized and de-duplicated", got)
+	}
+
+	resp := saveSettings(t, env, map[string]any{"teaRoomOrigins": []string{"https://ok.example.com", "*", "https://x.example.com/path"}})
+	body, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("bad origins: status %d, want 422", resp.StatusCode)
+	}
+	if !strings.Contains(string(body), "body.teaRoomOrigins[1]") || !strings.Contains(string(body), "body.teaRoomOrigins[2]") || strings.Contains(string(body), "body.teaRoomOrigins[0]") {
+		t.Errorf("422 does not name entries 1 and 2: %s", body)
+	}
+
+	decodeInto(t, saveSettings(t, env, map[string]any{"teaRoomOrigins": []string{}}), http.StatusOK, &saved)
+	if got := fmt.Sprint(saved["teaRoomOrigins"]); got != "[]" {
+		t.Errorf("an emptied list = %s; want it to stay empty", got)
+	}
+}
+
 // Saving the settings needs the system-settings permission; the integrations need an
 // admin, so a grantee of the settings page never sees or overwrites a secret.
 func TestSettingsAndIntegrationsAccess(t *testing.T) {
@@ -100,7 +132,6 @@ func TestSettingsAndIntegrationsAccess(t *testing.T) {
 	const secret = "fonts-api-key-do-not-clobber"
 	decodeInto(t, env.putJSON(t, "/api/v1/settings/integrations", map[string]any{
 		"googleFontsApiKey": secret,
-		"bookClubWebhooks":  map[string]string{"yaoi": "https://discord.com/api/webhooks/1/abc"},
 	}), http.StatusOK, nil)
 	s := siteSettings(t, env)
 	s["appTitle"] = "Renamed By Staff"
@@ -109,7 +140,7 @@ func TestSettingsAndIntegrationsAccess(t *testing.T) {
 	staff := makeActiveUser(t, env, "settingsstaff", "correct horse battery", []string{"system-settings"})
 	decodeInto(t, reqAs(t, staff, env, http.MethodPut, "/api/v1/settings", s), http.StatusOK, nil)
 	for _, method := range []string{http.MethodGet, http.MethodPut} {
-		resp := reqAs(t, staff, env, method, "/api/v1/settings/integrations", map[string]any{"googleFontsApiKey": "", "bookClubWebhooks": map[string]string{}})
+		resp := reqAs(t, staff, env, method, "/api/v1/settings/integrations", map[string]any{"googleFontsApiKey": ""})
 		if resp.StatusCode != http.StatusForbidden {
 			t.Errorf("%s integrations as a settings grantee: %d, want 403", method, resp.StatusCode)
 		}
@@ -137,31 +168,20 @@ func TestSettingsAndIntegrationsAccess(t *testing.T) {
 	}
 }
 
-// An admin can clear a secret on purpose, a webhook must be Discord's, and a club
-// the registry doesn't have is refused.
+// An admin can clear a secret on purpose, and the book clubs' webhooks are not among
+// the integrations any more.
 func TestIntegrationsSave(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
-	decodeInto(t, env.putJSON(t, "/api/v1/settings/integrations", map[string]any{
-		"googleFontsApiKey": "key", "bookClubWebhooks": map[string]string{"yaoi": "https://discord.com/api/webhooks/1/abc"},
-	}), http.StatusOK, nil)
+	decodeInto(t, env.putJSON(t, "/api/v1/settings/integrations", map[string]any{"googleFontsApiKey": "key"}), http.StatusOK, nil)
 
 	var cleared map[string]any
-	decodeInto(t, env.putJSON(t, "/api/v1/settings/integrations", map[string]any{
-		"googleFontsApiKey": "", "bookClubWebhooks": map[string]string{"yaoi": ""},
-	}), http.StatusOK, &cleared)
-	if cleared["googleFontsApiKey"] != "" || cleared["bookClubWebhooks"].(map[string]any)["yaoi"] != "" {
+	decodeInto(t, env.putJSON(t, "/api/v1/settings/integrations", map[string]any{"googleFontsApiKey": ""}), http.StatusOK, &cleared)
+	if cleared["googleFontsApiKey"] != "" {
 		t.Errorf("after clearing: %v", cleared)
 	}
-
-	for _, webhooks := range []map[string]string{
-		{"yaoi": "https://evil.example.com/api/webhooks/1"},
-		{"no-such-club": "https://discord.com/api/webhooks/1/abc"},
-	} {
-		resp := env.putJSON(t, "/api/v1/settings/integrations", map[string]any{"googleFontsApiKey": "", "bookClubWebhooks": webhooks})
-		if _, status, _ := problem(t, resp); status != http.StatusUnprocessableEntity {
-			t.Errorf("webhooks %v: %d, want 422", webhooks, status)
-		}
+	if _, has := cleared["bookClubWebhooks"]; has {
+		t.Errorf("the integrations still carry the book-club webhooks: %v", cleared)
 	}
 }
 

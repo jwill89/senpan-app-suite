@@ -18,7 +18,7 @@ import MarkdownEditor from '@/components/common/MarkdownEditor.vue'
 import AdminPanel from '@/components/common/ui/AdminPanel.vue'
 import FormField from '@/components/common/ui/FormField.vue'
 import FormActions from '@/components/common/ui/FormActions.vue'
-import { BOOK_CLUBS, FALLBACK_GOOGLE_FONTS } from '@/lib/constants'
+import { FALLBACK_GOOGLE_FONTS } from '@/lib/constants'
 import { applyUploadedFonts } from '@/lib/theme'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
@@ -27,6 +27,17 @@ import { useFontsStore, toUploadedFont } from '@/stores/fonts'
 const app = useAppStore()
 const auth = useAuthStore()
 const fonts = useFontsStore()
+
+/** The allowed tea-room API sites as the textarea shows them: one per line. */
+const teaRoomOrigins = computed({
+  get: () => app.settings.teaRoomOrigins.join('\n'),
+  set: (text: string) => {
+    app.settings.teaRoomOrigins = text
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line !== '')
+  },
+})
 
 /** Uploaded fonts' effective CSS family names, de-duplicated. */
 const uploadedFontFamilies = computed(() => {
@@ -129,6 +140,17 @@ watch(
             >
               <span class="switch-knob"></span>
             </button>
+          </FormField>
+          <FormField
+            label="Allowed sites for the public tea-room API"
+            help="Sites whose pages may read the public tea-room data from a browser, one origin per line, such as https://senpan.cafe. https://*.example.com covers every subdomain. Leave empty to allow none."
+          >
+            <textarea
+              v-model="teaRoomOrigins"
+              rows="3"
+              placeholder="https://senpan.cafe&#10;https://*.senpan.cafe"
+              aria-label="Allowed sites for the public tea-room API"
+            ></textarea>
           </FormField>
           <FormField
             label="Hide Custom Cards"
@@ -281,29 +303,11 @@ watch(
           </div>
         </section>
 
-        <!-- Book Club Integrations --------------------------------------- -->
+        <!-- Book Clubs ----------------------------------------------------- -->
         <section class="settings-section">
           <h4 class="section-heading">
-            <font-awesome-icon :icon="['fad', 'book-open-cover']" /> Book Club Integrations
+            <font-awesome-icon :icon="['fad', 'book-open-cover']" /> Book Clubs
           </h4>
-          <!-- Admin-only, like the Google Fonts key above: the webhooks are
-               integrations. -->
-          <template v-if="auth.isAdmin">
-            <template v-for="club in BOOK_CLUBS" :key="club.slug">
-              <FormField
-                :label="`${club.name} - Reading List Webhook URL`"
-                help="Publishes this club's reading lists - each item posted as its own embed to this channel. Kept private; never sent to non-admin visitors."
-              >
-                <input
-                  v-model="app.integrations.bookClubWebhooks[club.slug]"
-                  placeholder="https://discord.com/api/webhooks/..."
-                  :aria-label="club.name + ' reading list Discord webhook URL'"
-                  type="password"
-                  autocomplete="off"
-                />
-              </FormField>
-            </template>
-          </template>
           <FormField
             label="AniList API URL"
             help='GraphQL endpoint for the "Pull from AniList" lookup when adding reading list items. No API key needed.'

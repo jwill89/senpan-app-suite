@@ -35,7 +35,6 @@ import RafflePaymentModal from './RafflePaymentModal.vue'
 import {
   useRafflesStore,
   entryAmountCollected,
-  entryPaymentState,
   entryTicketPrice,
   raffleAcceptsSignups,
   raffleCostLabel,
@@ -43,7 +42,7 @@ import {
 } from '@/stores/raffles'
 import { assetUrl } from '@/lib/assets'
 import { formatServerTimestamp, parseServerTimestamp } from '@/lib/datetime'
-import type { Raffle, RaffleEntry } from '@/types/api'
+import type { Raffle, RaffleEntry } from '@/api/client'
 
 const raffles = useRafflesStore()
 
@@ -66,7 +65,7 @@ const closedSearch = ref('')
 const closedPage = ref(1)
 const closedView = ref<DataTableView>({ total: 0, totalPages: 1, facets: {} })
 const closedMatches = (r: Raffle, q: string): boolean =>
-  [r.title, r.winner_name ?? ''].some((s) => s.toLowerCase().includes(q))
+  [r.title, r.winnerName ?? ''].some((s) => s.toLowerCase().includes(q))
 
 // -- Entries table (DataTable) ------------------------------------------------
 // The Actions column (delete) only exists while the raffle is open; the closed
@@ -74,7 +73,7 @@ const closedMatches = (r: Raffle, q: string): boolean =>
 const entryColumns = computed<DataColumn[]>(() => {
   const cols: DataColumn[] = [
     { key: 'character', label: 'Character' },
-    { key: 'num_entries', label: 'Entries', align: 'center' },
+    { key: 'numEntries', label: 'Entries', align: 'center' },
   ]
   // A details-only (or free) raffle collects nothing, so the money column would
   // only ever read 0. The paid column stays: the draw still runs off it.
@@ -134,11 +133,11 @@ function raffleTiming(r: Raffle): 'upcoming' | 'ended' | '' {
     return ''
   }
   const now = Date.now()
-  const from = parseServerTimestamp(r.available_from)
+  const from = parseServerTimestamp(r.availableFrom)
   if (!Number.isNaN(from) && from > now) {
     return 'upcoming'
   }
-  const to = parseServerTimestamp(r.available_to)
+  const to = parseServerTimestamp(r.availableTo)
   if (!Number.isNaN(to) && to <= now) {
     return 'ended'
   }
@@ -147,8 +146,8 @@ function raffleTiming(r: Raffle): 'upcoming' | 'ended' | '' {
 
 /** Compact "from - to" availability window for the closed table. */
 function periodLabel(r: Raffle): string {
-  const from = r.available_from ? formatServerTimestamp(r.available_from) : ''
-  const to = r.available_to ? formatServerTimestamp(r.available_to) : ''
+  const from = r.availableFrom ? formatServerTimestamp(r.availableFrom) : ''
+  const to = r.availableTo ? formatServerTimestamp(r.availableTo) : ''
   if (!from && !to) {
     return 'Always open'
   }
@@ -156,7 +155,7 @@ function periodLabel(r: Raffle): string {
 }
 
 /** Gil amount formatted with thousands separators (or "-" for nothing). */
-function gilLabel(amount: number | undefined): string {
+function gilLabel(amount: number | null | undefined): string {
   if (!amount) {
     return '-'
   }
@@ -225,10 +224,7 @@ async function deleteSelected(): Promise<void> {
         <span v-if="!raffleAcceptsSignups(raffles.selectedRaffle)" class="badge badge--muted">
           Details only
         </span>
-        <span
-          v-else-if="raffles.selectedRaffle.entry_mode === 'custom'"
-          class="badge badge--accent"
-        >
+        <span v-else-if="raffles.selectedRaffle.entryMode === 'custom'" class="badge badge--accent">
           {{ raffleCostLabel(raffles.selectedRaffle) }}
         </span>
       </SubPageHeader>
@@ -266,18 +262,18 @@ async function deleteSelected(): Promise<void> {
       </div>
 
       <!-- Prize image -->
-      <div v-if="raffles.selectedRaffle.prize_image" class="mb-16">
-        <img :src="assetUrl(raffles.selectedRaffle.prize_image)" class="prize-img-sm" alt="Prize" />
+      <div v-if="raffles.selectedRaffle.prizeImage" class="mb-16">
+        <img :src="assetUrl(raffles.selectedRaffle.prizeImage)" class="prize-img-sm" alt="Prize" />
       </div>
 
       <!-- Winner section -->
       <div v-if="raffles.raffleWinner" class="raffle-winner-panel">
         <h3 class="section-heading">
           <font-awesome-icon :icon="['fad', 'trophy']" /> Winner:
-          {{ raffles.raffleWinner.character_name }} @
+          {{ raffles.raffleWinner.characterName }} @
           {{ raffles.raffleWinner.world }}
         </h3>
-        <p class="text-muted text-sm mb-12">{{ raffles.raffleWinner.num_entries }} entries</p>
+        <p class="text-muted text-sm mb-12">{{ raffles.raffleWinner.numEntries }} entries</p>
         <div v-if="isOpen" class="flex-toolbar">
           <button
             type="button"
@@ -337,7 +333,7 @@ async function deleteSelected(): Promise<void> {
               v-model.number="raffles.entryAdd.numEntries"
               type="number"
               min="1"
-              :max="raffles.selectedRaffle.max_entries"
+              :max="raffles.selectedRaffle.maxEntries"
               aria-label="Number of entries"
             />
           </FormField>
@@ -354,7 +350,7 @@ async function deleteSelected(): Promise<void> {
                 v-model.number="raffles.entryAdd.amountWaived"
                 type="number"
                 min="0"
-                step="any"
+                step="1"
                 style="width: 110px"
                 aria-label="Amount waived"
               />
@@ -385,19 +381,19 @@ async function deleteSelected(): Promise<void> {
         row-key="id"
         :row-class="entryRowClass"
       >
-        <template #cell-character="{ row }">{{ row.character_name }} @ {{ row.world }}</template>
-        <template #cell-num_entries="{ row }">
-          {{ row.num_entries }}
-          <span v-if="entryPaymentState(row) === 'partial'" class="text-muted text-xs nowrap">
-            ({{ row.paid_entries }} paid)
+        <template #cell-character="{ row }">{{ row.characterName }} @ {{ row.world }}</template>
+        <template #cell-numEntries="{ row }">
+          {{ row.numEntries }}
+          <span v-if="row.paymentState === 'partial'" class="text-muted text-xs nowrap">
+            ({{ row.paidEntries }} paid)
           </span>
         </template>
         <template #cell-cost="{ row }">
           {{ entryCost(row) }}
           <!-- A waiver only makes sense next to what it reduced, so the collected
                figure rides along with it rather than earning its own column. -->
-          <div v-if="row.amount_waived > 0" class="text-muted text-xs nowrap">
-            -{{ row.amount_waived.toLocaleString() }} waived =
+          <div v-if="row.amountWaived > 0" class="text-muted text-xs nowrap">
+            -{{ row.amountWaived.toLocaleString() }} waived =
             {{ entryCollected(row).toLocaleString() }}
           </div>
         </template>
@@ -405,16 +401,16 @@ async function deleteSelected(): Promise<void> {
           <button
             v-if="isOpen"
             type="button"
-            :class="['btn-sm', PAID_BUTTON[entryPaymentState(row)].cls]"
+            :class="['btn-sm', PAID_BUTTON[row.paymentState].cls]"
             :title="charges ? 'Record a payment' : 'Mark this entry paid'"
             @click="payingEntry = row"
           >
             <font-awesome-icon v-if="row.paid" :icon="['fas', 'circle-check']" />
-            {{ PAID_BUTTON[entryPaymentState(row)].label }}
+            {{ PAID_BUTTON[row.paymentState].label }}
           </button>
           <template v-else>
             <font-awesome-icon v-if="row.paid" :icon="['fad', 'circle-check']" />
-            <template v-else>{{ PAID_BUTTON[entryPaymentState(row)].label }}</template>
+            <template v-else>{{ PAID_BUTTON[row.paymentState].label }}</template>
           </template>
         </template>
         <template #cell-actions="{ row }">
@@ -464,8 +460,8 @@ async function deleteSelected(): Promise<void> {
             @keydown.space.prevent="openRaffle(r)"
           >
             <img
-              v-if="r.prize_image"
-              :src="assetUrl(r.prize_image)"
+              v-if="r.prizeImage"
+              :src="assetUrl(r.prizeImage)"
               class="media-card-image"
               alt="Prize"
             />
@@ -519,11 +515,11 @@ async function deleteSelected(): Promise<void> {
             @update:view="closedView = $event"
           >
             <template #cell-title="{ row }">{{ row.title }}</template>
-            <template #cell-winner="{ row }">{{ row.winner_name || '-' }}</template>
+            <template #cell-winner="{ row }">{{ row.winnerName || '-' }}</template>
             <template #cell-period="{ row }">
               <span class="text-sm">{{ periodLabel(row) }}</span>
             </template>
-            <template #cell-total="{ row }">{{ gilLabel(row.paid_total) }}</template>
+            <template #cell-total="{ row }">{{ gilLabel(row.paidTotal) }}</template>
             <template #cell-actions="{ row }">
               <div class="row-actions">
                 <button

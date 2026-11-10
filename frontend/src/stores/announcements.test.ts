@@ -1,61 +1,62 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import type { Announcement } from '@/types/api'
+import type { Announcement, AnnouncementInput } from '@/api/client'
 
-// Capture the payload save() builds; list() backs the post-save refresh.
-const { save, list, reorder, setSkip } = vi.hoisted(() => ({
-  save: vi.fn(async () => ({ announcement: {} })),
-  list: vi.fn(async () => ({ announcements: [] })),
-  reorder: vi.fn(async () => ({ ok: true })),
-  setSkip: vi.fn(async () => ({ announcement: {} })),
-}))
-vi.mock('@/lib/endpoints', () => ({
-  endpoints: { announcements: { save, list, reorder, setSkip } },
+// The store calls the API client; only its calls are faked (unwrap is the real
+// one). Each fake answers a call's `{ data, error, response }`.
+const ok = (data: unknown, status = 200) => ({ data, response: new Response(null, { status }) })
+const failed = (detail: string, status = 500) => ({
+  error: { detail },
+  response: new Response(null, { status }),
+})
+const api = vi.hoisted(() => ({ GET: vi.fn(), POST: vi.fn(), PUT: vi.fn(), DELETE: vi.fn() }))
+vi.mock('@/api/client', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  api,
 }))
 
 import { useAnnouncementsStore } from './announcements'
-
-/** Shape of the fields the payload-building tests assert on. */
-interface SavedPayload {
-  title: string
-  schedule_minutes: number
-  schedule_weekdays: string
-  buttons: { label: string; emoji: string; url: string }[]
-  mention: string
-  start_format: string
-  end_format: string
-  image: string
-  thumbnail: string
-  dynamic_dates: boolean
-}
-/** Args of the first save() call (vi infers no params, so widen to read them). */
-function firstSaveArgs(): unknown[] {
-  return save.mock.calls[0]!
-}
-/** The payload passed to the first save() call, typed for assertions. */
-function savedPayload(): SavedPayload {
-  return firstSaveArgs()[1] as SavedPayload
-}
+import { useUiStore } from './ui'
 
 beforeEach(() => {
   setActivePinia(createPinia())
-  save.mockClear()
-  list.mockClear()
-  reorder.mockClear()
+  Object.values(api).forEach((fn) => fn.mockReset())
+  api.GET.mockImplementation(async (path: string) => {
+    if (path === '/announcements') {
+      return ok({ announcements: [] })
+    }
+    return ok({ types: [], roles: [] })
+  })
+  api.POST.mockResolvedValue(ok({}, 201))
+  api.PUT.mockResolvedValue(ok({}))
+  api.DELETE.mockResolvedValue(ok(undefined, 204))
 })
 
+/** The call made to a method and path. */
+function call(method: 'POST' | 'PUT' | 'DELETE', path: string) {
+  return api[method].mock.calls.find((c) => c[0] === path)?.[1]
+}
+
+/** The announcement body save() sent (a create, unless told otherwise). */
+function savedBody(method: 'POST' | 'PUT' = 'POST', path = '/announcements'): AnnouncementInput {
+  return call(method, path).body
+}
+
+/** Whether the announcements were read again. */
+const reloaded = () => api.GET.mock.calls.some((c) => c[0] === '/announcements')
+
 describe('reorder', () => {
-  it('persists the supplied id order via the reorder endpoint', async () => {
+  it('persists the supplied id order via the reorder operation', async () => {
     const store = useAnnouncementsStore()
     await store.reorder([3, 1, 2])
-    expect(reorder).toHaveBeenCalledWith([3, 1, 2])
+    expect(call('POST', '/announcements/reorder')).toEqual({ body: { orderedIds: [3, 1, 2] } })
   })
 
   it('reverts to the server order when the save fails', async () => {
-    reorder.mockRejectedValueOnce(new Error('boom'))
+    api.POST.mockResolvedValueOnce(failed('boom', 422))
     const store = useAnnouncementsStore()
     await store.reorder([2, 1])
-    expect(list).toHaveBeenCalled() // reloads the persisted order
+    expect(reloaded()).toBe(true) // reloads the persisted order
   })
 })
 
@@ -63,8 +64,8 @@ describe('filteredAnnouncements', () => {
   beforeEach(() => {
     const s = useAnnouncementsStore()
     s.announcements = [
-      { id: 1, type_id: 1, type_name: 'News', title: 'Tea Party', details: 'come' },
-      { id: 2, type_id: 2, type_name: 'Events', title: 'Bingo Night', details: 'play' },
+      { id: 1, typeId: 1, typeName: 'News', title: 'Tea Party', details: 'come' },
+      { id: 2, typeId: 2, typeName: 'Events', title: 'Bingo Night', details: 'play' },
     ] as Announcement[]
   })
 
@@ -88,30 +89,113 @@ describe('filteredAnnouncements', () => {
   })
 })
 
+describe('loading', () => {
+  it('load reads the types, the roles and the announcements', async () => {
+    api.GET.mockImplementation(async (path: string) => {
+      switch (path) {
+        case '/announcement-types':
+          return ok({ types: [{ id: 1, name: 'News' }] })
+        case '/announcement-roles':
+          return ok({ roles: [{ id: 2, name: 'Crew' }] })
+        default:
+          return ok({ announcements: [{ id: 3 }] })
+      }
+    })
+    const s = useAnnouncementsStore()
+    await s.load()
+    expect(s.types.map((t) => t.id)).toEqual([1])
+    expect(s.roles.map((r) => r.id)).toEqual([2])
+    expect(s.announcements.map((a) => a.id)).toEqual([3])
+    expect(s.loading).toBe(false)
+  })
+
+  it('shows the problem when a read fails', async () => {
+    api.GET.mockResolvedValue(failed('The server is down'))
+    const s = useAnnouncementsStore()
+    await s.load()
+    expect(useUiStore().toast.message).toBe('The server is down')
+  })
+})
+
+describe('types and roles', () => {
+  it('saveType creates a trimmed type, or replaces one that has an id', async () => {
+    const s = useAnnouncementsStore()
+    s.typeForm = { id: 0, name: '  News  ', webhookUrl: ' https://discord.com/api/webhooks/1/x ' }
+    expect(await s.saveType()).toBe(true)
+    expect(call('POST', '/announcement-types')).toEqual({
+      body: { name: 'News', webhookUrl: 'https://discord.com/api/webhooks/1/x' },
+    })
+
+    s.typeForm = { id: 5, name: 'News', webhookUrl: '' }
+    await s.saveType()
+    expect(call('PUT', '/announcement-types/{id}')).toEqual({
+      params: { path: { id: 5 } },
+      body: { name: 'News', webhookUrl: '' },
+    })
+  })
+
+  it('saveType needs a name', async () => {
+    const s = useAnnouncementsStore()
+    s.typeForm = { id: 0, name: '  ', webhookUrl: '' }
+    expect(await s.saveType()).toBe(false)
+    expect(api.POST).not.toHaveBeenCalled()
+  })
+
+  it('saveRole sends the role id, which is digits only', async () => {
+    const s = useAnnouncementsStore()
+    s.roleForm = { id: 0, name: 'Crew', roleId: '12a' }
+    expect(await s.saveRole()).toBe(false)
+    expect(api.POST).not.toHaveBeenCalled()
+
+    s.roleForm = { id: 0, name: ' Crew ', roleId: ' 123 ' }
+    expect(await s.saveRole()).toBe(true)
+    expect(call('POST', '/announcement-roles')).toEqual({ body: { name: 'Crew', roleId: '123' } })
+  })
+
+  it("a type in use is refused with the server's reason", async () => {
+    api.DELETE.mockResolvedValueOnce(failed('This type is used by 2 announcement(s).', 409))
+    const ui = useUiStore()
+    vi.spyOn(ui, 'confirm').mockResolvedValue(true)
+    const s = useAnnouncementsStore()
+    await s.deleteType({ id: 4, name: 'News', webhookUrl: '', createdAt: null })
+    expect(ui.toast.message).toBe('This type is used by 2 announcement(s).')
+  })
+})
+
 describe('save() payload building', () => {
   it('encodes a weekly schedule (minutes + deduped/sorted weekdays)', async () => {
     const s = useAnnouncementsStore()
     Object.assign(s.form, {
-      type_id: 3,
+      typeId: 3,
       title: '  Weekly Tea  ',
       details: 'every week',
-      schedule_kind: 'weekly',
-      time_local: '19:30',
+      scheduleKind: 'weekly',
+      timeLocal: '19:30',
       weekdays: [5, 1, 3, 1], // out of order + duplicate
     })
     const ok = await s.save()
     expect(ok).toBe(true)
-    expect(firstSaveArgs()[0]).toBe(0) // id (0 = create)
-    const payload = savedPayload()
+    const payload = savedBody()
     expect(payload.title).toBe('Weekly Tea') // trimmed
-    expect(payload.schedule_minutes).toBe(19 * 60 + 30)
-    expect(payload.schedule_weekdays).toBe('1,3,5')
+    expect(payload.typeId).toBe(3)
+    expect(payload.scheduleMinutes).toBe(19 * 60 + 30)
+    expect(payload.scheduleWeekdays).toBe('1,3,5')
+    expect(payload).not.toHaveProperty('id')
+    expect(payload).not.toHaveProperty('timeLocal')
+  })
+
+  it('replaces an existing announcement through its own path', async () => {
+    const s = useAnnouncementsStore()
+    Object.assign(s.form, { id: 9, typeId: 1, title: 'Edited', details: 'x' })
+    await s.save()
+    expect(call('PUT', '/announcements/{id}').params).toEqual({ path: { id: 9 } })
+    expect(api.POST).not.toHaveBeenCalled()
   })
 
   it('sanitizes buttons: trims, drops blank-label / non-http, caps at 5', async () => {
     const s = useAnnouncementsStore()
     Object.assign(s.form, {
-      type_id: 1,
+      typeId: 1,
       title: 'Has buttons',
       details: 'x',
       buttons: [
@@ -126,7 +210,7 @@ describe('save() payload building', () => {
       ],
     })
     await s.save()
-    const payload = savedPayload()
+    const payload = savedBody()
     expect(payload.buttons).toHaveLength(5)
     expect(payload.buttons[0]).toEqual({ label: 'Go', emoji: '😀', url: 'https://a.com' })
     expect(payload.buttons.map((b) => b.label)).toEqual(['Go', 'One', 'Two', 'Three', 'Four'])
@@ -134,71 +218,75 @@ describe('save() payload building', () => {
 
   it('passes the selected role tag through to the payload', async () => {
     const s = useAnnouncementsStore()
-    Object.assign(s.form, { type_id: 1, title: 'Tagged', details: 'x', mention: 'role:4' })
+    Object.assign(s.form, { typeId: 1, title: 'Tagged', details: 'x', mention: 'role:4' })
     await s.save()
-    expect(savedPayload().mention).toBe('role:4')
+    expect(savedBody().mention).toBe('role:4')
   })
 
   it('passes the selected Discord start/end formats through to the payload', async () => {
     const s = useAnnouncementsStore()
     Object.assign(s.form, {
-      type_id: 1,
+      typeId: 1,
       title: 'Timed',
       details: 'x',
-      start_format: 'R',
-      end_format: 'T',
+      startFormat: 'R',
+      endFormat: 'T',
     })
     await s.save()
-    expect(savedPayload().start_format).toBe('R')
-    expect(savedPayload().end_format).toBe('T')
+    expect(savedBody().startFormat).toBe('R')
+    expect(savedBody().endFormat).toBe('T')
   })
 
   it('passes the dynamic-dates flag through to the payload', async () => {
     const s = useAnnouncementsStore()
-    Object.assign(s.form, {
-      type_id: 1,
-      title: 'Recurring event',
-      details: 'x',
-      dynamic_dates: true,
-    })
+    Object.assign(s.form, { typeId: 1, title: 'Recurring event', details: 'x', dynamicDates: true })
     await s.save()
-    expect(savedPayload().dynamic_dates).toBe(true)
+    expect(savedBody().dynamicDates).toBe(true)
   })
 
   it('passes both the image and the thumbnail through to the payload', async () => {
     const s = useAnnouncementsStore()
     Object.assign(s.form, {
-      type_id: 1,
+      typeId: 1,
       title: 'Pics',
       details: 'x',
       image: 'https://h/images/announcements/main.png',
       thumbnail: 'https://h/images/announcements/thumb.png',
     })
     await s.save()
-    expect(savedPayload().image).toBe('https://h/images/announcements/main.png')
-    expect(savedPayload().thumbnail).toBe('https://h/images/announcements/thumb.png')
+    expect(savedBody().image).toBe('https://h/images/announcements/main.png')
+    expect(savedBody().thumbnail).toBe('https://h/images/announcements/thumb.png')
   })
 
   it('blocks save and does not hit the API when the title is missing', async () => {
     const s = useAnnouncementsStore()
-    Object.assign(s.form, { type_id: 1, title: '   ', details: 'x' })
+    Object.assign(s.form, { typeId: 1, title: '   ', details: 'x' })
     const ok = await s.save()
     expect(ok).toBe(false)
-    expect(save).not.toHaveBeenCalled()
+    expect(api.POST).not.toHaveBeenCalled()
   })
 
   it('requires a weekday for a weekly schedule', async () => {
     const s = useAnnouncementsStore()
     Object.assign(s.form, {
-      type_id: 1,
+      typeId: 1,
       title: 'No days',
       details: 'x',
-      schedule_kind: 'weekly',
-      time_local: '12:00',
+      scheduleKind: 'weekly',
+      timeLocal: '12:00',
       weekdays: [],
     })
     expect(await s.save()).toBe(false)
-    expect(save).not.toHaveBeenCalled()
+    expect(api.POST).not.toHaveBeenCalled()
+  })
+
+  it("keeps the form and shows the server's reason when a save is refused", async () => {
+    api.POST.mockResolvedValueOnce(failed("The announcement can't be saved as it is.", 422))
+    const s = useAnnouncementsStore()
+    Object.assign(s.form, { typeId: 1, title: 'Refused', details: 'x' })
+    expect(await s.save()).toBe(false)
+    expect(s.form.title).toBe('Refused')
+    expect(s.saving).toBe(false)
   })
 })
 
@@ -207,27 +295,29 @@ describe('editAnnouncement round-trip', () => {
     const s = useAnnouncementsStore()
     s.editAnnouncement({
       id: 7,
-      type_id: 2,
+      typeId: 2,
       title: 'Recurring',
       details: 'd',
       image: '',
       color: '',
-      schedule_kind: 'weekly',
-      schedule_minutes: 19 * 60 + 30,
-      schedule_weekdays: '5,1,3',
-      schedule_week_of_month: 2,
+      scheduleKind: 'weekly',
+      scheduleMinutes: 19 * 60 + 30,
+      scheduleWeekdays: '5,1,3',
+      scheduleWeekOfMonth: 2,
       buttons: [{ label: 'Go', emoji: '', url: 'https://a.com' }],
       mention: 'everyone',
-      dynamic_dates: false,
+      dynamicDates: false,
+      startFormat: '',
+      endFormat: '',
     } as unknown as Announcement)
     expect(s.form.id).toBe(7)
-    expect(s.form.time_local).toBe('19:30')
+    expect(s.form.timeLocal).toBe('19:30')
     expect(s.form.weekdays).toEqual([1, 3, 5]) // parsed + sorted
     expect(s.form.color).toBe('#ff3131') // blank colour falls back to brand default
     expect(s.form.thumbnail).toBe('') // absent thumbnail -> empty
-    expect(s.form.dynamic_dates).toBe(false) // flag round-trips (API always sends it - no omitempty)
-    expect(s.form.start_format).toBe('F') // blank start format -> default
-    expect(s.form.end_format).toBe('t') // blank end format -> default
+    expect(s.form.dynamicDates).toBe(false)
+    expect(s.form.startFormat).toBe('F') // blank start format -> default
+    expect(s.form.endFormat).toBe('t') // blank end format -> default
     // Buttons round-trip; each also gains a client-only `_uid` for stable
     // repeater keying (stripped again when the payload is built).
     expect(s.form.buttons).toMatchObject([{ label: 'Go', emoji: '', url: 'https://a.com' }])
@@ -240,17 +330,47 @@ describe('editAnnouncement round-trip', () => {
     expect(() =>
       s.editAnnouncement({
         id: 8,
-        type_id: 1,
+        typeId: 1,
         title: 'No buttons',
         details: 'd',
         image: '',
         color: '',
         buttons: [],
         mention: '',
-        dynamic_dates: false,
+        dynamicDates: false,
       } as unknown as Announcement),
     ).not.toThrow()
     expect(s.form.buttons).toEqual([])
+  })
+})
+
+describe('sendNow', () => {
+  it('posts after confirming, then reads the list again', async () => {
+    const ui = useUiStore()
+    vi.spyOn(ui, 'confirm').mockResolvedValue(true)
+    const s = useAnnouncementsStore()
+    await s.sendNow({ id: 4, title: 'Bingo Night' } as Announcement)
+    expect(call('POST', '/announcements/{id}/send')).toEqual({ params: { path: { id: 4 } } })
+    expect(reloaded()).toBe(true)
+    expect(s.sendingId).toBeNull()
+  })
+
+  it('does nothing when the confirmation is declined', async () => {
+    const ui = useUiStore()
+    vi.spyOn(ui, 'confirm').mockResolvedValue(false)
+    const s = useAnnouncementsStore()
+    await s.sendNow({ id: 4, title: 'Bingo Night' } as Announcement)
+    expect(api.POST).not.toHaveBeenCalled()
+  })
+
+  it('shows why Discord refused', async () => {
+    api.POST.mockResolvedValueOnce(failed('Discord is limiting posts right now.', 429))
+    const ui = useUiStore()
+    vi.spyOn(ui, 'confirm').mockResolvedValue(true)
+    const s = useAnnouncementsStore()
+    await s.sendNow({ id: 4, title: 'Bingo Night' } as Announcement)
+    expect(ui.toast.message).toBe('Discord is limiting posts right now.')
+    expect(s.sendingId).toBeNull()
   })
 })
 
@@ -259,20 +379,23 @@ describe('setSkip', () => {
     const s = useAnnouncementsStore()
     const a = { id: 4, title: 'Bingo Night' } as Announcement
     expect(await s.setSkip(a, 2)).toBe(true)
-    expect(setSkip).toHaveBeenCalledWith(4, 2)
+    expect(call('POST', '/announcements/{id}/skip')).toEqual({
+      params: { path: { id: 4 } },
+      body: { count: 2 },
+    })
     // The list is reloaded so the row's badge reflects the new count.
-    expect(list).toHaveBeenCalled()
+    expect(reloaded()).toBe(true)
     expect(s.skippingId).toBeNull()
   })
 
   it('sends 0 to clear a pending skip', async () => {
     const s = useAnnouncementsStore()
     expect(await s.setSkip({ id: 4, title: 'X' } as Announcement, 0)).toBe(true)
-    expect(setSkip).toHaveBeenCalledWith(4, 0)
+    expect(call('POST', '/announcements/{id}/skip').body).toEqual({ count: 0 })
   })
 
   it('reports failure and clears the in-flight marker', async () => {
-    setSkip.mockRejectedValueOnce(new Error('nope'))
+    api.POST.mockResolvedValueOnce(failed("This announcement isn't scheduled.", 409))
     const s = useAnnouncementsStore()
     expect(await s.setSkip({ id: 4, title: 'X' } as Announcement, 1)).toBe(false)
     expect(s.skippingId).toBeNull()

@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"slices"
@@ -13,28 +15,42 @@ import (
 
 	"app-suite/internal/bookclubs"
 	"app-suite/internal/db"
-	"app-suite/internal/discord"
 	"app-suite/internal/fonts"
 	"app-suite/internal/game"
+	"app-suite/internal/origins"
 	"app-suite/internal/permissions"
 	"app-suite/internal/settings"
+	"app-suite/internal/store"
 )
 
 // SettingsInput is the site's settings as a save sends them: every one, since a save
 // replaces them all.
 type SettingsInput struct {
-	AppTitle                string `json:"appTitle" maxLength:"200" doc:"The site's name, shown in the browser tab and the header."`
-	DefaultDrawDelay        int    `json:"defaultDrawDelay" minimum:"0" maximum:"60" doc:"Seconds a drawn number waits before players see it, so the caller can announce it first."`
-	FrequentWinnerThreshold int    `json:"frequentWinnerThreshold" minimum:"1" maximum:"100" doc:"Wins within frequentWinnerHours that mark a player as a frequent winner."`
-	FrequentWinnerHours     int    `json:"frequentWinnerHours" minimum:"1" maximum:"168" doc:"The hours a frequent winner's wins are counted over."`
-	HeaderFont              string `json:"headerFont" maxLength:"100" doc:"The font family headings use: a Google Font or an uploaded font's family."`
-	AniListAPIURL           string `json:"aniListApiUrl" maxLength:"200" doc:"The AniList GraphQL endpoint book clubs look titles up at: https, under anilist.co. Empty for the default."`
-	BingoJoinPrompt         string `json:"bingoJoinPrompt" maxLength:"500" doc:"What the home page asks a player who is joining a board."`
-	YoeverCooldownSeconds   int    `json:"yoeverCooldownSeconds" minimum:"0" maximum:"3600" doc:"Seconds a card waits between Yoever reactions."`
-	CustomCardCost          int    `json:"customCardCost" minimum:"0" maximum:"1000000000" doc:"What a personal card costs, in gil, shown on the custom card request page."`
-	HideBingo               bool   `json:"hideBingo" doc:"Whether bingo is hidden from the public pages."`
-	HideCustomCards         bool   `json:"hideCustomCards" doc:"Whether the custom card request is hidden while the rest of bingo stays."`
-	UpdatedAt               string `json:"updatedAt,omitempty" doc:"When the settings were last saved, as read. Sent with a save, it must still be the latest: a save made from an older copy is answered 409, so a page left open can't undo what was saved since. Left out, the save is not checked."`
+	AppTitle                string     `json:"appTitle" maxLength:"200" doc:"The site's name, shown in the browser tab and the header."`
+	DefaultDrawDelay        int        `json:"defaultDrawDelay" minimum:"0" maximum:"60" doc:"Seconds a drawn number waits before players see it, so the caller can announce it first."`
+	FrequentWinnerThreshold int        `json:"frequentWinnerThreshold" minimum:"1" maximum:"100" doc:"Wins within frequentWinnerHours that mark a player as a frequent winner."`
+	FrequentWinnerHours     int        `json:"frequentWinnerHours" minimum:"1" maximum:"168" doc:"The hours a frequent winner's wins are counted over."`
+	HeaderFont              string     `json:"headerFont" maxLength:"100" doc:"The font family headings use: a Google Font or an uploaded font's family."`
+	AniListAPIURL           string     `json:"aniListApiUrl" maxLength:"200" doc:"The AniList GraphQL endpoint book clubs look titles up at: https, under anilist.co. Empty for the default."`
+	BingoJoinPrompt         string     `json:"bingoJoinPrompt" maxLength:"500" doc:"What the home page asks a player who is joining a board."`
+	YoeverCooldownSeconds   int        `json:"yoeverCooldownSeconds" minimum:"0" maximum:"3600" doc:"Seconds a card waits between Yoever reactions."`
+	CustomCardCost          int        `json:"customCardCost" minimum:"0" maximum:"1000000000" doc:"What a personal card costs, in gil, shown on the custom card request page."`
+	HideBingo               bool       `json:"hideBingo" doc:"Whether bingo is hidden from the public pages."`
+	HideCustomCards         bool       `json:"hideCustomCards" doc:"Whether the custom card request is hidden while the rest of bingo stays."`
+	TeaRoomOrigins          OriginList `json:"teaRoomOrigins" nullable:"false" doc:"The sites whose pages may read the public tea-room API from a browser, each as an origin such as https://senpan.cafe. https://*.example.com covers every subdomain of example.com. Empty for none."`
+	UpdatedAt               string     `json:"updatedAt,omitempty" doc:"When the settings were last saved, as read. Sent with a save, it must still be the latest: a save made from an older copy is answered 409, so a page left open can't undo what was saved since. Left out, the save is not checked."`
+}
+
+// OriginList is up to twenty origins, each up to 200 characters.
+type OriginList []string
+
+// Schema is an array of at most 20 strings, none null.
+func (OriginList) Schema(huma.Registry) *huma.Schema {
+	most, longest := 20, 200
+	return &huma.Schema{
+		Type: huma.TypeArray, MaxItems: &most,
+		Items: &huma.Schema{Type: huma.TypeString, MaxLength: &longest},
+	}
 }
 
 // Settings is the site's settings as anyone reads them, with the uploaded fonts a
@@ -51,11 +67,10 @@ type UploadedFont struct {
 	Token  string `json:"token" doc:"The token its file is served under (GET /api/fonts/pub/f/{token}); it rotates, so a page uses the one it was given."`
 }
 
-// Integrations is what the server sends to outside services with: admin-only, since
-// each grants access somewhere.
+// Integrations is the key the server uses with an outside service: admin-only, since
+// it grants access there.
 type Integrations struct {
-	GoogleFontsAPIKey string            `json:"googleFontsApiKey" maxLength:"200" doc:"The Google Fonts API key the header-font picker lists fonts with. Empty for none."`
-	BookClubWebhooks  map[string]string `json:"bookClubWebhooks" doc:"Each book club's reading-list Discord webhook, by the club's slug: https, on Discord, under /api/webhooks/. Empty for none."`
+	GoogleFontsAPIKey string `json:"googleFontsApiKey" maxLength:"200" doc:"The Google Fonts API key the header-font picker lists fonts with. Empty for none."`
 }
 
 type settingsOutput struct {
@@ -102,7 +117,7 @@ func (h handlers) registerSettings(api huma.API) {
 		OperationID: "get-integrations",
 		Method:      http.MethodGet,
 		Path:        "/settings/integrations",
-		Summary:     "The keys and webhooks the server uses",
+		Summary:     "The keys the server uses with outside services",
 		Tags:        []string{"Settings"},
 		Security:    secured,
 		Middlewares: huma.Middlewares{h.admin(api)},
@@ -113,7 +128,7 @@ func (h handlers) registerSettings(api huma.API) {
 		OperationID: "update-integrations",
 		Method:      http.MethodPut,
 		Path:        "/settings/integrations",
-		Summary:     "Replace the keys and webhooks the server uses",
+		Summary:     "Replace the keys the server uses with outside services",
 		Tags:        []string{"Settings"},
 		Security:    secured,
 		Middlewares: huma.Middlewares{h.admin(api)},
@@ -125,7 +140,7 @@ func (h handlers) registerSettings(api huma.API) {
 var siteKeys = []string{
 	settings.AppTitle, settings.DefaultDrawDelay, settings.FrequentWinnerThreshold, settings.FrequentWinnerHours,
 	settings.HeaderFont, settings.AniListAPIURL, settings.BingoJoinPrompt, settings.YoeverCooldownSeconds,
-	settings.CustomCardCost, settings.HideBingo, settings.HideCustomCards, settings.UpdatedAt,
+	settings.CustomCardCost, settings.HideBingo, settings.HideCustomCards, settings.TeaRoomOrigins, settings.UpdatedAt,
 }
 
 // loadSettings reads the site's settings, each its default when never saved or
@@ -164,8 +179,29 @@ func loadSettings(ctx context.Context, q *db.Queries) (SettingsInput, error) {
 		CustomCardCost:          number(settings.CustomCardCost),
 		HideBingo:               text(settings.HideBingo) == "1",
 		HideCustomCards:         text(settings.HideCustomCards) == "1",
+		TeaRoomOrigins:          OriginList(parseOrigins(stored[settings.TeaRoomOrigins])),
 		UpdatedAt:               stored[settings.UpdatedAt],
 	}, nil
+}
+
+// parseOrigins reads the stored origins list; one that doesn't read as a list
+// allows nothing.
+func parseOrigins(stored string) []string {
+	list := []string{}
+	if err := json.Unmarshal([]byte(stored), &list); err != nil || list == nil {
+		return []string{}
+	}
+	return list
+}
+
+// TeaRoomOriginAllowed reports whether origin may read the public tea-room API from a
+// browser, by the saved allowlist.
+func TeaRoomOriginAllowed(ctx context.Context, st *store.Store, origin string) bool {
+	stored, err := db.New(st.ReadDB()).GetSetting(ctx, settings.TeaRoomOrigins)
+	if err != nil {
+		return false
+	}
+	return origins.Allowed(parseOrigins(stored), origin)
 }
 
 func (h handlers) uploadedFonts(ctx context.Context) []UploadedFont {
@@ -198,6 +234,11 @@ func (in SettingsInput) check() []error {
 		problems = append(problems, &huma.ErrorDetail{Location: "body.aniListApiUrl", Value: in.AniListAPIURL,
 			Message: "The AniList API URL must be an https URL under anilist.co."})
 	}
+	for i, entry := range in.TeaRoomOrigins {
+		if _, err := origins.Normalize(entry); err != nil {
+			problems = append(problems, &huma.ErrorDetail{Location: "body.teaRoomOrigins[" + strconv.Itoa(i) + "]", Value: entry, Message: err.Error()})
+		}
+	}
 	if in.UpdatedAt != "" {
 		if _, err := time.Parse(time.RFC3339, in.UpdatedAt); err != nil {
 			problems = append(problems, &huma.ErrorDetail{Location: "body.updatedAt", Value: in.UpdatedAt,
@@ -205,6 +246,18 @@ func (in SettingsInput) check() []error {
 		}
 	}
 	return problems
+}
+
+// normalizedOrigins is entries in their canonical form, each once.
+func normalizedOrigins(entries []string) []string {
+	out := make([]string, 0, len(entries))
+	for _, e := range entries {
+		n, err := origins.Normalize(e)
+		if err == nil && !slices.Contains(out, n) {
+			out = append(out, n)
+		}
+	}
+	return out
 }
 
 // nextUpdatedAt is a save's updatedAt: now, to the second, but always later than the
@@ -225,6 +278,11 @@ func (h handlers) updateSettings(ctx context.Context, in *settingsInput) (*setti
 	if problems := body.check(); len(problems) > 0 {
 		return nil, huma.Error422UnprocessableEntity("Some settings can't be saved as they are.", problems...)
 	}
+	allowed := normalizedOrigins(body.TeaRoomOrigins)
+	allowedJSON, err := json.Marshal(allowed)
+	if err != nil {
+		return nil, h.fail("encode the tea-room origins", err)
+	}
 	flag := func(b bool) string {
 		if b {
 			return "1"
@@ -243,6 +301,7 @@ func (h handlers) updateSettings(ctx context.Context, in *settingsInput) (*setti
 		settings.CustomCardCost:          strconv.Itoa(body.CustomCardCost),
 		settings.HideBingo:               flag(body.HideBingo),
 		settings.HideCustomCards:         flag(body.HideCustomCards),
+		settings.TeaRoomOrigins:          string(allowedJSON),
 	}
 
 	// One transaction: the check against the latest save and every value land
@@ -250,7 +309,7 @@ func (h handlers) updateSettings(ctx context.Context, in *settingsInput) (*setti
 	// nothing half-saved. It runs detached from the request for the same reason.
 	ctx = context.WithoutCancel(ctx)
 	var before SettingsInput
-	err := h.transact(ctx, func(q *db.Queries) error {
+	err = h.transact(ctx, func(q *db.Queries) error {
 		var err error
 		if before, err = loadSettings(ctx, q); err != nil {
 			return err
@@ -286,59 +345,16 @@ func (h handlers) updateSettings(ctx context.Context, in *settingsInput) (*setti
 }
 
 func (h handlers) getIntegrations(ctx context.Context, _ *struct{}) (*integrationsOutput, error) {
-	keys := []string{settings.GoogleFontsAPIKey}
-	for _, slug := range bookclubs.Slugs() {
-		keys = append(keys, bookclubs.WebhookSettingKey(slug))
-	}
-	rows, err := h.read().ListSettings(ctx, keys)
-	if err != nil {
+	key, err := h.read().GetSetting(ctx, settings.GoogleFontsAPIKey)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, h.fail("load integrations", err)
 	}
-	stored := map[string]string{}
-	for _, r := range rows {
-		stored[r.Key] = r.Value
-	}
-	out := Integrations{GoogleFontsAPIKey: stored[settings.GoogleFontsAPIKey], BookClubWebhooks: map[string]string{}}
-	for _, slug := range bookclubs.Slugs() {
-		out.BookClubWebhooks[slug] = stored[bookclubs.WebhookSettingKey(slug)]
-	}
-	return &integrationsOutput{Body: out}, nil
+	return &integrationsOutput{Body: Integrations{GoogleFontsAPIKey: key}}, nil
 }
 
 func (h handlers) updateIntegrations(ctx context.Context, in *integrationsInput) (*integrationsOutput, error) {
-	body := in.Body
-	var problems []error
-	slugs := bookclubs.Slugs()
-	for slug, url := range body.BookClubWebhooks {
-		switch {
-		case !slices.Contains(slugs, slug):
-			problems = append(problems, &huma.ErrorDetail{Location: "body.bookClubWebhooks." + slug, Value: slug,
-				Message: "There is no book club " + strconv.Quote(slug) + "."})
-		case url != "" && !discord.IsWebhookURL(url):
-			problems = append(problems, &huma.ErrorDetail{Location: "body.bookClubWebhooks." + slug, Value: url,
-				Message: "A Discord webhook URL looks like https://discord.com/api/webhooks/..."})
-		}
-	}
-	if len(problems) > 0 {
-		return nil, huma.Error422UnprocessableEntity("Some integrations can't be saved as they are.", problems...)
-	}
-	ctx = context.WithoutCancel(ctx)
-	err := h.transact(ctx, func(q *db.Queries) error {
-		if err := q.SetSetting(ctx, db.SetSettingParams{Key: settings.GoogleFontsAPIKey, Value: strings.TrimSpace(body.GoogleFontsAPIKey)}); err != nil {
-			return err
-		}
-		for _, slug := range slugs {
-			// A club the body leaves out keeps its webhook, so adding a club never
-			// wipes one an older page didn't know.
-			url, ok := body.BookClubWebhooks[slug]
-			if !ok {
-				continue
-			}
-			if err := q.SetSetting(ctx, db.SetSettingParams{Key: bookclubs.WebhookSettingKey(slug), Value: strings.TrimSpace(url)}); err != nil {
-				return err
-			}
-		}
-		return nil
+	err := h.write().SetSetting(context.WithoutCancel(ctx), db.SetSettingParams{
+		Key: settings.GoogleFontsAPIKey, Value: strings.TrimSpace(in.Body.GoogleFontsAPIKey),
 	})
 	if err != nil {
 		return nil, h.fail("save integrations", err)

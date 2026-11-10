@@ -5,7 +5,7 @@
  * details are posted across multiple consecutive fields (split at a natural line
  * break) so nothing is truncated and the time-first field order is preserved.
  *
- * This mirrors `splitForEmbedFields` in src/internal/server/announcements.go so
+ * This mirrors `SplitForFields` in backend/internal/announcements so
  * the editor can warn the admin when a post will be split - keep the two in sync.
  * It runs on the raw editor markdown (the backend additionally normalizes a few
  * markdown artifacts that only ever shorten the text), so the part count here is

@@ -5,7 +5,7 @@
  */
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import type { Raffle } from '@/types/api'
+import type { Raffle } from '@/api/client'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import EmptyState from '@/components/common/ui/EmptyState.vue'
 import { useRafflesStore, raffleAcceptsSignups, raffleCostLabel } from '@/stores/raffles'
@@ -65,16 +65,16 @@ function goHome(): void {
           @keydown.space.prevent="openRaffle(r)"
         >
           <img
-            v-if="r.prize_image"
-            :src="assetUrl(r.prize_image)"
+            v-if="r.prizeImage"
+            :src="assetUrl(r.prizeImage)"
             class="media-card-image"
             alt="Prize"
           />
           <div class="media-card-body">
             <h3>{{ r.title }}</h3>
             <p v-if="raffleCostLabel(r)" class="raffle-cost">{{ raffleCostLabel(r) }}</p>
-            <p v-if="r.max_entries > 1" class="text-sm text-muted">
-              Up to {{ r.max_entries }} entries
+            <p v-if="r.maxEntries > 1" class="text-sm text-muted">
+              Up to {{ r.maxEntries }} entries
             </p>
             <p v-if="!raffleAcceptsSignups(r)" class="text-sm text-muted">
               Sign up outside the site - see details

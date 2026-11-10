@@ -151,17 +151,17 @@ function cancel(): void {
       <FormField label="Embed color" help="Accent stripe on the Discord embed.">
         <div class="color-field">
           <input
-            v-model="affiliates.affiliateForm.embed_color"
+            v-model="affiliates.affiliateForm.embedColor"
             type="color"
             class="color-field-input"
             aria-label="Embed accent color"
           />
-          <code class="color-field-hex">{{ affiliates.affiliateForm.embed_color }}</code>
+          <code class="color-field-hex">{{ affiliates.affiliateForm.embedColor }}</code>
           <button
             type="button"
             class="btn-neutral btn-sm"
-            :disabled="affiliates.affiliateForm.embed_color === '#ff3131'"
-            @click="affiliates.affiliateForm.embed_color = '#ff3131'"
+            :disabled="affiliates.affiliateForm.embedColor === '#ff3131'"
+            @click="affiliates.affiliateForm.embedColor = '#ff3131'"
           >
             Reset
           </button>
@@ -171,14 +171,14 @@ function cancel(): void {
       <div class="affiliate-links-row">
         <FormField label="Discord Link" help="Optional. Shown as a link field in the embed.">
           <input
-            v-model="affiliates.affiliateForm.discord_link"
+            v-model="affiliates.affiliateForm.discordLink"
             placeholder="https://discord.gg/..."
             aria-label="Discord link"
           />
         </FormField>
         <FormField label="Carrd Link" help="Optional. Shown as a link field in the embed.">
           <input
-            v-model="affiliates.affiliateForm.carrd_link"
+            v-model="affiliates.affiliateForm.carrdLink"
             placeholder="https://example.carrd.co"
             aria-label="Carrd link"
           />

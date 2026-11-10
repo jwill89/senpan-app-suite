@@ -23,12 +23,11 @@ import {
   useRafflesStore,
   entryAmountCollected,
   entryAmountOutstanding,
-  entryPaymentState,
   entryTicketPrice,
   raffleEntryCost,
   raffleHasCost,
 } from '@/stores/raffles'
-import type { Raffle, RaffleEntry } from '@/types/api'
+import type { Raffle, RaffleEntry } from '@/api/client'
 
 const props = defineProps<{ raffle: Raffle; entry: RaffleEntry }>()
 const emit = defineEmits<{ saved: []; close: [] }>()
@@ -43,30 +42,30 @@ const waived = ref(0)
  * paying up in full is the common counter case - and can be dialled back to
  * record a part payment ("gil for two now, the third later").
  */
-const ticketsPaid = ref(props.entry.num_entries)
+const ticketsPaid = ref(props.entry.numEntries)
 
-const state = computed(() => entryPaymentState(props.entry))
+const state = computed(() => props.entry.paymentState)
 const charges = computed(() => raffleHasCost(props.raffle))
 const ticketPrice = computed(() => entryTicketPrice(props.raffle, props.entry))
 const collected = computed(() => entryAmountCollected(props.raffle, props.entry))
 const outstanding = computed(() => entryAmountOutstanding(props.raffle, props.entry))
 
 /** Unsettled tickets - what this settlement covers. */
-const unsettled = computed(() => Math.max(0, props.entry.num_entries - props.entry.paid_entries))
+const unsettled = computed(() => Math.max(0, props.entry.numEntries - props.entry.paidEntries))
 
 /** The ticket box, normalized: at least one, never past what the entry holds. */
 const ticketsSettled = computed(() =>
-  Math.min(Math.max(Math.floor(ticketsPaid.value) || 1, 1), props.entry.num_entries),
+  Math.min(Math.max(Math.floor(ticketsPaid.value) || 1, 1), props.entry.numEntries),
 )
 
 /** True when this payment deliberately leaves some tickets unsettled. */
-const isPartPayment = computed(() => ticketsSettled.value < props.entry.num_entries)
+const isPartPayment = computed(() => ticketsSettled.value < props.entry.numEntries)
 
 /** What this payment covers, priced through the raffle's entry mode. */
 const payingFor = computed(
   () =>
     raffleEntryCost(props.raffle, ticketsSettled.value) -
-    raffleEntryCost(props.raffle, props.entry.paid_entries),
+    raffleEntryCost(props.raffle, props.entry.paidEntries),
 )
 
 /** The waived field, normalized: never negative, never more than is outstanding. */
@@ -74,7 +73,7 @@ const waiveAmount = computed(() => {
   if (!Number.isFinite(waived.value)) {
     return 0
   }
-  return Math.min(Math.max(waived.value, 0), Math.max(0, payingFor.value))
+  return Math.floor(Math.min(Math.max(waived.value, 0), Math.max(0, payingFor.value)))
 })
 
 /** What the player actually hands over for this settlement. */
@@ -99,7 +98,7 @@ async function clearPayment(): Promise<void> {
   <ModalOverlay aria-label="Record payment" @close="emit('close')">
     <div class="flex-between mb-12">
       <h3>
-        <font-awesome-icon :icon="['fad', 'coins']" /> {{ entry.character_name }} @
+        <font-awesome-icon :icon="['fad', 'coins']" /> {{ entry.characterName }} @
         {{ entry.world }}
       </h3>
       <button type="button" class="btn-neutral btn-sm" @click="emit('close')">Close</button>
@@ -108,9 +107,9 @@ async function clearPayment(): Promise<void> {
     <ul class="stack mb-16">
       <li class="stack-row">
         <span class="stack-label">Entries</span>
-        <strong>{{ entry.num_entries }}</strong>
+        <strong>{{ entry.numEntries }}</strong>
         <span v-if="state === 'partial'" class="badge badge--warning">
-          {{ entry.paid_entries }} paid, {{ unsettled }} outstanding
+          {{ entry.paidEntries }} paid, {{ unsettled }} outstanding
         </span>
         <span v-else-if="state === 'paid'" class="badge badge--success">Fully paid</span>
       </li>
@@ -119,9 +118,9 @@ async function clearPayment(): Promise<void> {
           <span class="stack-label">Tickets total</span>
           <strong>{{ gil(ticketPrice) }}</strong>
         </li>
-        <li v-if="entry.amount_waived > 0" class="stack-row">
+        <li v-if="entry.amountWaived > 0" class="stack-row">
           <span class="stack-label">Already waived</span>
-          <strong>{{ gil(entry.amount_waived) }}</strong>
+          <strong>{{ gil(entry.amountWaived) }}</strong>
         </li>
         <li class="stack-row">
           <span class="stack-label">Collected</span>
@@ -136,15 +135,15 @@ async function clearPayment(): Promise<void> {
            ("gil for two now, the third later"). Only worth offering when the entry
            holds more than one. -->
       <FormField
-        v-if="entry.num_entries > 1"
+        v-if="entry.numEntries > 1"
         label="Entries Paid For"
-        :help="`Out of ${entry.num_entries}. Lower it to record a part payment.`"
+        :help="`Out of ${entry.numEntries}. Lower it to record a part payment.`"
       >
         <input
           v-model.number="ticketsPaid"
           type="number"
           min="1"
-          :max="entry.num_entries"
+          :max="entry.numEntries"
           aria-label="Entries paid for"
         />
       </FormField>
@@ -158,7 +157,7 @@ async function clearPayment(): Promise<void> {
           type="number"
           min="0"
           :max="outstanding"
-          step="any"
+          step="1"
           aria-label="Amount waived"
         />
       </FormField>
@@ -170,7 +169,7 @@ async function clearPayment(): Promise<void> {
         <strong class="text-highlight"> = {{ gil(dueNow) }} due</strong>
       </p>
       <p v-if="isPartPayment" class="text-muted text-sm mb-12">
-        Leaves {{ entry.num_entries - ticketsSettled }} of {{ entry.num_entries }} unpaid.
+        Leaves {{ entry.numEntries - ticketsSettled }} of {{ entry.numEntries }} unpaid.
       </p>
       <div class="flex-toolbar">
         <button type="button" class="btn-confirm" :disabled="raffles.settlingEntry" @click="settle">

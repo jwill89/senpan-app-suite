@@ -21,10 +21,10 @@ export const useAppStore = defineStore('app', () => {
 
   const settings = ref<SettingsInput>({ ...DEFAULT_SETTINGS })
   /**
-   * The keys and webhooks the server uses (Settings -> Integrations): admin-only,
+   * The keys the server uses with outside services (Settings -> Integrations): admin-only,
    * loaded by the settings page for an admin, and blank for anyone else.
    */
-  const integrations = ref<Integrations>({ googleFontsApiKey: '', bookClubWebhooks: {} })
+  const integrations = ref<Integrations>({ googleFontsApiKey: '' })
   const googleFontsList = ref<string[]>([])
   /** Fonts uploaded via System -> Font Upload (name + serving token). */
   const uploadedFonts = ref<UploadedFont[]>([])

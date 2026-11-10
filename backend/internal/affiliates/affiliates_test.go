@@ -1,16 +1,16 @@
-package server
+package affiliates
 
 import (
 	"strings"
 	"testing"
 	"time"
 
-	"app-suite/internal/model"
+	"app-suite/internal/discord"
 )
 
-func TestBuildAffiliateEmbed(t *testing.T) {
+func TestEmbed(t *testing.T) {
 	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
-	a := model.Affiliate{
+	a := Profile{
 		Name:        "The Tipsy Moogle",
 		Location:    "Ul'dah, Steps of Nald",
 		Details:     "**Cozy** spot.",
@@ -20,12 +20,12 @@ func TestBuildAffiliateEmbed(t *testing.T) {
 		Logo:        "images/affiliate_logos/x.png",
 		Screenshot:  "images/affiliate_images/y.png",
 		Timezone:    "America/New_York",
-		Hours: []model.AffiliateHour{
+		Hours: []Hour{
 			{Label: "Mon-Fri", Start: "18:00", End: "23:00"},
 			{Label: "Sat", Start: "20:00"}, // open-ended (no end)
 		},
 	}
-	e := buildAffiliateEmbed(a, "https://apps.senpan.cafe", now)
+	e := Embed(a, "https://apps.senpan.cafe", now)
 
 	if e.Title != "The Tipsy Moogle" {
 		t.Errorf("title = %q", e.Title)
@@ -75,9 +75,9 @@ func TestBuildAffiliateEmbed(t *testing.T) {
 	}
 }
 
-func TestBuildAffiliateEmbed_Minimal(t *testing.T) {
+func TestEmbed_Minimal(t *testing.T) {
 	// No hours/links/images/color -> a valid embed with just a title.
-	e := buildAffiliateEmbed(model.Affiliate{Name: "Bare"}, "https://x", time.Now())
+	e := Embed(Profile{Name: "Bare"}, "https://x", time.Now())
 	if e.Title != "Bare" {
 		t.Errorf("title = %q", e.Title)
 	}
@@ -90,8 +90,8 @@ func TestBuildAffiliateEmbed_Minimal(t *testing.T) {
 	if e.Thumbnail != nil || e.Image != nil {
 		t.Errorf("no images expected: thumb=%+v img=%+v", e.Thumbnail, e.Image)
 	}
-	if e.Color != accentColor {
-		t.Errorf("empty color should fall back to the brand accent (%#x), got %#x", accentColor, e.Color)
+	if e.Color != discord.AccentColor {
+		t.Errorf("empty color should fall back to the brand accent (%#x), got %#x", discord.AccentColor, e.Color)
 	}
 }
 
@@ -126,6 +126,31 @@ func TestAbsoluteAssetURL(t *testing.T) {
 	for in, want := range cases {
 		if got := absoluteAssetURL("https://h", in); got != want {
 			t.Errorf("absoluteAssetURL(%q) = %q; want %q", in, got, want)
+		}
+	}
+}
+
+func TestSanitize(t *testing.T) {
+	owners := SanitizeOwners([]string{" Tataru ", "  ", "Hildibrand"})
+	if len(owners) != 2 || owners[0] != "Tataru" {
+		t.Errorf("owners = %q; want the two names trimmed", owners)
+	}
+	hours := SanitizeHours([]Hour{{Label: " Mon ", Start: " 18:00 ", End: " 23:00 "}, {Label: "Closed", Start: "  "}})
+	if len(hours) != 1 || hours[0] != (Hour{Label: "Mon", Start: "18:00", End: "23:00"}) {
+		t.Errorf("hours = %+v; want the start-less row dropped and the rest trimmed", hours)
+	}
+}
+
+func TestNormalizeExternalURL(t *testing.T) {
+	cases := map[string]string{
+		"javascript:alert(1)": "https://javascript:alert(1)",
+		"discord.gg/abc":      "https://discord.gg/abc",
+		"http://x.test":       "http://x.test",
+		"  ":                  "",
+	}
+	for in, want := range cases {
+		if got := NormalizeExternalURL(in); got != want {
+			t.Errorf("NormalizeExternalURL(%q) = %q; want %q", in, got, want)
 		}
 	}
 }

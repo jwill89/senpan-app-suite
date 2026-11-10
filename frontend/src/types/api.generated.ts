@@ -44,263 +44,10 @@ export interface AffiliateHour {
   start: string; // wall-clock "HH:MM"
   end: string; // optional wall-clock "HH:MM"
 }
-/**
- * AffiliatesResponse is the body of GET /api/affiliates. It also carries the
- * single shared Discord webhook every affiliate posts to - safe to include here
- * because the endpoint is permission-gated (it is kept out of public settings).
- */
-export interface AffiliatesResponse {
-  affiliates: Affiliate[];
-  webhook_url: string;
-}
-/**
- * AffiliateResponse is the body of POST /api/affiliates (create) and
- * POST /api/affiliates/{id}/post when a single affiliate is echoed back.
- */
-export interface AffiliateResponse {
-  affiliate: Affiliate;
-}
-/**
- * AffiliateWebhookResponse is the body of PUT /api/affiliates/webhook.
- */
-export interface AffiliateWebhookResponse {
-  webhook_url: string;
-}
-
-//////////
-// source: announcements.go
-
-/**
- * AnnouncementType is a named Discord destination for announcements: a friendly
- * label plus the webhook URL of the channel its announcements post to. Each
- * announcement references one type, and posts to that type's webhook.
- */
-export interface AnnouncementType {
-  id: number /* int64 */;
-  name: string;
-  webhook_url: string; // Discord channel webhook
-  created_at: string;
-}
-/**
- * AnnouncementRole is a named Discord role that an announcement can optionally
- * tag (ping) when it posts: a friendly group label plus the role's Discord ID.
- * It's a convenience picker - managed like announcement types - so admins choose
- * a role by name instead of pasting raw snowflake IDs. Tagging happens in the
- * message content (above the embed), because role mentions inside an embed don't
- * notify anyone.
- */
-export interface AnnouncementRole {
-  id: number /* int64 */;
-  name: string;
-  role_id: string; // Discord role snowflake ID (string to avoid JS precision loss)
-  created_at: string;
-}
-/**
- * Announcement is an admin-authored message posted to Discord as an embed via
- * its type's webhook - manually ("send now") or automatically on a schedule.
- * One IANA Timezone anchors every time on the announcement: the admin enters
- * wall-clock values (StartLocal/EndLocal for the event window, OnceLocal for a
- * one-time post, and the recurring time-of-day/weekday selections) and the
- * backend resolves them in Timezone with time.LoadLocation. The absolute instants
- * (StartAt/EndAt/NextPostAt, UTC RFC-3339) are computed server-side and drive the
- * embed timestamps + the scheduler. Because the zone is explicit, all times stay
- * put across DST transitions (e.g. "every Saturday 7pm America/New_York").
- */
-export interface Announcement {
-  id: number /* int64 */;
-  type_id: number /* int64 */;
-  title: string;
-  details: string; // markdown
-  image: string; // full URL, shown full-width at the bottom of the embed
-  thumbnail: string; // full URL, shown as the small top-right embed thumbnail
-  color: string; // embed accent colour, "#rrggbb" ("" = brand default)
-  location: string; // optional free-text location (e.g. a Discord voice channel)
-  start_local: string; // optional event start, wall-clock "2006-01-02T15:04" in Timezone
-  end_local: string; // optional event end, wall-clock in Timezone
-  start_at: string; // computed event start, UTC RFC-3339
-  end_at: string; // computed event end, UTC RFC-3339
-  /**
-   * Discord timestamp styles (t|T|d|D|f|F|R) for how the start/end render in the
-   * embed; each is chosen independently ("" = default - F for start, t for end).
-   */
-  start_format: string;
-  end_format: string;
-  /**
-   * DynamicDates re-anchors the start/end onto the day the announcement is posted
-   * (preserving the time-of-day and how many days the end runs past the start),
-   * so a recurring "day-of" event post always shows the current occurrence rather
-   * than the first one. StartLocal/EndLocal define the template time-of-day.
-   */
-  dynamic_dates: boolean;
-  /**
-   * Schedule (all optional; ScheduleKind == "" means unscheduled - manual only).
-   * All recurring/one-time times are wall-clock values anchored to Timezone.
-   */
-  schedule_kind: string; // ""|once|daily|weekly|monthly
-  timezone: string; // IANA zone anchoring every time on the announcement
-  once_local: string; // wall-clock "2006-01-02T15:04" in Timezone (one-time schedule)
-  schedule_minutes: number /* int */; // local minutes-of-day in Timezone (recurring)
-  schedule_weekdays: string; // CSV of local weekdays 0=Sun..6=Sat (weekly; first value reused for monthly)
-  schedule_week_of_month: number /* int */; // 1..5 or -1=last (monthly)
-  next_post_at: string; // next scheduled instant, UTC RFC-3339 ("" = none)
-  /**
-   * SkipCount is how many upcoming occurrences to pass over before posting again.
-   * Each skipped occurrence decrements it, so a Friday+Saturday announcement can
-   * be told once to skip 2 and sit out a whole weekend. 0 = post as scheduled.
-   */
-  skip_count: number /* int */;
-  active: boolean; // whether the schedule is live
-  last_posted_at: string; // ISO timestamp of last post ("" if never)
-  created_at: string;
-  /**
-   * Optional Discord link buttons (up to 5) rendered as a single action row
-   * below the embed. Persisted as a JSON array in the announcements.buttons column.
-   */
-  buttons: AnnouncementButton[];
-  /**
-   * Optional role tag posted in the message content (above the embed), since
-   * mentions inside an embed don't notify. One of: "" (don't tag), "everyone"
-   * (@everyone), or "role:<announcement_role_id>" (a managed AnnouncementRole).
-   */
-  mention: string;
-  /**
-   * Read-only convenience for list rendering (joined from announcement_types).
-   */
-  type_name?: string;
-}
-/**
- * AnnouncementButton is one Discord link button shown beneath an announcement's
- * embed: a label, an optional emoji (a unicode emoji like "🎉" or a custom-emoji
- * token "<:name:id>"/"<a:name:id>"), and the URL it opens.
- */
-export interface AnnouncementButton {
-  label: string;
-  emoji: string;
-  url: string;
-}
-/**
- * AnnouncementTypesResponse is the body of GET /api/announcement-types - all
- * announcement types. JSON: {"types": [...]}.
- */
-export interface AnnouncementTypesResponse {
-  types: AnnouncementType[];
-}
-/**
- * AnnouncementTypeResponse is the body of POST /api/announcement-types (create)
- * and PUT /api/announcement-types/{id} (update) - the saved type. The handler
- * passes the *AnnouncementType from GetAnnouncementType through, so the pointer is
- * preserved (a nil serializes to null, matching the old map literal). JSON:
- * {"type": ...}.
- */
-export interface AnnouncementTypeResponse {
-  type?: AnnouncementType;
-}
-/**
- * AnnouncementRolesResponse is the body of GET /api/announcement-roles - all
- * taggable Discord roles. JSON: {"roles": [...]}.
- */
-export interface AnnouncementRolesResponse {
-  roles: AnnouncementRole[];
-}
-/**
- * AnnouncementRoleResponse is the body of POST /api/announcement-roles (create)
- * and PUT /api/announcement-roles/{id} (update) - the saved role. The handler
- * passes the *AnnouncementRole through (nil -> null). JSON: {"role": ...}.
- */
-export interface AnnouncementRoleResponse {
-  role?: AnnouncementRole;
-}
-/**
- * AnnouncementsResponse is the body of GET /api/announcements - all announcements
- * (with type_name joined). JSON: {"announcements": [...]}.
- */
-export interface AnnouncementsResponse {
-  announcements: Announcement[];
-}
-/**
- * AnnouncementResponse is the body of POST /api/announcements
- * {action:"create"|"update"|"send_now"|"skip_next"} - the saved announcement.
- * The handler passes the *Announcement from GetAnnouncement through, so the
- * pointer is preserved (nil -> null, matching the old map literal). JSON:
- * {"announcement": ...}.
- */
-export interface AnnouncementResponse {
-  announcement?: Announcement;
-}
 
 //////////
 // source: bookclubs.go
 
-/**
- * ReadingList is a named, ordered collection of book-club reading items
- * (e.g. a "Yaoi Book Club" reading list). ClubSlug groups lists under a
- * particular book club so additional clubs can be added later without a
- * schema change. Items is populated only on detail fetches.
- */
-export interface ReadingList {
-  id: number /* int64 */;
-  club_slug: string; // book club identifier, e.g. "yaoi"
-  title: string;
-  created_at: string;
-  items?: ReadingListItem[];
-}
-/**
- * ReadingListItem is a single entry in a reading list (a manga/manhwa/danmei
- * title). CoverImage is stored as a full URL - either an uploaded image served
- * from this site or a cover URL pulled from AniList.
- */
-export interface ReadingListItem {
-  id: number /* int64 */;
-  list_id: number /* int64 */;
-  cover_image: string; // full URL
-  title: string;
-  summary: string; // markdown (rendered by Discord on publish)
-  format: string; // Manga, Manhwa, Danmei, etc.
-  genres: string; // comma-separated list
-  tropes: string; // comma-separated list
-  chapters: string; // free text (e.g. "156", "156 (ongoing)")
-  comments: string; // Yao's Comments (markdown)
-  sources: ReadingListSource[]; // external links (stored as JSON)
-  sort_order: number /* int */;
-}
-/**
- * ReadingListSource is a named external link attached to a reading list item.
- */
-export interface ReadingListSource {
-  title: string;
-  url: string;
-}
-/**
- * ReadingListsResponse is the body of GET /api/book-clubs/{club}/reading-lists -
- * all reading lists for a club, without their items. JSON: {"reading_lists": [...]}.
- */
-export interface ReadingListsResponse {
-  reading_lists: ReadingList[];
-}
-/**
- * ReadingListDetailResponse is the body of GET /api/book-clubs/{club}/reading-lists/{id}
- * and of POST /api/book-clubs/{club}/reading-lists (create) - a single reading
- * list (with its items). The handler passes the ReadingList straight through, so
- * the pointer is preserved (a nil would serialize to null, matching the old map
- * literal). JSON: {"reading_list": ReadingList}.
- */
-export interface ReadingListDetailResponse {
-  reading_list: ReadingList;
-}
-/**
- * ReadingListItemResponse is the body of POST /api/book-clubs/{club}/reading-lists/{id}/items
- * (create) and PUT .../items/{itemId} (replace) - the created/updated item. JSON: {"item": ...}.
- */
-export interface ReadingListItemResponse {
-  item: ReadingListItem;
-}
-/**
- * BookclubLookupResponse is the body of GET /api/bookclub/lookup - AniList
- * suggestions shaped like reading-list items. JSON: {"results": [...]}.
- */
-export interface BookclubLookupResponse {
-  results: ReadingListItem[];
-}
 /**
  * BookclubUploadResponse is the shared single-image upload response (book-club
  * cover uploads via saveSingleImageUpload) - the full URL of the stored image.
@@ -308,13 +55,6 @@ export interface BookclubLookupResponse {
  */
 export interface BookclubUploadResponse {
   url: string;
-}
-/**
- * PublishResponse is the body of POST /api/book-clubs/{club}/reading-lists/{id}/publish
- * - the number of items posted to Discord. JSON: {"published": <int>}.
- */
-export interface PublishResponse {
-  published: number /* int */;
 }
 
 //////////
@@ -1379,26 +1119,6 @@ export interface LogEntry {
 // source: raffles.go
 
 /**
- * RaffleModeDetails - "Details Only": the raffle is published for reference
- * only. There is no sign-up form; players follow signup_instructions to enter
- * somewhere else (in game, on Discord, ...). Staff can still record entries by
- * hand and draw a winner.
- */
-export const RaffleModeDetails = "details";
-/**
- * RaffleModeSingle - "Single Cost per Entry": every ticket costs
- * cost_per_entry. This is the original behavior and the default for any raffle
- * created before entry modes existed.
- */
-export const RaffleModeSingle = "single";
-/**
- * RaffleModeCustom - "Custom Cost per Entry": each ticket has its own price,
- * read from TierCosts in order, so a ladder of 50k/100k/150k charges 300,000
- * for all three. TierCosts also fixes MaxEntries (one tier = one allowed
- * ticket).
- */
-export const RaffleModeCustom = "custom";
-/**
  * Raffle represents a raffle event that players can enter.
  * Raffles have configurable entry limits, costs, and time windows.
  */
@@ -1409,7 +1129,7 @@ export interface Raffle {
   rules: string;
   max_entries: number /* int */; // max entries per player
   signup_instructions: string; // how to pay/sign up (details-only: shown on the page; otherwise after signup)
-  entry_mode: string; // "details" | "single" | "custom" - see the constants above
+  entry_mode: string; // "details" | "single" | "custom" - see package raffles
   cost_per_entry: number /* float64 */; // "single" mode: the price of every ticket
   tier_costs: number /* float64 */[]; // "custom" mode: price of the 1st, 2nd, ... ticket
   available_from: string; // UTC RFC-3339 datetime; empty = always open
@@ -1443,71 +1163,10 @@ export interface Raffle {
   paid_total?: number /* float64 */;
 }
 /**
- * RaffleEntry represents a user's entry (one or more tickets) into a raffle.
- * Entries are merged per character+world, so one row can grow over time: a player
- * who settles up and then buys two more tickets keeps the same row. PaidEntries
- * records how many of NumEntries have actually been settled, which is what makes
- * that PARTIAL state visible instead of a paid row silently absorbing new unpaid
- * tickets. Paid is the derived "nothing outstanding" flag (PaidEntries >=
- * NumEntries) that the winner draw and the collected-gil totals read.
- */
-export interface RaffleEntry {
-  id: number /* int64 */;
-  raffle_id: number /* int64 */;
-  character_name: string; // in-game character name
-  world: string; // game world/server
-  num_entries: number /* int */; // number of tickets purchased
-  paid_entries: number /* int */; // how many of them are settled
-  amount_waived: number /* float64 */; // gil forgiven across all settlements (cumulative)
-  paid: boolean; // derived: nothing outstanding
-  created_at: string;
-}
-/**
- * RafflesResponse is the body of GET /api/raffles - the visible raffle list
- * (filtered by role: admins see all, public sees open + in-window).
- */
-export interface RafflesResponse {
-  raffles: Raffle[];
-}
-/**
- * RaffleResponse wraps a single raffle. Returned by POST /api/raffles
- * {action:"create"} (HTTP 201) with the freshly created raffle.
- */
-export interface RaffleResponse {
-  raffle: Raffle;
-}
-/**
- * RaffleDetailResponse is the body of GET /api/raffles/{id}. The shape varies by
- * role and raffle state, so several fields are conditional:
- *   - raffle        - always present.
- *   - total_entries - present whenever the count query succeeds (pointer +
- *     omitempty so a count error omits the key, matching the map that only sets it
- *     on err == nil).
- *   - entries       - admins only: the full entry list. A POINTER to the slice so
- *     the admin branch always emits the key (even "entries":[] when there are no
- *     entries - the store returns a non-nil empty slice), while a nil pointer omits
- *     the key entirely for public callers. A plain []RaffleEntry with omitempty
- *     would wrongly drop the key on an empty admin list.
- *   - winner_entry  - public only, and only for a closed raffle that has a verified
- *     winner whose entry loads (omitempty pointer; absent otherwise).
- * entries and winner_entry are mutually exclusive in practice (admin vs public
- * branch); whichever branch ran emits exactly its key.
- */
-export interface RaffleDetailResponse {
-  raffle: Raffle;
-  total_entries?: number /* int */;
-  entries?: RaffleEntry[];
-  winner_entry?: RaffleEntry;
-}
-/**
- * RaffleLookupEntry is one hit from the public "have I already entered?" search.
- * It is a SEPARATE type from RaffleEntry rather than a filtered view of it, so a
- * field added to the stored entry can never reach this public response by
- * accident. What it carries is deliberate: enough to recognise your own sign-up
- * and reproduce the exact name you used, plus how far it has been paid. What it
- * omits is equally deliberate - the entry id (nothing public needs to address a
- * row) and every gil figure, because the amount waived on an entry is a private
- * arrangement between that person and the staff.
+ * RaffleLookupEntry is one entry of a participant's own in a festival's raffles: enough
+ * to recognize their sign-up and reproduce the exact name they used, plus how far it
+ * has been paid. It carries no entry id and no gil figure, because the amount waived
+ * on an entry is a private arrangement between that person and the staff.
  */
 export interface RaffleLookupEntry {
   character_name: string;
@@ -1515,50 +1174,6 @@ export interface RaffleLookupEntry {
   num_entries: number /* int */;
   paid_entries: number /* int */;
   payment_state: string; // "unpaid" | "partial" | "paid"
-}
-/**
- * RaffleLookupResponse is the body of POST /api/raffles/{id}/lookup. Truncated
- * says the search matched more entries than were returned, so the page can ask
- * for a narrower one instead of quietly presenting a partial list as the whole.
- */
-export interface RaffleLookupResponse {
-  entries: RaffleLookupEntry[];
-  truncated: boolean;
-}
-/**
- * RaffleEnterResponse is the body of POST /api/raffles/{id}/enter - the public
- * sign-up confirmation (HTTP 201 on a new entry, 200 when adding to an existing
- * one; the body shape is identical either way).
- * TotalCost is the sticker price of every ticket the character now holds;
- * AmountDue is what they actually have to send. The two differ once an entry has
- * been settled in part - entries merge per character+world, so somebody who
- * already paid for a ticket and comes back for two more owes only the new ones.
- * Quoting TotalCost alone there invites an overpayment, which is why AmountDue is
- * the figure the confirmation leads with.
- * AmountDue deliberately says nothing about WHY the balance is lower: it folds
- * settled tickets and waived gil together, so the response can't be used to work
- * out that a particular character was comped.
- */
-export interface RaffleEnterResponse {
-  message: string;
-  total_entries: number /* int */;
-  total_cost: number /* float64 */;
-  amount_due: number /* float64 */;
-  signup_instructions: string;
-}
-/**
- * RaffleEntryResponse wraps a single entry - the body of POST
- * /api/raffles/{id}/entries {action:"add_entry"} (the created/updated entry).
- */
-export interface RaffleEntryResponse {
-  entry: RaffleEntry;
-}
-/**
- * RaffleWinnerResponse wraps the picked entry - the body of POST
- * /api/raffles/{id}/entries {action:"pick_winner"|"pick_another"}.
- */
-export interface RaffleWinnerResponse {
-  winner: RaffleEntry;
 }
 
 //////////
@@ -1963,107 +1578,6 @@ export interface StampLookupEntry {
  */
 export interface StampLookupResponse {
   entries: StampLookupEntry[];
-}
-
-//////////
-// source: tearooms.go
-
-/**
- * TeaRoom is a bookable room listed in the Senpan Tea House -> Tea Rooms admin
- * section: a named, numbered room with a per-half-hour gil cost, hashtags, a
- * markdown description, a handful of status flags (seasonal, open, lockable,
- * discounted), a lock with an optional expiry, an image picked from the shared
- * image library, and a Discord embed accent colour. Admins manage a
- * drag-orderable list of them and post each as a Discord embed to a single shared
- * webhook (see the tea-room webhook setting).
- * The list is also exposed read-only through a public, cross-origin API so an
- * external Carrd site can render live room availability and pricing.
- */
-export interface TeaRoom {
-  id: number /* int64 */;
-  name: string; // room name (embed title)
-  /**
-   * Subtitle is a short secondary line under the name (e.g. a Japanese phrase);
-   * stored as UTF-8, so it holds any script natively.
-   */
-  subtitle: string;
-  /**
-   * RoomOwner is the character who owns the room - optional and informational only
-   * (shown in the admin + plugin lists and served by the public API). Stored as
-   * UTF-8, so it holds any script.
-   */
-  room_owner: string;
-  /**
-   * RoomNumber is the room's public identifier: required and unique, and the key
-   * the public API + Carrd embed look rooms up by (e.g. "12", "West 3").
-   */
-  room_number: string;
-  /**
-   * CostPerHalfHour is the price in gil per half hour. When Discounted is set the
-   * effective price is halved (a fixed 50% rule); the raw full price is stored here.
-   */
-  cost_per_half_hour: number /* int64 */;
-  hashtags: string; // normalized space-separated "#tag" list
-  description: string; // markdown (embed body)
-  seasonal: boolean; // seasonal vs permanent
-  open: boolean; // open vs closed
-  lockable: boolean; // can be locked for an extra fee
-  discounted: boolean; // currently 50%-off
-  /**
-   * Locked is whether the room is locked right now (booked out for a guest),
-   * as opposed to Lockable, which is only whether it CAN be locked.
-   */
-  locked: boolean;
-  /**
-   * LockedUntil is when the lock lifts, as a UTC RFC-3339 instant. Empty means
-   * the lock has no expiry and stands until someone unlocks the room by hand.
-   * Only meaningful while Locked is set; unlocking clears it.
-   */
-  locked_until: string;
-  image: string; // full URL, shown full-width in the embed
-  color: string; // embed accent colour, "#rrggbb" ("" = brand default)
-  sort_order: number /* int */;
-  created_at: string;
-}
-/**
- * TeaRoomsResponse is the body of GET /api/tea-rooms - every room in the admin's
- * chosen order, plus the shared Discord webhook (returned only to callers who can
- * manage the feature; never exposed on the public API). JSON: {"tea_rooms": [...],
- * "webhook_url": "..."}.
- */
-export interface TeaRoomsResponse {
-  tea_rooms: TeaRoom[];
-  webhook_url: string;
-}
-/**
- * TeaRoomResponse is the body of POST /api/tea-rooms (create), PUT /api/tea-rooms/
- * {id} (replace), PATCH /api/tea-rooms/{id} (toggle), and POST /api/tea-rooms/{id}/
- * post (post to Discord) - the saved room. The handler passes the *TeaRoom from
- * GetTeaRoom through, so the pointer is preserved (nil -> null). JSON: {"tea_room": ...}.
- */
-export interface TeaRoomResponse {
-  tea_room?: TeaRoom;
-}
-/**
- * TeaRoomWebhookResponse is the body of PUT /api/tea-rooms/webhook - the saved
- * shared Discord webhook. JSON: {"webhook_url": "..."}.
- */
-export interface TeaRoomWebhookResponse {
-  webhook_url: string;
-}
-/**
- * TeaRoomsPublicResponse is the body of the public GET /api/tea-rooms/public - the
- * full room list for an external site (no webhook). JSON: {"tea_rooms": [...]}.
- */
-export interface TeaRoomsPublicResponse {
-  tea_rooms: TeaRoom[];
-}
-/**
- * TeaRoomPublicResponse is the body of the public GET /api/tea-rooms/public/{id} -
- * one room with all its data + status flags. JSON: {"tea_room": ...}.
- */
-export interface TeaRoomPublicResponse {
-  tea_room?: TeaRoom;
 }
 
 //////////

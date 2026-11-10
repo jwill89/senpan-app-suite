@@ -110,7 +110,7 @@ func emaBoardFromRequest(req emaBoardWriteRequest) (*model.EmaBoard, string) {
 	if (b.AllowSelf || b.AllowSite) && b.TemplateImage == "" {
 		return nil, "Pick the plaque template image"
 	}
-	if b.DiscordLink != "" && !isHTTPURL(b.DiscordLink) {
+	if b.DiscordLink != "" && !discord.IsHTTPURL(b.DiscordLink) {
 		return nil, "The Discord link must be a web address"
 	}
 	if len(req.Windows) == 0 {
@@ -419,7 +419,7 @@ func (s *Server) loadReviewablePlaque(w http.ResponseWriter, r *http.Request) (*
 //
 //	Endpoint:  POST /api/ema-boards/{id}/plaques/{plaqueId}/approve
 //	Auth:      festival-ema
-//	Response:  200 EmaPlaqueResponse; 409 already reviewed or being posted; 502 Discord refused
+//	Response:  200 EmaPlaqueResponse; 409 already reviewed or being posted; 500 Discord refused (503 no answer, 429 rate limited)
 //
 // The plaque is claimed (pending -> posting) before the post, so a second staff
 // member approving it at the same moment is refused rather than posting it twice.
@@ -462,15 +462,15 @@ func (s *Server) handleEmaPlaqueApprove(w http.ResponseWriter, r *http.Request) 
 	}
 
 	who := model.ParticipantLabel(p.CharacterName, p.World)
-	postErr := s.postEmaToDiscord(ctx, webhookTarget{Kind: "ema_plaque", Name: who}, webhook,
+	postErr := s.postEmaToDiscord(ctx, discord.Target{Kind: "ema_plaque", Name: who}, webhook,
 		"Hung by **"+who+"** - "+p.WindowLabel,
-		discordFile{Name: "ema.png", ContentType: "image/png", Data: data})
+		discord.File{Name: "ema.png", ContentType: "image/png", Data: data})
 	if postErr != nil {
 		if _, err := s.store.SetEmaPlaqueStatus(ctx, p.ID, model.EmaStatusPosting, model.EmaStatusPending); err != nil {
 			slog.Error("release ema plaque after a failed post", "plaque_id", p.ID, "error", err)
 		}
-		if errors.Is(postErr, errWebhookAmbiguous) {
-			writeError(w, http.StatusBadGateway,
+		if discord.IsAmbiguous(postErr) {
+			writeError(w, http.StatusServiceUnavailable,
 				"Discord didn't answer, so the plaque may or may not have posted. Check the channel before approving it again.")
 			slog.Error("ema plaque post ambiguous", "plaque_id", p.ID, "error", postErr)
 			return
@@ -531,11 +531,11 @@ func emaWindowWebhook(board *model.EmaBoard, windowID *int64) string {
 // postEmaToDiscord posts a plaque to a window's webhook: an embed carrying the
 // image as an attachment, sent through the shared funnel so the dry-run and
 // override valves apply.
-func (s *Server) postEmaToDiscord(ctx context.Context, target webhookTarget, webhook, description string, file discordFile) error {
-	embed := newEmbed().title("An Ema plaque").description(description).build()
+func (s *Server) postEmaToDiscord(ctx context.Context, target discord.Target, webhook, description string, file discord.File) error {
+	embed := discord.NewEmbed().Title("An Ema plaque").Description(description).Build()
 	// Set directly: the builder takes web URLs only, and this names the upload.
-	embed.Image = &discordEmbedImage{URL: "attachment://" + file.Name}
-	return s.postDiscordWebhookFile(ctx, target, webhook, discordWebhookPayload{Embeds: []discordEmbed{embed}}, file)
+	embed.Image = &discord.EmbedImage{URL: "attachment://" + file.Name}
+	return s.discord.PostFile(ctx, target, webhook, discord.Payload{Embeds: []discord.Embed{embed}}, file)
 }
 
 // writeEmaPlaque answers with a plaque's current row.
@@ -625,7 +625,7 @@ func emaArtistImageName(contentType string) string {
 //	Auth:      festival-ema-requests
 //	Request:   multipart: image (PNG, JPEG, GIF or WebP, max 10 MB)
 //	Response:  200 EmaPlaqueResponse (status "complete"); 400 no webhook / not an
-//	           image; 404 not a request; 409 not open; 502 Discord refused
+//	           image; 404 not a request; 409 not open; 500 Discord refused (503 no answer, 429 rate limited)
 //
 // The request is claimed (requested -> posting) before the post, like an approval,
 // so a double click can't post it twice; a failed post hands it back.
@@ -699,15 +699,15 @@ func (s *Server) handleEmaRequestPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	who := model.ParticipantLabel(p.CharacterName, p.World)
-	postErr := s.postEmaToDiscord(ctx, webhookTarget{Kind: "ema_request", Name: who}, webhook,
+	postErr := s.postEmaToDiscord(ctx, discord.Target{Kind: "ema_request", Name: who}, webhook,
 		"Requested by **"+who+"**, made by **"+board.ArtistName+"** - "+p.WindowLabel,
-		discordFile{Name: name, ContentType: contentType, Data: data})
+		discord.File{Name: name, ContentType: contentType, Data: data})
 	if postErr != nil {
 		if _, err := s.store.SetEmaPlaqueStatus(ctx, p.ID, model.EmaStatusPosting, model.EmaStatusRequested); err != nil {
 			slog.Error("release ema request after a failed post", "plaque_id", p.ID, "error", err)
 		}
-		if errors.Is(postErr, errWebhookAmbiguous) {
-			writeError(w, http.StatusBadGateway,
+		if discord.IsAmbiguous(postErr) {
+			writeError(w, http.StatusServiceUnavailable,
 				"Discord didn't answer, so the plaque may or may not have posted. Check the channel before posting it again.")
 			slog.Error("ema request post ambiguous", "plaque_id", p.ID, "error", postErr)
 			return

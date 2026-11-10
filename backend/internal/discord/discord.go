@@ -1,4 +1,6 @@
-// Package discord holds what Senpan knows about Discord apart from sending to it.
+// Package discord is what Senpan knows about Discord: its webhook URLs, the embeds
+// and messages it builds, and the Sender that posts them, with errors that say why a
+// post failed.
 package discord
 
 import (

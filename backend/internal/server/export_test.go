@@ -5,27 +5,21 @@ import (
 	"net/url"
 )
 
-// DeriveFormatForTest exposes the unexported deriveFormat helper to the
-// external server_test package so the format-mapping logic can be unit-tested.
-var DeriveFormatForTest = deriveFormat
-
-// RouteAnilistToForTest points the AniList lookup client at targetURL (a test
-// server) by rewriting each outbound request's scheme+host, so a test can keep a
-// valid, allowlisted anilist_api_url setting - exercising the read-time SSRF
-// allowlist end to end - while still reaching its local mock. Returns a restore
-// func that reinstates the original transport.
-func RouteAnilistToForTest(targetURL string) (func(), error) {
+// RouteAnilistForTest points the server's AniList client at targetURL (a test
+// server) by rewriting each outbound request's scheme and host, so a test can keep a
+// valid, allowlisted anilist_api_url setting - exercising the allowlist end to end -
+// while still reaching its local mock.
+func (s *Server) RouteAnilistForTest(targetURL string) error {
 	target, err := url.Parse(targetURL)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	orig := anilistHTTPClient.Transport
-	anilistHTTPClient.Transport = rewriteHostRoundTripper{scheme: target.Scheme, host: target.Host}
-	return func() { anilistHTTPClient.Transport = orig }, nil
+	s.anilist.HTTP.Transport = rewriteHostRoundTripper{scheme: target.Scheme, host: target.Host}
+	return nil
 }
 
 // rewriteHostRoundTripper redirects every request to a fixed scheme+host,
-// leaving the path/query intact (test-only; see RouteAnilistToForTest).
+// leaving the path/query intact (test-only; see RouteAnilistForTest).
 type rewriteHostRoundTripper struct{ scheme, host string }
 
 func (rt rewriteHostRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -48,10 +42,6 @@ var (
 	SafeFontNameForTest = safeFontName
 	// SanitizeGaraponPrizesForTest trims/normalizes incoming garapon prize rows.
 	SanitizeGaraponPrizesForTest = sanitizeGaraponPrizes
-	// IsDiscordSnowflakeForTest reports whether a string is a Discord snowflake ID.
-	IsDiscordSnowflakeForTest = isDiscordSnowflake
-	// ParseRaffleTimeForTest parses a raffle availability timestamp to a UTC instant.
-	ParseRaffleTimeForTest = parseRaffleTime
 	// NormalizeFontOriginForTest validates/normalizes a font-allowlist origin.
 	NormalizeFontOriginForTest = normalizeFontOrigin
 	// FontTokenBucketForTest returns the token time bucket for an instant.
@@ -62,8 +52,6 @@ var (
 	// LogClientIPForTest exposes the CF-Connecting-IP-first client-IP extraction
 	// used for the request log's ip field.
 	LogClientIPForTest = logClientIP
-	// ParseTeaRoomLockTimeForTest parses a tea-room lock expiry to a UTC instant.
-	ParseTeaRoomLockTimeForTest = parseTeaRoomLockTime
 	// ExpireDueTeaRoomLocksForTest runs ONE pass of the lock-expiry sweep, so what
 	// the scheduler decides - unlock and announce, or leave the lock alone - can be
 	// exercised without waiting on its ticker.

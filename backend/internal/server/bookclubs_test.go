@@ -1,368 +1,391 @@
 package server_test
 
 import (
-	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
-
-	"app-suite/internal/server"
 )
 
 // itoa is a tiny local int64->string helper to keep test call sites terse.
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }
 
+const bookClubWebhook = "https://discord.com/api/webhooks/1/book-club-token"
+
+// itemBody is a full reading-list item save with the given title and fields set.
+func itemBody(title string, set map[string]any) map[string]any {
+	body := map[string]any{
+		"coverImage": "", "title": title, "summary": "", "format": "", "genres": "", "tropes": "",
+		"chapters": "", "comments": "", "sources": []any{},
+	}
+	for k, v := range set {
+		body[k] = v
+	}
+	return body
+}
+
 // createReadingListIn creates a list in the given club, returning its id.
 func createReadingListIn(t *testing.T, e *testEnv, club, title string) int64 {
 	t.Helper()
-	resp := e.postJSON(t, "/api/book-clubs/"+club+"/reading-lists", map[string]any{"title": title})
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("create list status = %d; want 201", resp.StatusCode)
-	}
-	body := decodeBody(t, resp)
-	list, _ := body["reading_list"].(map[string]any)
+	var list map[string]any
+	decodeInto(t, e.postJSON(t, "/api/v1/book-clubs/"+club+"/reading-lists", map[string]any{"title": title}), http.StatusCreated, &list)
 	id, _ := list["id"].(float64)
-	if id == 0 {
-		t.Fatalf("create list returned no id: %+v", body)
+	if id == 0 || list["club"] != club || list["title"] != title {
+		t.Fatalf("create list returned %+v", list)
+	}
+	if items, ok := list["items"].([]any); !ok || len(items) != 0 {
+		t.Fatalf("a new list's items = %v; want an empty array", list["items"])
 	}
 	return int64(id)
 }
 
-// createReadingList creates a list in the default (yaoi) club, returning its id.
+// createReadingList creates a list in the yaoi club, returning its id.
 func createReadingList(t *testing.T, e *testEnv, title string) int64 {
 	t.Helper()
 	return createReadingListIn(t, e, "yaoi", title)
+}
+
+// addItem adds an item to a list and returns it.
+func addItem(t *testing.T, e *testEnv, club string, listID int64, title string, set map[string]any) map[string]any {
+	t.Helper()
+	var item map[string]any
+	decodeInto(t, e.postJSON(t, "/api/v1/book-clubs/"+club+"/reading-lists/"+itoa(listID)+"/items", itemBody(title, set)), http.StatusCreated, &item)
+	return item
 }
 
 func TestReadingListAndItemHTTPCRUD(t *testing.T) {
 	e := newTestEnv(t)
 
 	// Unauthenticated calls are rejected.
-	resp := e.get(t, "/api/book-clubs/yaoi/reading-lists")
-	if resp.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("anon list status = %d; want 401", resp.StatusCode)
+	if got := status(e.get(t, "/api/v1/book-clubs/yaoi/reading-lists")); got != http.StatusUnauthorized {
+		t.Fatalf("anon list status = %d; want 401", got)
 	}
-	resp.Body.Close()
 
 	e.loginAdmin(t)
 	listID := createReadingList(t, e, "Yaoi Faves")
 
-	// Add an item with sources.
-	resp = e.postJSON(t, "/api/book-clubs/yaoi/reading-lists/"+itoa(listID)+"/items", map[string]any{
-		"item": map[string]any{
-			"title":       "Painter of the Night",
-			"summary":     "A period romance.",
-			"format":      "Manhwa",
-			"genres":      "Romance, Historical",
-			"chapters":    "102",
-			"comments":    "A classic.",
-			"cover_image": "https://media.example.org/p.webp",
-			"sources": []map[string]string{
-				{"title": "OmegaScans", "url": "https://omegascans.org/series/x"},
-				{"title": "", "url": ""}, // blank row should be dropped
-			},
+	// Add an item with sources; a blank row is dropped.
+	item := addItem(t, e, "yaoi", listID, "  Painter of the Night  ", map[string]any{
+		"summary": "A period romance.", "format": "Manhwa", "genres": "Romance, Historical", "chapters": "102",
+		"comments": "A classic.", "coverImage": "https://media.example.org/p.webp",
+		"sources": []map[string]string{
+			{"title": "OmegaScans", "url": "https://omegascans.org/series/x"},
+			{"title": "", "url": ""},
 		},
 	})
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("create item status = %d; want 201", resp.StatusCode)
+	if item["title"] != "Painter of the Night" || item["listId"] != float64(listID) {
+		t.Errorf("created item: %v", item)
 	}
-	resp.Body.Close()
-
-	// Detail should include the item with one (sanitized) source.
-	resp = e.get(t, "/api/book-clubs/yaoi/reading-lists/"+itoa(listID))
-	body := decodeBody(t, resp)
-	list, _ := body["reading_list"].(map[string]any)
-	items, _ := list["items"].([]any)
-	if len(items) != 1 {
-		t.Fatalf("items = %d; want 1", len(items))
-	}
-	item0, _ := items[0].(map[string]any)
-	sources, _ := item0["sources"].([]any)
-	if len(sources) != 1 {
+	if sources, _ := item["sources"].([]any); len(sources) != 1 {
 		t.Fatalf("sources = %d; want 1 (blank dropped)", len(sources))
 	}
-	itemID := int64(item0["id"].(float64))
+	itemID := int64(item["id"].(float64))
+	itemPath := "/api/v1/book-clubs/yaoi/reading-lists/" + itoa(listID) + "/items/" + itoa(itemID)
 
-	// Update the item (PUT the item resource).
-	resp = e.putJSON(t, "/api/book-clubs/yaoi/reading-lists/"+itoa(listID)+"/items/"+itoa(itemID), map[string]any{
-		"item": map[string]any{"title": "Painter of the Night (Vol 1)"},
-	})
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("update item status = %d; want 200", resp.StatusCode)
+	// The list shows it.
+	var list map[string]any
+	decodeInto(t, e.get(t, "/api/v1/book-clubs/yaoi/reading-lists/"+itoa(listID)), http.StatusOK, &list)
+	if items, _ := list["items"].([]any); len(items) != 1 {
+		t.Fatalf("items = %d; want 1", len(items))
 	}
-	resp.Body.Close()
 
-	// Delete the item (DELETE the item resource -> 204).
-	resp = e.del(t, "/api/book-clubs/yaoi/reading-lists/"+itoa(listID)+"/items/"+itoa(itemID))
-	if resp.StatusCode != http.StatusNoContent {
-		t.Fatalf("delete item status = %d; want 204", resp.StatusCode)
+	// The club's lists, without items.
+	var lists struct{ ReadingLists []map[string]any }
+	decodeInto(t, e.get(t, "/api/v1/book-clubs/yaoi/reading-lists"), http.StatusOK, &lists)
+	if len(lists.ReadingLists) != 1 || lists.ReadingLists[0]["title"] != "Yaoi Faves" {
+		t.Fatalf("lists: %v", lists.ReadingLists)
 	}
-	resp.Body.Close()
+	if _, has := lists.ReadingLists[0]["items"]; has {
+		t.Error("the summaries carry items")
+	}
 
-	resp = e.get(t, "/api/book-clubs/yaoi/reading-lists/"+itoa(listID))
-	body = decodeBody(t, resp)
-	list, _ = body["reading_list"].(map[string]any)
+	// Replace the item (PUT answers it).
+	var updated map[string]any
+	decodeInto(t, e.putJSON(t, itemPath, itemBody("Painter of the Night (Vol 1)", nil)), http.StatusOK, &updated)
+	if updated["title"] != "Painter of the Night (Vol 1)" || updated["sortOrder"] != item["sortOrder"] {
+		t.Errorf("updated: %v", updated)
+	}
+
+	// Rename the list (PUT answers it with its items).
+	decodeInto(t, e.putJSON(t, "/api/v1/book-clubs/yaoi/reading-lists/"+itoa(listID), map[string]any{"title": "Renamed"}), http.StatusOK, &list)
+	if list["title"] != "Renamed" || len(list["items"].([]any)) != 1 {
+		t.Errorf("renamed: %v", list)
+	}
+
+	// Delete the item, then it is gone.
+	if got := status(e.del(t, itemPath)); got != http.StatusNoContent {
+		t.Fatalf("delete item status = %d; want 204", got)
+	}
+	if got := status(e.del(t, itemPath)); got != http.StatusNotFound {
+		t.Errorf("delete the item again = %d; want 404", got)
+	}
+	decodeInto(t, e.get(t, "/api/v1/book-clubs/yaoi/reading-lists/"+itoa(listID)), http.StatusOK, &list)
 	if items, _ := list["items"].([]any); len(items) != 0 {
 		t.Fatalf("items after delete = %d; want 0", len(items))
 	}
+
+	// Delete the list.
+	if got := status(e.del(t, "/api/v1/book-clubs/yaoi/reading-lists/"+itoa(listID))); got != http.StatusNoContent {
+		t.Errorf("delete list = %d; want 204", got)
+	}
+	if got := status(e.del(t, "/api/v1/book-clubs/yaoi/reading-lists/"+itoa(listID))); got != http.StatusNotFound {
+		t.Errorf("delete the list again = %d; want 404", got)
+	}
 }
 
-// TestReadingListItemMustBelongToItsList closes the gap the club-mismatch guard
-// above does NOT cover. That guard checks the LIST belongs to the club in the
-// path; nothing checked the ITEM belongs to that list. So a caller working through
-// a list they legitimately own could pass any item id at all - including one from
-// another club's list - and the store keyed the UPDATE and DELETE on the item id
-// alone, editing or destroying another club's item. Both statements are now scoped
-// to the parent list, and a non-member id reports 404.
+// New items go to the end of their list.
+func TestReadingListItemsKeepTheirOrder(t *testing.T) {
+	e := newTestEnv(t)
+	e.loginAdmin(t)
+	listID := createReadingList(t, e, "Ordered")
+	for _, title := range []string{"First", "Second", "Third"} {
+		addItem(t, e, "yaoi", listID, title, nil)
+	}
+	var list struct{ Items []map[string]any }
+	decodeInto(t, e.get(t, "/api/v1/book-clubs/yaoi/reading-lists/"+itoa(listID)), http.StatusOK, &list)
+	var titles []string
+	for _, it := range list.Items {
+		titles = append(titles, it["title"].(string))
+	}
+	if fmt.Sprint(titles) != "[First Second Third]" {
+		t.Errorf("order = %v", titles)
+	}
+}
+
+func TestReadingListValidation(t *testing.T) {
+	e := newTestEnv(t)
+	e.loginAdmin(t)
+	if at := invalid(t, e.postJSON(t, "/api/v1/book-clubs/yaoi/reading-lists", map[string]any{"title": "   "})); !slices.Contains(at, "body.title") {
+		t.Errorf("a blank list title: errors at %v", at)
+	}
+	listID := createReadingList(t, e, "L")
+	path := "/api/v1/book-clubs/yaoi/reading-lists/" + itoa(listID)
+	if at := invalid(t, e.postJSON(t, path+"/items", itemBody("  ", nil))); !slices.Contains(at, "body.title") {
+		t.Errorf("a blank item title: errors at %v", at)
+	}
+	if got := status(e.postJSON(t, "/api/v1/book-clubs/yaoi/reading-lists/999999/items", itemBody("X", nil))); got != http.StatusNotFound {
+		t.Errorf("an item on an unknown list = %d; want 404", got)
+	}
+	if got := status(e.putJSON(t, path+"/items/999999", itemBody("X", nil))); got != http.StatusNotFound {
+		t.Errorf("an unknown item = %d; want 404", got)
+	}
+}
+
+// TestReadingListItemMustBelongToItsList: the list is checked against the club in the
+// path, and the item against the list, so an item id from another club's list finds
+// nothing.
 func TestReadingListItemMustBelongToItsList(t *testing.T) {
 	e := newTestEnv(t)
 	e.loginAdmin(t)
 
-	// The victim: an item on a yaoi list.
 	victimList := createReadingListIn(t, e, "yaoi", "Yaoi Only")
-	resp := e.postJSON(t, "/api/book-clubs/yaoi/reading-lists/"+itoa(victimList)+"/items", map[string]any{
-		"item": map[string]any{"title": "Secret"},
-	})
-	victimItem := int64(decodeBody(t, resp)["item"].(map[string]any)["id"].(float64))
+	victimItem := int64(addItem(t, e, "yaoi", victimList, "Secret", nil)["id"].(float64))
 
-	// The attacker's own list, in a different club, reached by its correct path -
-	// so the club-mismatch guard passes and only the item scope stands in the way.
+	// The attacker's own list, in a different club, reached by its correct path - so
+	// the club guard passes and only the item scope stands in the way.
 	ownList := createReadingListIn(t, e, "yuri", "Yuri Own")
-	own := "/api/book-clubs/yuri/reading-lists/" + itoa(ownList)
+	own := "/api/v1/book-clubs/yuri/reading-lists/" + itoa(ownList)
 
-	resp = e.putJSON(t, own+"/items/"+itoa(victimItem), map[string]any{
-		"item": map[string]any{"title": "Hijacked"},
-	})
-	if resp.StatusCode != http.StatusNotFound {
-		t.Errorf("cross-list item update status = %d; want 404", resp.StatusCode)
+	if got := status(e.putJSON(t, own+"/items/"+itoa(victimItem), itemBody("Hijacked", nil))); got != http.StatusNotFound {
+		t.Errorf("cross-list item update status = %d; want 404", got)
 	}
-	resp.Body.Close()
+	if got := status(e.del(t, own+"/items/"+itoa(victimItem))); got != http.StatusNotFound {
+		t.Errorf("cross-list item delete status = %d; want 404", got)
+	}
 
-	resp = e.del(t, own+"/items/"+itoa(victimItem))
-	if resp.StatusCode != http.StatusNotFound {
-		t.Errorf("cross-list item delete status = %d; want 404", resp.StatusCode)
-	}
-	resp.Body.Close()
-
-	// The victim item is untouched, by both name and existence.
-	list := decodeBody(t, e.get(t, "/api/book-clubs/yaoi/reading-lists/"+itoa(victimList)))["reading_list"].(map[string]any)
-	items := list["items"].([]any)
-	if len(items) != 1 {
-		t.Fatalf("victim list items = %d; want 1 (item was deleted across lists)", len(items))
-	}
-	if got := items[0].(map[string]any)["title"]; got != "Secret" {
-		t.Errorf("victim item title = %v; want \"Secret\" (overwritten across lists)", got)
+	var list struct{ Items []map[string]any }
+	decodeInto(t, e.get(t, "/api/v1/book-clubs/yaoi/reading-lists/"+itoa(victimList)), http.StatusOK, &list)
+	if len(list.Items) != 1 || list.Items[0]["title"] != "Secret" {
+		t.Errorf("the victim list = %v; want its one item untouched", list.Items)
 	}
 }
 
-// TestReadingListClubMismatchGuard verifies the security guard: a list created in
-// one club cannot be read or mutated through another club's path, even by an
-// admin (who holds every club's permission). The mismatch is a 404 - the id is
-// not disclosed to the wrong club - while the correct-club path still works.
+// TestReadingListClubMismatchGuard: a list created in one club cannot be read or
+// changed through another club's path, even by an admin (who holds every club's
+// permission). The mismatch is a 404 - the id is not disclosed to the wrong club -
+// while the correct-club path still works.
 func TestReadingListClubMismatchGuard(t *testing.T) {
 	e := newTestEnv(t)
 	e.loginAdmin(t)
 
-	// A list that belongs to yaoi, plus one item in it.
 	listID := createReadingListIn(t, e, "yaoi", "Yaoi Only")
-	resp := e.postJSON(t, "/api/book-clubs/yaoi/reading-lists/"+itoa(listID)+"/items", map[string]any{
-		"item": map[string]any{"title": "Secret"},
-	})
-	item := decodeBody(t, resp)["item"].(map[string]any)
-	itemID := int64(item["id"].(float64))
+	itemID := int64(addItem(t, e, "yaoi", listID, "Secret", nil)["id"].(float64))
 
-	yaoi := "/api/book-clubs/yaoi/reading-lists/" + itoa(listID)
-	yuri := "/api/book-clubs/yuri/reading-lists/" + itoa(listID)
+	yaoi := "/api/v1/book-clubs/yaoi/reading-lists/" + itoa(listID)
+	yuri := "/api/v1/book-clubs/yuri/reading-lists/" + itoa(listID)
 
-	// Reaching the yaoi list through the yuri path 404s on every operation.
 	mismatches := []struct {
 		name string
 		resp *http.Response
 	}{
 		{"detail", e.get(t, yuri)},
 		{"update", e.putJSON(t, yuri, map[string]any{"title": "Hijacked"})},
-		{"item create", e.postJSON(t, yuri+"/items", map[string]any{"item": map[string]any{"title": "X"}})},
-		{"item update", e.putJSON(t, yuri+"/items/"+itoa(itemID), map[string]any{"item": map[string]any{"title": "X"}})},
+		{"item create", e.postJSON(t, yuri+"/items", itemBody("X", nil))},
+		{"item update", e.putJSON(t, yuri+"/items/"+itoa(itemID), itemBody("X", nil))},
 		{"item delete", e.del(t, yuri+"/items/"+itoa(itemID))},
-		{"publish", e.postJSON(t, yuri+"/publish", map[string]any{})},
+		{"publish", e.postJSON(t, yuri+"/publish", nil)},
 		{"delete", e.del(t, yuri)},
 	}
 	for _, m := range mismatches {
-		if m.resp.StatusCode != http.StatusNotFound {
-			t.Errorf("%s via yuri path status = %d; want 404 (club mismatch)", m.name, m.resp.StatusCode)
+		if got := status(m.resp); got != http.StatusNotFound {
+			t.Errorf("%s via yuri path status = %d; want 404 (club mismatch)", m.name, got)
 		}
-		m.resp.Body.Close()
 	}
 
-	// The correct (yaoi) path still resolves the list - the guard didn't touch it.
-	resp = e.get(t, yaoi)
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("yaoi detail status = %d; want 200", resp.StatusCode)
+	if got := status(e.get(t, yaoi)); got != http.StatusOK {
+		t.Fatalf("yaoi detail status = %d; want 200", got)
 	}
-	resp.Body.Close()
 }
 
-// TestReadingListPerClubPermission verifies the per-club page permission: a
-// non-admin who holds only bookclub-yaoi may list/create in yaoi but is
-// forbidden (403) from another club's reading lists.
+// TestReadingListPerClubPermission: a non-admin who holds only bookclub-yaoi may
+// list and create in yaoi but is forbidden (403) from another club's pages; a club
+// that isn't registered is a 404, and signed out is a 401, before either.
 func TestReadingListPerClubPermission(t *testing.T) {
 	e := newTestEnv(t)
 	yaoiUser := makeActiveUser(t, e, "yaoi-curator", "password123", []string{"bookclub-yaoi"})
 
-	// Granted club: listing and creating work.
-	resp := getAs(t, yaoiUser, e, "/api/book-clubs/yaoi/reading-lists")
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("yaoi list status = %d; want 200", resp.StatusCode)
+	if got := status(getAs(t, yaoiUser, e, "/api/v1/book-clubs/yaoi/reading-lists")); got != http.StatusOK {
+		t.Fatalf("yaoi list status = %d; want 200", got)
 	}
-	resp.Body.Close()
-	resp = postAs(t, yaoiUser, e, "/api/book-clubs/yaoi/reading-lists", map[string]any{"title": "Mine"})
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("yaoi create status = %d; want 201", resp.StatusCode)
+	if got := status(postAs(t, yaoiUser, e, "/api/v1/book-clubs/yaoi/reading-lists", map[string]any{"title": "Mine"})); got != http.StatusCreated {
+		t.Fatalf("yaoi create status = %d; want 201", got)
 	}
-	resp.Body.Close()
 
-	// Ungranted club: both list and create are forbidden (not just hidden).
-	resp = getAs(t, yaoiUser, e, "/api/book-clubs/yuri/reading-lists")
-	if resp.StatusCode != http.StatusForbidden {
-		t.Fatalf("yuri list status = %d; want 403", resp.StatusCode)
+	for _, path := range []string{
+		"/api/v1/book-clubs/yuri/reading-lists", "/api/v1/book-clubs/yuri/webhook", "/api/v1/book-clubs/yuri/lookup?q=x",
+	} {
+		if got := status(getAs(t, yaoiUser, e, path)); got != http.StatusForbidden {
+			t.Errorf("GET %s = %d; want 403", path, got)
+		}
 	}
-	resp.Body.Close()
-	resp = postAs(t, yaoiUser, e, "/api/book-clubs/yuri/reading-lists", map[string]any{"title": "Nope"})
-	if resp.StatusCode != http.StatusForbidden {
-		t.Fatalf("yuri create status = %d; want 403", resp.StatusCode)
+	if got := status(postAs(t, yaoiUser, e, "/api/v1/book-clubs/yuri/reading-lists", map[string]any{"title": "Nope"})); got != http.StatusForbidden {
+		t.Fatalf("yuri create status = %d; want 403", got)
 	}
-	resp.Body.Close()
+	if got := status(getAs(t, yaoiUser, e, "/api/v1/book-clubs/nope/reading-lists")); got != http.StatusNotFound {
+		t.Errorf("an unknown club = %d; want 404", got)
+	}
+
+	e.loginAdmin(t)
+	if got := status(e.get(t, "/api/v1/book-clubs/nope/reading-lists")); got != http.StatusNotFound {
+		t.Errorf("an unknown club, as an admin = %d; want 404", got)
+	}
 }
 
-func TestDiscordWebhookSettingRedactedForPublic(t *testing.T) {
+// The webhook is the club's page's: read and set there, kept out of the public
+// settings and the integrations, and it must be Discord's.
+func TestBookClubWebhook(t *testing.T) {
 	e := newTestEnv(t)
-	if err := e.store.SetSetting(t.Context(), "discord_webhook_url_yaoi", "https://discord.test/secret"); err != nil {
-		t.Fatal(err)
+	if got := status(e.get(t, "/api/v1/book-clubs/yaoi/webhook")); got != http.StatusUnauthorized {
+		t.Fatalf("webhook signed out = %d; want 401", got)
+	}
+	curator := makeActiveUser(t, e, "curator", "password123", []string{"bookclub-yaoi"})
+	if got := status(reqAs(t, curator, e, http.MethodPut, "/api/v1/book-clubs/yuri/webhook", map[string]any{"webhookUrl": bookClubWebhook})); got != http.StatusForbidden {
+		t.Fatalf("another club's webhook = %d; want 403", got)
 	}
 
-	// Public (no login): the site's settings carry no webhook at all.
-	resp := e.get(t, "/api/v1/settings")
-	body, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
-	if strings.Contains(string(body), "discord.test") {
-		t.Fatalf("the public settings carry the webhook: %s", body)
+	// The club's own curator sets and reads it.
+	resp := reqAs(t, curator, e, http.MethodPut, "/api/v1/book-clubs/yaoi/webhook", map[string]any{"webhookUrl": bookClubWebhook})
+	var hook map[string]any
+	decodeInto(t, resp, http.StatusOK, &hook)
+	if hook["webhookUrl"] != bookClubWebhook {
+		t.Errorf("set: %v", hook)
 	}
-	if resp := e.get(t, "/api/v1/settings/integrations"); resp.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("integrations signed out: %d; want 401", resp.StatusCode)
+	decodeInto(t, getAs(t, curator, e, "/api/v1/book-clubs/yaoi/webhook"), http.StatusOK, &hook)
+	if hook["webhookUrl"] != bookClubWebhook {
+		t.Errorf("read back: %v", hook)
 	}
-
-	// Admin: the integrations show it.
+	// The other club still has none.
 	e.loginAdmin(t)
-	integrations := decodeBody(t, e.get(t, "/api/v1/settings/integrations"))
-	webhooks, _ := integrations["bookClubWebhooks"].(map[string]any)
-	if v, _ := webhooks["yaoi"].(string); v != "https://discord.test/secret" {
-		t.Fatalf("admin webhook = %q; want the real value", v)
+	decodeInto(t, e.get(t, "/api/v1/book-clubs/yuri/webhook"), http.StatusOK, &hook)
+	if hook["webhookUrl"] != "" {
+		t.Errorf("another club's webhook: %v", hook)
 	}
+
+	// It is nowhere else: not the public settings, not the integrations.
+	for _, path := range []string{"/api/v1/settings", "/api/v1/settings/integrations"} {
+		resp := e.get(t, path)
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if strings.Contains(string(body), "book-club-token") {
+			t.Errorf("%s carries the webhook: %s", path, body)
+		}
+	}
+
+	if at := invalid(t, e.putJSON(t, "/api/v1/book-clubs/yaoi/webhook", map[string]any{"webhookUrl": "https://evil.example/api/webhooks/1"})); !slices.Contains(at, "body.webhookUrl") {
+		t.Errorf("a non-Discord webhook: errors at %v", at)
+	}
+	decodeInto(t, e.putJSON(t, "/api/v1/book-clubs/yaoi/webhook", map[string]any{"webhookUrl": ""}), http.StatusOK, &hook)
+	if hook["webhookUrl"] != "" {
+		t.Errorf("cleared: %v", hook)
+	}
+}
+
+// useBookClubWebhook saves a club's webhook and points every post at a stub that
+// answers with status, recording what it is sent.
+func useBookClubWebhook(t *testing.T, e *testEnv, club string, status int, header http.Header) *recordingDiscord {
+	t.Helper()
+	decodeInto(t, e.putJSON(t, "/api/v1/book-clubs/"+club+"/webhook", map[string]any{"webhookUrl": bookClubWebhook}), http.StatusOK, nil)
+	var stub recordingDiscord
+	stub.use(t, e, status, header)
+	return &stub
 }
 
 func TestPublishPostsOneEmbedPerItem(t *testing.T) {
 	e := newTestEnv(t)
 	e.loginAdmin(t)
-
-	// Fake Discord webhook that records each received embed payload.
-	var mu sync.Mutex
-	var received []map[string]any
-	discord := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		data, _ := io.ReadAll(r.Body)
-		var payload map[string]any
-		_ = json.Unmarshal(data, &payload)
-		mu.Lock()
-		received = append(received, payload)
-		mu.Unlock()
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	defer discord.Close()
-	if err := e.store.SetSetting(t.Context(), "discord_webhook_url_yaoi", discord.URL); err != nil {
-		t.Fatal(err)
-	}
+	discord := useBookClubWebhook(t, e, "yaoi", http.StatusNoContent, nil)
 
 	listID := createReadingList(t, e, "To Publish")
 	for _, title := range []string{"Alpha", "Beta", "Gamma"} {
-		resp := e.postJSON(t, "/api/book-clubs/yaoi/reading-lists/"+itoa(listID)+"/items", map[string]any{
-			"item": map[string]any{"title": title, "format": "Manga", "summary": title + " summary"},
-		})
-		resp.Body.Close()
+		addItem(t, e, "yaoi", listID, title, map[string]any{"format": "Manga", "summary": title + " summary"})
 	}
 
-	resp := e.postJSON(t, "/api/book-clubs/yaoi/reading-lists/"+itoa(listID)+"/publish", map[string]any{})
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("publish status = %d; want 200", resp.StatusCode)
-	}
-	body := decodeBody(t, resp)
-	if n, _ := body["published"].(float64); int(n) != 3 {
-		t.Fatalf("published = %v; want 3", body["published"])
+	var result map[string]any
+	decodeInto(t, e.postJSON(t, "/api/v1/book-clubs/yaoi/reading-lists/"+itoa(listID)+"/publish", nil), http.StatusOK, &result)
+	if result["published"] != float64(3) {
+		t.Fatalf("published = %v; want 3", result["published"])
 	}
 
-	mu.Lock()
-	defer mu.Unlock()
-	if len(received) != 3 {
-		t.Fatalf("webhook received %d posts; want 3", len(received))
+	if discord.count() != 3 {
+		t.Fatalf("webhook received %d posts; want 3", discord.count())
 	}
-	// Each payload has exactly one embed with a title.
-	for _, p := range received {
+	var titles []string
+	for _, p := range discord.posts {
 		embeds, _ := p["embeds"].([]any)
 		if len(embeds) != 1 {
 			t.Fatalf("embeds per post = %d; want 1", len(embeds))
 		}
-		embed, _ := embeds[0].(map[string]any)
-		if _, ok := embed["title"].(string); !ok {
-			t.Fatalf("embed missing title: %+v", embed)
-		}
+		titles = append(titles, embeds[0].(map[string]any)["title"].(string))
+	}
+	if fmt.Sprint(titles) != "[Alpha Beta Gamma]" {
+		t.Errorf("posted in the order %v", titles)
 	}
 }
 
 func TestPublishUsesPerClubCommentsLabel(t *testing.T) {
 	e := newTestEnv(t)
 	e.loginAdmin(t)
+	discord := useBookClubWebhook(t, e, "yuri", http.StatusNoContent, nil)
 
-	// Capture the embed posted to Discord for the Yuri club.
-	var got map[string]any
-	discord := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		data, _ := io.ReadAll(r.Body)
-		_ = json.Unmarshal(data, &got)
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	defer discord.Close()
-	if err := e.store.SetSetting(t.Context(), "discord_webhook_url_yuri", discord.URL); err != nil {
-		t.Fatal(err)
-	}
-
-	// Create a Yuri list (club from the path), with one commented item.
 	listID := createReadingListIn(t, e, "yuri", "Yuri Faves")
+	addItem(t, e, "yuri", listID, "Bloom Into You", map[string]any{"comments": "Drani loved it."})
+	decodeInto(t, e.postJSON(t, "/api/v1/book-clubs/yuri/reading-lists/"+itoa(listID)+"/publish", nil), http.StatusOK, nil)
 
-	resp := e.postJSON(t, "/api/book-clubs/yuri/reading-lists/"+itoa(listID)+"/items", map[string]any{
-		"item": map[string]any{"title": "Bloom Into You", "comments": "Drani loved it."},
-	})
-	resp.Body.Close()
-
-	resp = e.postJSON(t, "/api/book-clubs/yuri/reading-lists/"+itoa(listID)+"/publish", map[string]any{})
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("publish status = %d; want 200", resp.StatusCode)
-	}
-	resp.Body.Close()
-
-	embeds, _ := got["embeds"].([]any)
-	if len(embeds) != 1 {
-		t.Fatalf("embeds = %d; want 1", len(embeds))
-	}
-	embed, _ := embeds[0].(map[string]any)
-	fields, _ := embed["fields"].([]any)
+	embeds, _ := discord.posts[0]["embeds"].([]any)
+	fields, _ := embeds[0].(map[string]any)["fields"].([]any)
 	found := false
 	for _, f := range fields {
-		fm, _ := f.(map[string]any)
-		if name, _ := fm["name"].(string); name == "Drani's Comments" {
+		switch f.(map[string]any)["name"] {
+		case "Drani's Comments":
 			found = true
-		}
-		if name, _ := fm["name"].(string); name == "Yao's Comments" {
+		case "Yao's Comments":
 			t.Errorf("yuri embed used Yao's Comments label")
 		}
 	}
@@ -374,118 +397,254 @@ func TestPublishUsesPerClubCommentsLabel(t *testing.T) {
 func TestPublishWithoutWebhookFails(t *testing.T) {
 	e := newTestEnv(t)
 	e.loginAdmin(t)
+	var stub recordingDiscord
+	stub.use(t, e, http.StatusNoContent, nil)
 	listID := createReadingList(t, e, "No Hook")
-	resp := e.postJSON(t, "/api/book-clubs/yaoi/reading-lists/"+itoa(listID)+"/items", map[string]any{
-		"item": map[string]any{"title": "X"},
-	})
-	resp.Body.Close()
+	addItem(t, e, "yaoi", listID, "X", nil)
 
-	resp = e.postJSON(t, "/api/book-clubs/yaoi/reading-lists/"+itoa(listID)+"/publish", map[string]any{})
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("publish w/o webhook status = %d; want 400", resp.StatusCode)
+	_, code, detail := problem(t, e.postJSON(t, "/api/v1/book-clubs/yaoi/reading-lists/"+itoa(listID)+"/publish", nil))
+	if code != http.StatusInternalServerError || !strings.Contains(detail, "No Discord webhook is set") {
+		t.Fatalf("publish w/o webhook = %d %q; want 500 saying no webhook is set", code, detail)
 	}
-	resp.Body.Close()
+	if stub.count() != 0 {
+		t.Error("Discord was called with no webhook set")
+	}
 }
 
-func TestBookclubLookupMapsAniListFields(t *testing.T) {
+func TestPublishEmptyListIsAConflict(t *testing.T) {
 	e := newTestEnv(t)
 	e.loginAdmin(t)
-
-	// Fake AniList GraphQL endpoint returning one manga from a Page search.
-	var gotMethod, gotContentType string
-	anilist := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotMethod = r.Method
-		gotContentType = r.Header.Get("Content-Type")
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, `{"data":{"Page":{"media":[{
-			"id":111621,
-			"title":{"romaji":"Yahwacheop","english":"Painter of the Night","native":"야화첩"},
-			"description":"Na-kyum is a talented artist.<br><br>(Source: Seven Seas)",
-			"coverImage":{"extraLarge":"https://s4.anilist.co/cover.jpg","large":"https://s4.anilist.co/med.jpg"},
-			"format":"MANGA","countryOfOrigin":"KR","genres":["Drama","Romance"],
-			"chapters":131,"siteUrl":"https://anilist.co/manga/111621"}]}}}`)
-	}))
-	defer anilist.Close()
-	// anilistURL() now enforces the SSRF allowlist at read time, so a localhost
-	// endpoint would be rejected and fall back to the real AniList. Keep a valid,
-	// allowlisted endpoint URL and route the request to the mock via a host-rewriting
-	// transport - exercising the real allowlisted path end to end.
-	if err := e.store.SetSetting(t.Context(), "anilist_api_url", "https://graphql.anilist.co"); err != nil {
-		t.Fatal(err)
-	}
-	restore, err := server.RouteAnilistToForTest(anilist.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(restore)
-
-	resp := e.get(t, "/api/bookclub/lookup?q=painter")
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("lookup status = %d; want 200", resp.StatusCode)
-	}
-	// The proxy must POST GraphQL as JSON.
-	if gotMethod != http.MethodPost {
-		t.Errorf("upstream method = %s; want POST", gotMethod)
-	}
-	if gotContentType != "application/json" {
-		t.Errorf("upstream Content-Type = %q; want application/json", gotContentType)
-	}
-
-	body := decodeBody(t, resp)
-	results, _ := body["results"].([]any)
-	if len(results) != 1 {
-		t.Fatalf("results = %d; want 1", len(results))
-	}
-	r0, _ := results[0].(map[string]any)
-	// Prefers the English title.
-	if r0["title"] != "Painter of the Night" {
-		t.Errorf("title = %v", r0["title"])
-	}
-	// extraLarge cover preferred.
-	if r0["cover_image"] != "https://s4.anilist.co/cover.jpg" {
-		t.Errorf("cover_image = %v", r0["cover_image"])
-	}
-	// MANGA + KR -> Manhwa.
-	if r0["format"] != "Manhwa" {
-		t.Errorf("format = %v; want Manhwa", r0["format"])
-	}
-	if r0["genres"] != "Drama, Romance" {
-		t.Errorf("genres = %v", r0["genres"])
-	}
-	if r0["chapters"] != "131" {
-		t.Errorf("chapters = %v", r0["chapters"])
-	}
-	// HTML stripped from the summary (<br> -> newline, no tags left).
-	s, _ := r0["summary"].(string)
-	if strings.Contains(s, "<br>") || !strings.Contains(s, "Na-kyum is a talented artist.") {
-		t.Errorf("summary not stripped cleanly: %q", s)
-	}
-	// AniList source prefilled.
-	sources, _ := r0["sources"].([]any)
-	if len(sources) != 1 {
-		t.Fatalf("sources = %d; want 1", len(sources))
-	}
-	src0, _ := sources[0].(map[string]any)
-	if src0["title"] != "AniList" || src0["url"] != "https://anilist.co/manga/111621" {
-		t.Errorf("source = %v; want AniList link", src0)
+	useBookClubWebhook(t, e, "yaoi", http.StatusNoContent, nil)
+	listID := createReadingList(t, e, "Empty")
+	if got := status(e.postJSON(t, "/api/v1/book-clubs/yaoi/reading-lists/"+itoa(listID)+"/publish", nil)); got != http.StatusConflict {
+		t.Errorf("publishing an empty list = %d; want 409", got)
 	}
 }
 
-func TestDeriveFormatByCountry(t *testing.T) {
+// Discord failing a post is answered with the status that says what to do, and a
+// failure part-way says how far the run got.
+func TestPublishDiscordFailures(t *testing.T) {
 	cases := []struct {
-		format, country, want string
+		name       string
+		status     int
+		header     http.Header
+		want       int
+		wantRetry  string
+		wantDetail string
 	}{
-		{"MANGA", "JP", "Manga"},
-		{"MANGA", "KR", "Manhwa"},
-		{"MANGA", "CN", "Manhua"},
-		{"NOVEL", "CN", "Danmei"},
-		{"NOVEL", "JP", "Novel"},
-		{"ONE_SHOT", "JP", "One-shot"},
-		{"MANGA", "", "Manga"},
+		{"refused", http.StatusNotFound, nil, http.StatusInternalServerError, "", "Posted 0 of 2, then: Discord refused the post"},
+		{"rate limited", http.StatusTooManyRequests, http.Header{"Retry-After": {"4"}}, http.StatusTooManyRequests, "4", "4 seconds"},
+		{"down", http.StatusBadGateway, nil, http.StatusServiceUnavailable, "", "can't be reached"},
 	}
 	for _, c := range cases {
-		if got := server.DeriveFormatForTest(c.format, c.country); got != c.want {
-			t.Errorf("deriveFormat(%q,%q) = %q; want %q", c.format, c.country, got, c.want)
+		t.Run(c.name, func(t *testing.T) {
+			e := newTestEnv(t)
+			e.loginAdmin(t)
+			useBookClubWebhook(t, e, "yaoi", c.status, c.header)
+			listID := createReadingList(t, e, "L")
+			addItem(t, e, "yaoi", listID, "A", nil)
+			addItem(t, e, "yaoi", listID, "B", nil)
+
+			resp := e.postJSON(t, "/api/v1/book-clubs/yaoi/reading-lists/"+itoa(listID)+"/publish", nil)
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if resp.StatusCode != c.want || resp.Header.Get("Retry-After") != c.wantRetry || !strings.Contains(string(body), c.wantDetail) {
+				t.Errorf("%d Retry-After %q %s; want %d, %q, %q", resp.StatusCode, resp.Header.Get("Retry-After"), body, c.want, c.wantRetry, c.wantDetail)
+			}
+		})
+	}
+}
+
+// Deleting a list or an item removes the uploaded covers no other item uses, and
+// leaves a shared one and an AniList one alone.
+func TestDeleteRemovesUnusedCovers(t *testing.T) {
+	e := newTestEnv(t)
+	e.loginAdmin(t)
+	dir := filepath.Join(e.srv.WebRootForTest(), "images", "bookclub")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"shared.jpg", "solo.jpg", "list.jpg"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
 		}
+	}
+	cover := func(name string) string { return e.ts.URL + "/images/bookclub/" + name }
+	exists := func(name string) bool {
+		_, err := os.Stat(filepath.Join(dir, name))
+		return err == nil
+	}
+
+	first := createReadingList(t, e, "First")
+	second := createReadingList(t, e, "Second")
+	a := addItem(t, e, "yaoi", first, "A", map[string]any{"coverImage": cover("shared.jpg")})
+	addItem(t, e, "yaoi", second, "B", map[string]any{"coverImage": cover("shared.jpg")})
+	solo := addItem(t, e, "yaoi", first, "Solo", map[string]any{"coverImage": cover("solo.jpg")})
+	addItem(t, e, "yaoi", second, "Remote", map[string]any{"coverImage": "https://s4.anilist.co/cover.jpg"})
+	addItem(t, e, "yaoi", first, "InList", map[string]any{"coverImage": cover("list.jpg")})
+
+	path := func(list int64, item map[string]any) string {
+		return "/api/v1/book-clubs/yaoi/reading-lists/" + itoa(list) + "/items/" + itoa(int64(item["id"].(float64)))
+	}
+	if got := status(e.del(t, path(first, a))); got != http.StatusNoContent {
+		t.Fatalf("delete shared-cover item = %d", got)
+	}
+	if !exists("shared.jpg") {
+		t.Error("a cover another item still uses was deleted")
+	}
+	if got := status(e.del(t, path(first, solo))); got != http.StatusNoContent {
+		t.Fatalf("delete solo-cover item = %d", got)
+	}
+	if exists("solo.jpg") {
+		t.Error("a cover no item uses any more was kept")
+	}
+
+	// Deleting the first list takes its remaining item's cover with it; the second
+	// list's items keep the shared one.
+	if got := status(e.del(t, "/api/v1/book-clubs/yaoi/reading-lists/"+itoa(first))); got != http.StatusNoContent {
+		t.Fatalf("delete list = %d", got)
+	}
+	if exists("list.jpg") {
+		t.Error("a deleted list's cover was kept")
+	}
+	if !exists("shared.jpg") {
+		t.Error("deleting a list removed a cover another list's item uses")
+	}
+}
+
+// -- Title lookup -------------------------------------------------------------
+
+const aniListReply = `{"data":{"Page":{"media":[{
+	"id":111621,
+	"title":{"romaji":"Yahwacheop","english":"Painter of the Night","native":"야화첩"},
+	"description":"Na-kyum is a talented artist.<br><br>(Source: Seven Seas)",
+	"coverImage":{"extraLarge":"https://s4.anilist.co/cover.jpg","large":"https://s4.anilist.co/med.jpg"},
+	"format":"MANGA","countryOfOrigin":"KR","genres":["Drama","Romance"],
+	"chapters":131,"siteUrl":"https://anilist.co/manga/111621"}]}}}`
+
+// useAniList points the server's AniList client at a stub that answers with answer,
+// keeping the saved endpoint a valid, allowlisted address.
+func useAniList(t *testing.T, e *testEnv, answer http.HandlerFunc) {
+	t.Helper()
+	stub := httptest.NewServer(answer)
+	t.Cleanup(stub.Close)
+	if err := e.srv.RouteAnilistForTest(stub.URL); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLookUpTitleMapsAniListFields(t *testing.T) {
+	e := newTestEnv(t)
+	e.loginAdmin(t)
+	var mu sync.Mutex
+	var gotMethod, gotContentType string
+	useAniList(t, e, func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		gotMethod, gotContentType = r.Method, r.Header.Get("Content-Type")
+		mu.Unlock()
+		_, _ = io.WriteString(w, aniListReply)
+	})
+
+	var found struct{ Results []map[string]any }
+	decodeInto(t, e.get(t, "/api/v1/book-clubs/yaoi/lookup?q=painter"), http.StatusOK, &found)
+	mu.Lock()
+	method, contentType := gotMethod, gotContentType
+	mu.Unlock()
+	if method != http.MethodPost || contentType != "application/json" {
+		t.Errorf("upstream request = %s %q; want a JSON POST", method, contentType)
+	}
+	if len(found.Results) != 1 {
+		t.Fatalf("results = %d; want 1", len(found.Results))
+	}
+	r := found.Results[0]
+	if r["title"] != "Painter of the Night" || r["coverImage"] != "https://s4.anilist.co/cover.jpg" ||
+		r["format"] != "Manhwa" || r["genres"] != "Drama, Romance" || r["chapters"] != "131" {
+		t.Errorf("result = %v", r)
+	}
+	if s, _ := r["summary"].(string); strings.Contains(s, "<br>") || !strings.Contains(s, "Na-kyum is a talented artist.") {
+		t.Errorf("summary not stripped cleanly: %q", s)
+	}
+	sources, _ := r["sources"].([]any)
+	if len(sources) != 1 || sources[0].(map[string]any)["title"] != "AniList" || sources[0].(map[string]any)["url"] != "https://anilist.co/manga/111621" {
+		t.Errorf("sources = %v; want the AniList link", sources)
+	}
+
+	// By id: the same mapping.
+	decodeInto(t, e.get(t, "/api/v1/book-clubs/yaoi/lookup?id=111621"), http.StatusOK, &found)
+}
+
+func TestLookUpTitleNeedsOneOfQueryAndID(t *testing.T) {
+	e := newTestEnv(t)
+	e.loginAdmin(t)
+	for _, path := range []string{"/lookup", "/lookup?q=", "/lookup?q=x&id=5"} {
+		if at := invalid(t, e.get(t, "/api/v1/book-clubs/yaoi"+path)); !slices.Contains(at, "query.q") {
+			t.Errorf("GET %s: errors at %v; want query.q", path, at)
+		}
+	}
+	if got := status(e.get(t, "/api/v1/book-clubs/yaoi/lookup?id=abc")); got != http.StatusUnprocessableEntity {
+		t.Errorf("a non-numeric id = %d; want 422", got)
+	}
+}
+
+// AniList failing is answered with the status that says what to do - never a 424 or
+// 502 - and says why in words.
+func TestLookUpTitleFailures(t *testing.T) {
+	cases := []struct {
+		name       string
+		answer     http.HandlerFunc
+		want       int
+		wantRetry  string
+		wantDetail string
+	}{
+		{"disabled", func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = io.WriteString(w, `{"errors":[{"message":"AniList API temporarily disabled"}]}`)
+		}, http.StatusInternalServerError, "", "AniList refused the lookup: AniList API temporarily disabled"},
+		{"rate limited", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Retry-After", "30")
+			w.WriteHeader(http.StatusTooManyRequests)
+		}, http.StatusTooManyRequests, "30", "30 seconds"},
+		{"down", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusBadGateway) },
+			http.StatusServiceUnavailable, "", "can't be reached"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			e := newTestEnv(t)
+			e.loginAdmin(t)
+			useAniList(t, e, c.answer)
+			resp := e.get(t, "/api/v1/book-clubs/yaoi/lookup?q=x")
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if resp.StatusCode != c.want || resp.Header.Get("Retry-After") != c.wantRetry || !strings.Contains(string(body), c.wantDetail) {
+				t.Errorf("%d Retry-After %q %s; want %d, %q, %q", resp.StatusCode, resp.Header.Get("Retry-After"), body, c.want, c.wantRetry, c.wantDetail)
+			}
+		})
+	}
+}
+
+// The saved endpoint is held to the AniList allowlist when it is used, not only when
+// it is saved: one written another way falls back to the real AniList, never the
+// internal address.
+func TestLookUpTitleIgnoresAnEndpointOffTheAllowlist(t *testing.T) {
+	e := newTestEnv(t)
+	e.loginAdmin(t)
+	var hit sync.Mutex
+	var urls []string
+	useAniList(t, e, func(w http.ResponseWriter, r *http.Request) {
+		hit.Lock()
+		urls = append(urls, r.URL.Path)
+		hit.Unlock()
+		_, _ = io.WriteString(w, aniListReply)
+	})
+	if err := e.store.SetSetting(t.Context(), "anilist_api_url", "https://169.254.169.254/latest"); err != nil {
+		t.Fatal(err)
+	}
+	decodeInto(t, e.get(t, "/api/v1/book-clubs/yaoi/lookup?q=painter"), http.StatusOK, nil)
+	// The stub rewrites the host, so the path tells which endpoint the request was
+	// for: the default has none, the metadata address had /latest.
+	hit.Lock()
+	defer hit.Unlock()
+	if len(urls) != 1 || urls[0] != "/" {
+		t.Fatalf("the stub saw requests for %v; want one for the default endpoint", urls)
 	}
 }

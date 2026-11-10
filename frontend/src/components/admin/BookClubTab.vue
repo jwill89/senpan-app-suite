@@ -12,7 +12,7 @@
  * the form is populated, cover image URL included). "Publish" posts every item
  * in the list as its own Discord embed via the club's configured webhook.
  */
-import { ref, useTemplateRef } from 'vue'
+import { ref, useTemplateRef, watch } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import MarkdownEditor from '@/components/common/MarkdownEditor.vue'
 import AdminPanel from '@/components/common/ui/AdminPanel.vue'
@@ -24,13 +24,35 @@ import FormActions from '@/components/common/ui/FormActions.vue'
 import EmptyState from '@/components/common/ui/EmptyState.vue'
 import { useBookclubStore } from '@/stores/bookclub'
 import { assetUrl } from '@/lib/assets'
-import type { ReadingList } from '@/types/api'
+import type { ReadingListSummary } from '@/api/client'
 
 const bookclub = useBookclubStore()
 
 // Inline rename state for a reading list (themed, avoids native prompt()).
 const editingListId = ref<number | null>(null)
 const editingTitle = ref('')
+
+// The list overview, or the club's Discord webhook form.
+const screen = ref<'list' | 'webhook'>('list')
+const webhookDraft = ref('')
+
+// Another club's tab starts on its overview.
+watch(
+  () => bookclub.activeClubSlug,
+  () => {
+    screen.value = 'list'
+  },
+)
+
+function openWebhook(): void {
+  webhookDraft.value = bookclub.webhookUrl
+  screen.value = 'webhook'
+}
+async function submitWebhook(): Promise<void> {
+  if (await bookclub.saveWebhook(webhookDraft.value)) {
+    screen.value = 'list'
+  }
+}
 
 /** Hidden <input type="file"> behind the cover Upload button. A bare file input
  *  renders the browser's own grey "Choose File" control, which cannot be themed
@@ -42,11 +64,11 @@ function pickCover(): void {
   coverInput.value?.click()
 }
 
-function startRename(list: ReadingList): void {
+function startRename(list: ReadingListSummary): void {
   editingListId.value = list.id
   editingTitle.value = list.title
 }
-async function commitRename(list: ReadingList): Promise<void> {
+async function commitRename(list: ReadingListSummary): Promise<void> {
   await bookclub.renameList(list, editingTitle.value)
   editingListId.value = null
 }
@@ -57,8 +79,50 @@ function cancelRename(): void {
 
 <template>
   <div class="tab-body">
+    <!-- The club's Discord webhook -->
+    <AdminPanel v-if="screen === 'webhook'">
+      <SubPageHeader
+        :icon="['fab', 'discord']"
+        :title="`${bookclub.clubName} Discord Webhook`"
+        @back="screen = 'list'"
+      />
+      <p class="text-muted text-sm mb-16">
+        Publishing a reading list posts each item as its own embed to this channel webhook. In
+        Discord: Channel Settings -> Integrations -> Webhooks -> New Webhook -> Copy Webhook URL.
+      </p>
+      <FormField
+        label="Discord webhook URL"
+        help="Leave blank to disable publishing. Only Discord webhook URLs are accepted."
+      >
+        <input
+          v-model="webhookDraft"
+          placeholder="https://discord.com/api/webhooks/..."
+          aria-label="Discord webhook URL"
+        />
+      </FormField>
+      <FormActions align="start">
+        <button
+          type="button"
+          class="btn-neutral"
+          :disabled="bookclub.savingWebhook"
+          @click="screen = 'list'"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="btn-confirm"
+          :disabled="bookclub.savingWebhook"
+          @click="submitWebhook"
+        >
+          <LoadingSpinner v-if="bookclub.savingWebhook" label="Saving..." />
+          <template v-else>Save Webhook</template>
+        </button>
+      </FormActions>
+    </AdminPanel>
+
     <!-- Reading list detail (items + add/edit form) -->
-    <AdminPanel v-if="bookclub.selectedList">
+    <AdminPanel v-else-if="bookclub.selectedList">
       <SubPageHeader
         :icon="['fad', bookclub.clubIcon]"
         :title="bookclub.selectedList.title"
@@ -86,8 +150,8 @@ function cancelRename(): void {
           <ListRow v-for="item in bookclub.selectedList.items" :key="item.id">
             <template #media>
               <img
-                v-if="item.cover_image"
-                :src="assetUrl(item.cover_image)"
+                v-if="item.coverImage"
+                :src="assetUrl(item.coverImage)"
                 class="media-cover media-cover--book"
                 alt="Cover"
               />
@@ -180,8 +244,8 @@ function cancelRename(): void {
                 @click="bookclub.applyLookupResult(res)"
               >
                 <img
-                  v-if="res.cover_image"
-                  :src="res.cover_image"
+                  v-if="res.coverImage"
+                  :src="res.coverImage"
                   class="media-cover media-cover--book-sm"
                   alt=""
                 />
@@ -196,8 +260,8 @@ function cancelRename(): void {
           <div class="flex-row items-start mb-10">
             <FormField label="Cover" style="flex: 0 0 120px">
               <img
-                v-if="bookclub.itemForm.cover_image"
-                :src="assetUrl(bookclub.itemForm.cover_image)"
+                v-if="bookclub.itemForm.coverImage"
+                :src="assetUrl(bookclub.itemForm.coverImage)"
                 class="media-cover media-cover--book-lg"
                 alt="Cover preview"
               />
@@ -219,10 +283,10 @@ function cancelRename(): void {
                 @change="bookclub.uploadCover($event)"
               />
               <button
-                v-if="bookclub.itemForm.cover_image"
+                v-if="bookclub.itemForm.coverImage"
                 type="button"
                 class="btn-neutral btn-sm mt-8"
-                @click="bookclub.itemForm.cover_image = ''"
+                @click="bookclub.itemForm.coverImage = ''"
               >
                 Remove
               </button>
@@ -237,7 +301,7 @@ function cancelRename(): void {
               </FormField>
               <FormField label="Cover Image URL">
                 <input
-                  v-model="bookclub.itemForm.cover_image"
+                  v-model="bookclub.itemForm.coverImage"
                   placeholder="https://..."
                   aria-label="Cover image URL"
                 />
@@ -348,6 +412,12 @@ function cancelRename(): void {
 
     <!-- Reading lists overview -->
     <ManagerView v-else :title="`${bookclub.clubName} - Reading Lists`" :icon="['fad', 'book']">
+      <template #actions>
+        <button type="button" class="btn-view btn-sm" @click="openWebhook">
+          <font-awesome-icon :icon="['fab', 'discord']" /> Webhook
+        </button>
+      </template>
+
       <template #toolbar>
         <input
           v-model="bookclub.newListTitle"
@@ -366,6 +436,13 @@ function cancelRename(): void {
           <template v-else><font-awesome-icon :icon="['fas', 'plus']" /> Create List</template>
         </button>
       </template>
+
+      <div v-if="!bookclub.webhookUrl && bookclub.lists.length" class="text-muted text-xs mb-12">
+        <font-awesome-icon :icon="['fad', 'triangle-exclamation']" /> No Discord webhook set yet -
+        add one with the
+        <button type="button" class="link-btn" @click="openWebhook">Webhook</button> button to
+        publish reading lists.
+      </div>
 
       <LoadingSpinner
         v-if="bookclub.listsLoading && bookclub.lists.length === 0"

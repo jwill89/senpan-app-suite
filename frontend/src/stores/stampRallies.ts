@@ -10,9 +10,9 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { endpoints } from '@/lib/endpoints'
+import { api, unwrap, type Affiliate } from '@/api/client'
 import { saveRallySignup } from '@/lib/signups'
 import type {
-  Affiliate,
   FestivalMap,
   FestivalStallOccupant,
   Placement,
@@ -246,7 +246,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     await Promise.all([
       (async () => {
         try {
-          affiliates.value = (await endpoints.affiliates.list()).affiliates
+          affiliates.value = (await unwrap(api.GET('/affiliates'))).affiliates
         } catch {
           affiliates.value = []
         }

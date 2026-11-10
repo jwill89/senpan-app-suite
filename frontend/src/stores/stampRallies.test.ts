@@ -50,7 +50,6 @@ vi.mock('@/lib/endpoints', () => ({
     },
     stampCard: { get: ep.get, stamp: ep.stamp },
     stampSignup: { list: ep.signupList, signUp: ep.signUp, lookup: ep.signupLookup },
-    affiliates: { list: vi.fn(async () => ({ affiliates: [] })) },
     festivalMaps: { list: ep.mapList, detail: ep.mapDetail },
   },
 }))

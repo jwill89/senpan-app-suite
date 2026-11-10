@@ -21,10 +21,9 @@ import {
   raffleTicketCost,
 } from '@/stores/raffles'
 import { assetUrl } from '@/lib/assets'
-import { api, unwrap } from '@/api/client'
+import { api, unwrap, type RaffleLookupEntry } from '@/api/client'
 import { RAFFLE_LOOKUP_MIN_QUERY } from '@/lib/constants'
 import { savedRaffleSignup } from '@/lib/signups'
-import type { RaffleLookupEntry } from '@/types/api'
 
 const props = defineProps<{ id: string }>()
 
@@ -59,7 +58,7 @@ const detailsOnly = computed(
  */
 const alreadyCovered = computed(() => {
   const r = raffles.raffleSignupResult
-  return r ? Math.max(0, r.total_cost - r.amount_due) : 0
+  return r ? Math.max(0, r.totalCost - r.amountDue) : 0
 })
 
 /**
@@ -68,13 +67,13 @@ const alreadyCovered = computed(() => {
  */
 const costTiers = computed(() => {
   const r = raffles.selectedRaffle
-  if (r?.entry_mode !== 'custom') {
+  if (r?.entryMode !== 'custom') {
     return []
   }
-  return r.tier_costs.map((_, i) => ({
+  return r.tierCosts.map((_, i) => ({
     n: i + 1,
     cost: raffleTicketCost(r, i + 1),
-    running: r.tier_costs.slice(0, i + 1).reduce((sum, c) => sum + c, 0),
+    running: r.tierCosts.slice(0, i + 1).reduce((sum, c) => sum + c, 0),
   }))
 })
 
@@ -159,7 +158,7 @@ function runLookup(): void {
  * splits the tickets across both.
  */
 function useHit(hit: RaffleLookupEntry): void {
-  raffles.raffleSignup.characterName = hit.character_name
+  raffles.raffleSignup.characterName = hit.characterName
   raffles.raffleSignup.world = hit.world
   // Came from the search, not from this device's saved entry - the notice would
   // be claiming the wrong source.
@@ -184,8 +183,8 @@ function back(): void {
     </div>
     <div class="tab-body raffle-detail-body">
       <!-- Prize image -->
-      <div v-if="raffles.selectedRaffle.prize_image" class="prize-container">
-        <img :src="assetUrl(raffles.selectedRaffle.prize_image)" class="prize-img" alt="Prize" />
+      <div v-if="raffles.selectedRaffle.prizeImage" class="prize-container">
+        <img :src="assetUrl(raffles.selectedRaffle.prizeImage)" class="prize-img" alt="Prize" />
       </div>
 
       <!-- Description -->
@@ -222,10 +221,10 @@ function back(): void {
           <font-awesome-icon :icon="['fad', 'circle-check']" />
           {{ raffles.raffleSignupResult.message }}
         </h3>
-        <p><strong>Total Entries:</strong> {{ raffles.raffleSignupResult.total_entries }}</p>
+        <p><strong>Total Entries:</strong> {{ raffles.raffleSignupResult.totalEntries }}</p>
         <p>
           <strong>Total Cost:</strong>
-          {{ raffles.raffleSignupResult.total_cost.toLocaleString() }} gil
+          {{ raffles.raffleSignupResult.totalCost.toLocaleString() }} gil
         </p>
         <!-- What they actually send. It only differs from the total once part of
              this character's entry has already been settled, so the "already
@@ -236,15 +235,15 @@ function back(): void {
         <!-- The figure the player acts on, so it outweighs the totals above it. -->
         <p class="text-lg text-highlight">
           <strong>Amount Due:</strong>
-          {{ raffles.raffleSignupResult.amount_due.toLocaleString() }} gil
+          {{ raffles.raffleSignupResult.amountDue.toLocaleString() }} gil
         </p>
-        <div v-if="raffles.raffleSignupResult.signup_instructions" class="game-details mt-12">
+        <div v-if="raffles.raffleSignupResult.signupInstructions" class="game-details mt-12">
           <h4 class="text-highlight mb-6">Sign-Up Instructions</h4>
-          <MarkdownText :source="raffles.raffleSignupResult.signup_instructions" />
+          <MarkdownText :source="raffles.raffleSignupResult.signupInstructions" />
         </div>
-        <figure v-if="raffles.selectedRaffle.pay_image" class="captioned-figure">
+        <figure v-if="raffles.selectedRaffle.payImage" class="captioned-figure">
           <figcaption>Where to pay</figcaption>
-          <img :src="assetUrl(raffles.selectedRaffle.pay_image)" alt="Where to pay" />
+          <img :src="assetUrl(raffles.selectedRaffle.payImage)" alt="Where to pay" />
         </figure>
       </div>
 
@@ -253,16 +252,16 @@ function back(): void {
       <div v-if="detailsOnly" class="raffle-signup-form">
         <h3 class="mb-12">How to Enter</h3>
         <MarkdownText
-          v-if="raffles.selectedRaffle.signup_instructions"
+          v-if="raffles.selectedRaffle.signupInstructions"
           class="game-details"
-          :source="raffles.selectedRaffle.signup_instructions"
+          :source="raffles.selectedRaffle.signupInstructions"
         />
         <p v-else class="text-muted m-0">
           Sign-ups for this raffle are handled outside the site - check the description above.
         </p>
-        <figure v-if="raffles.selectedRaffle.pay_image" class="captioned-figure">
+        <figure v-if="raffles.selectedRaffle.payImage" class="captioned-figure">
           <figcaption>Where to pay</figcaption>
-          <img :src="assetUrl(raffles.selectedRaffle.pay_image)" alt="Where to pay" />
+          <img :src="assetUrl(raffles.selectedRaffle.payImage)" alt="Where to pay" />
         </figure>
       </div>
 
@@ -305,17 +304,17 @@ function back(): void {
           <ul v-if="raffles.entryLookupResults.length" class="stack">
             <li
               v-for="hit in raffles.entryLookupResults"
-              :key="hit.character_name + hit.world"
+              :key="hit.characterName + hit.world"
               class="stack-row"
             >
-              <strong>{{ hit.character_name }} @ {{ hit.world }}</strong>
+              <strong>{{ hit.characterName }} @ {{ hit.world }}</strong>
               <span class="text-sm text-muted">
-                {{ hit.num_entries }} {{ hit.num_entries === 1 ? 'entry' : 'entries' }}
+                {{ hit.numEntries }} {{ hit.numEntries === 1 ? 'entry' : 'entries' }}
               </span>
-              <span :class="['badge', PAYMENT_LABELS[hit.payment_state]?.badge ?? 'badge--muted']">
-                {{ PAYMENT_LABELS[hit.payment_state]?.text ?? hit.payment_state }}
-                <template v-if="hit.payment_state === 'partial'">
-                  ({{ hit.paid_entries }}/{{ hit.num_entries }})
+              <span :class="['badge', PAYMENT_LABELS[hit.paymentState]?.badge ?? 'badge--muted']">
+                {{ PAYMENT_LABELS[hit.paymentState]?.text ?? hit.paymentState }}
+                <template v-if="hit.paymentState === 'partial'">
+                  ({{ hit.paidEntries }}/{{ hit.numEntries }})
                 </template>
               </span>
               <button
@@ -367,9 +366,9 @@ function back(): void {
           />
         </div>
         <WorldPicker v-model="raffles.raffleSignup.world" class="mb-10" />
-        <div v-if="raffles.selectedRaffle.max_entries > 1" class="field mb-10">
+        <div v-if="raffles.selectedRaffle.maxEntries > 1" class="field mb-10">
           <label :for="`${fieldId}-entries`" class="field-label">
-            Number of Entries (max {{ raffles.selectedRaffle.max_entries }})
+            Number of Entries (max {{ raffles.selectedRaffle.maxEntries }})
           </label>
           <input
             :id="`${fieldId}-entries`"
@@ -377,7 +376,7 @@ function back(): void {
             type="number"
             min="1"
             step="1"
-            :max="raffles.selectedRaffle.max_entries"
+            :max="raffles.selectedRaffle.maxEntries"
             aria-label="Number of entries"
             @change="raffles.clampSignupEntries()"
             @blur="raffles.clampSignupEntries()"

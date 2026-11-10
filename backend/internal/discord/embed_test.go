@@ -1,4 +1,4 @@
-package server
+package discord
 
 import (
 	"strings"
@@ -26,9 +26,9 @@ func TestTruncateRunesRespectsTheLimit(t *testing.T) {
 		{"japanese truncates by rune", "あいうえおかきくけこ", 6, "あいう..."},
 	}
 	for _, c := range cases {
-		got := truncateRunes(c.in, c.n)
+		got := TruncateRunes(c.in, c.n)
 		if got != c.want {
-			t.Errorf("%s: truncateRunes(%q, %d) = %q; want %q", c.name, c.in, c.n, got, c.want)
+			t.Errorf("%s: TruncateRunes(%q, %d) = %q; want %q", c.name, c.in, c.n, got, c.want)
 		}
 		if n := len([]rune(got)); n > c.n {
 			t.Errorf("%s: result is %d runes, over the limit of %d", c.name, n, c.n)
@@ -43,27 +43,27 @@ func TestTruncateRunesRespectsTheLimit(t *testing.T) {
 // anything about length. The 25-field cap was enforced but dropped silently, which
 // is worse than failing: the announcement arrived looking complete.
 func TestEmbedRespectsDiscordTotalBudget(t *testing.T) {
-	b := newEmbed().title("A long announcement")
+	b := NewEmbed().Title("A long announcement")
 	// Each field is at the per-field cap, so ~6 of them reach the total budget.
-	big := strings.Repeat("x", embedFieldValueMax)
+	big := strings.Repeat("x", EmbedFieldValueMax)
 	for range 20 {
-		b.field(embedNoHeading, big, false)
+		b.Field(NoHeading, big, false)
 	}
-	e := b.build()
+	e := b.Build()
 
 	total := len([]rune(e.Title)) + len([]rune(e.Description))
 	for _, f := range e.Fields {
 		total += len([]rune(f.Name)) + len([]rune(f.Value))
 	}
-	if total > embedTotalMax {
-		t.Errorf("embed totals %d characters; Discord rejects anything over %d", total, embedTotalMax)
+	if total > EmbedTotalMax {
+		t.Errorf("embed totals %d characters; Discord rejects anything over %d", total, EmbedTotalMax)
 	}
-	if len(e.Fields) > maxEmbedFields {
-		t.Errorf("embed carries %d fields; Discord caps them at %d", len(e.Fields), maxEmbedFields)
+	if len(e.Fields) > MaxEmbedFields {
+		t.Errorf("embed carries %d fields; Discord caps them at %d", len(e.Fields), MaxEmbedFields)
 	}
 	// And it must SAY it was clipped rather than quietly arriving short.
 	last := e.Fields[len(e.Fields)-1]
-	if last.Value != embedTruncatedNotice {
+	if last.Value != TruncatedNotice {
 		t.Errorf("last field = %q; want the truncation notice so the clip is visible", last.Value)
 	}
 }
@@ -71,7 +71,7 @@ func TestEmbedRespectsDiscordTotalBudget(t *testing.T) {
 // TestEmbedWithinBudgetIsUntouched guards the other direction: an ordinary
 // announcement must not gain a truncation notice it did not earn.
 func TestEmbedWithinBudgetIsUntouched(t *testing.T) {
-	e := newEmbed().title("Tea time").field("When", "Friday", false).build()
+	e := NewEmbed().Title("Tea time").Field("When", "Friday", false).Build()
 	if len(e.Fields) != 1 {
 		t.Fatalf("fields = %d; want 1", len(e.Fields))
 	}

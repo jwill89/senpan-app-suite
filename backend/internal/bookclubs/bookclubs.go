@@ -1,15 +1,19 @@
 // Package bookclubs holds the book clubs' registry and the rules that need no
-// database or network: each club's settings key, and which AniList addresses the
-// server may look titles up at.
+// database or network: each club's settings key, which AniList addresses the
+// server may look titles up at, how a reading-list item is cleaned, and how one is
+// rendered as a Discord embed.
 package bookclubs
 
 import (
 	"net/url"
+	"slices"
 	"strings"
+
+	"app-suite/internal/discord"
 )
 
 // Club is one book club. Adding one here gives it its reading lists and its own
-// Discord webhook (Settings -> Integrations).
+// Discord webhook.
 type Club struct {
 	Slug string
 	Name string
@@ -66,4 +70,71 @@ func IsAllowedAniListURL(raw string) bool {
 	}
 	host := strings.ToLower(u.Hostname())
 	return host == "anilist.co" || strings.HasSuffix(host, ".anilist.co")
+}
+
+// Exists reports whether slug is a registered club.
+func Exists(slug string) bool {
+	return slices.Contains(Slugs(), slug)
+}
+
+// Source is a named external link on a reading-list item.
+type Source struct {
+	Title string
+	URL   string
+}
+
+// Item is what an embed shows of a reading-list item.
+type Item struct {
+	CoverImage string
+	Title      string
+	Summary    string
+	Format     string
+	Genres     string
+	Tropes     string
+	Chapters   string
+	Comments   string
+	Sources    []Source
+}
+
+// SanitizeSources trims each source and drops those with no URL, so blank rows from
+// a form aren't kept. A source needs at least a URL.
+func SanitizeSources(in []Source) []Source {
+	out := make([]Source, 0, len(in))
+	for _, s := range in {
+		if u := strings.TrimSpace(s.URL); u != "" {
+			out = append(out, Source{Title: strings.TrimSpace(s.Title), URL: u})
+		}
+	}
+	return out
+}
+
+// ItemEmbed renders an item as a Discord embed for the club. The cover is the large
+// full-width image rather than the small thumbnail, and the curator's comments are
+// labeled the club's way.
+func ItemEmbed(it Item, slug string) discord.Embed {
+	b := discord.NewEmbed().
+		Title(it.Title).
+		Description(it.Summary).
+		Image(it.CoverImage).
+		Field("Format", it.Format, true).
+		Field("Chapters", it.Chapters, true).
+		Field("Genres", it.Genres, false).
+		Field("Tropes", it.Tropes, false).
+		Field(CommentsLabel(slug), it.Comments, false)
+
+	if len(it.Sources) > 0 {
+		links := make([]string, 0, len(it.Sources))
+		for _, src := range it.Sources {
+			if strings.TrimSpace(src.URL) == "" {
+				continue
+			}
+			label := strings.TrimSpace(src.Title)
+			if label == "" {
+				label = src.URL
+			}
+			links = append(links, "["+label+"]("+src.URL+")")
+		}
+		b.Field("Sources", strings.Join(links, "\n"), false)
+	}
+	return b.Build()
 }

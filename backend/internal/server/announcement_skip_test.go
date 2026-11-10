@@ -4,95 +4,72 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
 	"testing"
 	"time"
+
+	"app-suite/internal/db"
 )
 
 // -- Skipping scheduled occurrences -------------------------------------------
 
 // scheduledAnnouncement creates a weekly (Friday) announcement and returns its id
-// plus the request body it was built from, so a test can edit and PUT it back the
-// way the admin form does.
-func (e *testEnv) scheduledAnnouncement(t *testing.T, title string) (int, map[string]any) {
+// plus the body it was built from, so a test can edit and PUT it back the way the
+// admin form does.
+func (e *testEnv) scheduledAnnouncement(t *testing.T, title string) (int64, map[string]any) {
 	t.Helper()
-	tr := e.postJSON(t, "/api/announcement-types", map[string]any{"name": title + " type", "webhook_url": ""})
-	if tr.StatusCode != http.StatusCreated {
-		t.Fatalf("create announcement type = %d; want 201", tr.StatusCode)
+	typeID := e.makeAnnouncementType(t, title+" type")
+	body := announcementBody(typeID, map[string]any{
+		"title": title, "details": "Tonight!", "scheduleKind": "weekly", "timezone": "America/Chicago",
+		"scheduleWeekdays": "5", "scheduleMinutes": 1320,
+	})
+	var made map[string]any
+	decodeInto(t, e.postJSON(t, "/api/v1/announcements", body), http.StatusCreated, &made)
+	if got := made["skipCount"]; got != float64(0) {
+		t.Fatalf("new announcement skipCount = %v; want 0", got)
 	}
-	typeID := int(decodeBody(t, tr)["type"].(map[string]any)["id"].(float64))
-
-	fields := map[string]any{
-		"type_id":           typeID,
-		"title":             title,
-		"details":           "Tonight!",
-		"schedule_kind":     "weekly",
-		"timezone":          "America/Chicago",
-		"schedule_weekdays": "5",
-		"schedule_minutes":  1320,
-		"active":            true,
-	}
-	cr := e.postJSON(t, "/api/announcements", map[string]any{"announcement": fields})
-	if cr.StatusCode != http.StatusCreated {
-		t.Fatalf("create announcement = %d; want 201", cr.StatusCode)
-	}
-	a := decodeBody(t, cr)["announcement"].(map[string]any)
-	if got := a["skip_count"]; got != float64(0) {
-		t.Fatalf("new announcement skip_count = %v; want 0", got)
-	}
-	return int(a["id"].(float64)), fields
+	return int64(made["id"].(float64)), body
 }
 
-/** skipCount reads an announcement's current skip_count from the list endpoint. */
-func (e *testEnv) skipCount(t *testing.T, id int) int {
+// skipCount reads an announcement's current skipCount from the list endpoint.
+func (e *testEnv) skipCount(t *testing.T, id int64) int {
 	t.Helper()
-	resp := e.get(t, "/api/announcements")
-	for _, row := range decodeBody(t, resp)["announcements"].([]any) {
-		m := row.(map[string]any)
-		if int(m["id"].(float64)) == id {
-			return int(m["skip_count"].(float64))
-		}
-	}
-	t.Fatalf("announcement %d not found in the list", id)
-	return 0
+	return int(e.announcementRow(t, id)["skipCount"].(float64))
 }
 
 func TestAnnouncementSkip_SetsACount(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 	id, _ := env.scheduledAnnouncement(t, "Bingo Night")
+	path := fmt.Sprintf("/api/v1/announcements/%d/skip", id)
 
-	// An empty body means "skip the next one" - what the endpoint did before it
-	// took a count at all, so an older client keeps working.
-	resp := env.postJSON(t, fmt.Sprintf("/api/announcements/%d/skip", id), map[string]any{})
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("skip = %d; want 200", resp.StatusCode)
-	}
-	if got := env.skipCount(t, id); got != 1 {
-		t.Errorf("skip_count after an empty body = %d; want 1", got)
+	// An empty body means "skip the next one".
+	var skipped map[string]any
+	decodeInto(t, env.postJSON(t, path, map[string]any{}), http.StatusOK, &skipped)
+	if skipped["skipCount"] != float64(1) {
+		t.Errorf("skipCount after an empty body = %v; want 1", skipped["skipCount"])
 	}
 
 	// A count skips that many upcoming occurrences - the Friday+Saturday case.
-	resp = env.postJSON(t, fmt.Sprintf("/api/announcements/%d/skip", id), map[string]any{"count": 2})
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("skip 2 = %d; want 200", resp.StatusCode)
-	}
+	decodeInto(t, env.postJSON(t, path, map[string]any{"count": 2}), http.StatusOK, nil)
 	if got := env.skipCount(t, id); got != 2 {
-		t.Errorf("skip_count = %d; want 2", got)
+		t.Errorf("skipCount = %d; want 2", got)
 	}
 
 	// 0 clears it, so a mis-click is undoable without editing the announcement.
-	resp = env.postJSON(t, fmt.Sprintf("/api/announcements/%d/skip", id), map[string]any{"count": -1})
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("clear = %d; want 200", resp.StatusCode)
-	}
+	decodeInto(t, env.postJSON(t, path, map[string]any{"count": 0}), http.StatusOK, nil)
 	if got := env.skipCount(t, id); got != 0 {
-		t.Errorf("skip_count after clearing = %d; want 0", got)
+		t.Errorf("skipCount after clearing = %d; want 0 (0 means post as scheduled)", got)
 	}
 
-	// Absurd counts are refused rather than silently stored.
-	resp = env.postJSON(t, fmt.Sprintf("/api/announcements/%d/skip", id), map[string]any{"count": 500})
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("skip 500 = %d; want 400", resp.StatusCode)
+	// Absurd or negative counts are refused rather than silently stored.
+	for _, count := range []int{500, -1} {
+		if at := invalid(t, env.postJSON(t, path, map[string]any{"count": count})); !slices.Contains(at, "body.count") {
+			t.Errorf("skip %d: errors at %v; want body.count", count, at)
+		}
+	}
+	if got := status(env.postJSON(t, "/api/v1/announcements/999999/skip", map[string]any{})); got != http.StatusNotFound {
+		t.Errorf("an unknown announcement: %d, want 404", got)
 	}
 }
 
@@ -105,49 +82,34 @@ func TestAnnouncementSkip_SurvivesAnEdit(t *testing.T) {
 	env.loginAdmin(t)
 	id, fields := env.scheduledAnnouncement(t, "Bingo Night")
 
-	resp := env.postJSON(t, fmt.Sprintf("/api/announcements/%d/skip", id), map[string]any{"count": 2})
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("skip = %d; want 200", resp.StatusCode)
-	}
+	decodeInto(t, env.postJSON(t, fmt.Sprintf("/api/v1/announcements/%d/skip", id), map[string]any{"count": 2}), http.StatusOK, nil)
 
 	// Edit something unrelated and save, exactly as the admin form does.
 	fields["details"] = "Tonight, with prizes!"
-	ur := env.putJSON(t, fmt.Sprintf("/api/announcements/%d", id), map[string]any{"announcement": fields})
-	if ur.StatusCode != http.StatusOK {
-		t.Fatalf("update = %d; want 200", ur.StatusCode)
-	}
+	decodeInto(t, env.putJSON(t, fmt.Sprintf("/api/v1/announcements/%d", id), fields), http.StatusOK, nil)
 	if got := env.skipCount(t, id); got != 2 {
-		t.Errorf("skip_count after an unrelated edit = %d; want 2 (the edit must not clear it)", got)
+		t.Errorf("skipCount after an unrelated edit = %d; want 2 (the edit must not clear it)", got)
 	}
 
-	// A save can't set one either - the endpoint owns that.
-	fields["skip_count"] = 9
-	ur = env.putJSON(t, fmt.Sprintf("/api/announcements/%d", id), map[string]any{"announcement": fields})
-	if ur.StatusCode != http.StatusOK {
-		t.Fatalf("update = %d; want 200", ur.StatusCode)
+	// A save can't set one either - the skip operation owns that, and the field is not
+	// in the schema, so a client that sends it is refused.
+	fields["skipCount"] = 9
+	if at := invalid(t, env.putJSON(t, fmt.Sprintf("/api/v1/announcements/%d", id), fields)); !slices.Contains(at, "body.skipCount") {
+		t.Errorf("a save carrying skipCount: errors at %v; want body.skipCount", at)
 	}
 	if got := env.skipCount(t, id); got != 2 {
-		t.Errorf("a form save changed skip_count to %d; want it untouched at 2", got)
+		t.Errorf("a form save changed skipCount to %d; want it untouched at 2", got)
 	}
 }
 
 func TestAnnouncementSkip_RejectsUnscheduled(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
-	tr := env.postJSON(t, "/api/announcement-types", map[string]any{"name": "Manual", "webhook_url": ""})
-	typeID := int(decodeBody(t, tr)["type"].(map[string]any)["id"].(float64))
-	cr := env.postJSON(t, "/api/announcements", map[string]any{"announcement": map[string]any{
-		"type_id": typeID, "title": "Manual only", "details": "x",
-	}})
-	if cr.StatusCode != http.StatusCreated {
-		t.Fatalf("create = %d; want 201", cr.StatusCode)
-	}
-	id := int(decodeBody(t, cr)["announcement"].(map[string]any)["id"].(float64))
+	a := env.makeAnnouncement(t, env.makeAnnouncementType(t, "Manual"), map[string]any{"title": "Manual only"})
 
 	// Nothing to skip on an announcement that has no schedule.
-	resp := env.postJSON(t, fmt.Sprintf("/api/announcements/%d/skip", id), map[string]any{"count": 1})
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("skip on a manual announcement = %d; want 400", resp.StatusCode)
+	if got := status(env.postJSON(t, announcementPath(a)+"/skip", map[string]any{"count": 1})); got != http.StatusConflict {
+		t.Errorf("skip on a manual announcement = %d; want 409", got)
 	}
 }
 
@@ -162,24 +124,53 @@ func TestAnnouncementSkip_DecrementsPerOccurrence(t *testing.T) {
 
 	// Two skips pending, and an occurrence already due.
 	past := time.Now().UTC().Add(-time.Minute).Format(time.RFC3339)
-	if _, err := env.store.AdvanceAnnouncement(t.Context(), int64(id), env.announcementRow(t, id)["next_post_at"].(string), past, true, 2); err != nil {
-		t.Fatalf("seed cursor: %v", err)
-	}
+	env.seedCursor(t, id, past, 2)
 
 	// One sweep should consume exactly one of them.
 	env.sweepAnnouncements(t)
 	if got := env.skipCount(t, id); got != 1 {
-		t.Fatalf("after one due occurrence, skip_count = %d; want 1 (one consumed, one left)", got)
+		t.Fatalf("after one due occurrence, skipCount = %d; want 1 (one consumed, one left)", got)
 	}
 
 	// The cursor moved forward, so make the NEXT occurrence due and sweep again.
-	if _, err := env.store.AdvanceAnnouncement(t.Context(), int64(id), env.announcementRow(t, id)["next_post_at"].(string), past, true, 1); err != nil {
-		t.Fatalf("re-seed cursor: %v", err)
-	}
+	env.seedCursor(t, id, past, 1)
 	env.sweepAnnouncements(t)
 	if got := env.skipCount(t, id); got != 0 {
-		t.Errorf("after the second occurrence, skip_count = %d; want 0 (both consumed)", got)
+		t.Errorf("after the second occurrence, skipCount = %d; want 0 (both consumed)", got)
 	}
+}
+
+// seedCursor sets an announcement's next post and pending skips, as a schedule left
+// to run would.
+func (e *testEnv) seedCursor(t *testing.T, id int64, next string, skips int64) {
+	t.Helper()
+	cur := e.announcementRow(t, id)["nextPostAt"].(string)
+	n, err := db.New(e.store.DB()).AdvanceAnnouncement(t.Context(), db.AdvanceAnnouncementParams{
+		NextPostAt: &next, Active: 1, SkipCount: skips, ID: id, PrevNextPostAt: &cur,
+	})
+	if err != nil || n != 1 {
+		t.Fatalf("seed cursor = %d, %v", n, err)
+	}
+}
+
+// A sweep that changed something tells the staff with the Announcements page, once;
+// one that found nothing due tells nobody.
+func TestAnnouncementSchedulerTellsItsPage(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+	id, _ := env.scheduledAnnouncement(t, "Bingo Night")
+	s := staffStream(t, env, env.client)
+
+	env.sweepAnnouncements(t)
+	s.expectNone("resource_changed", 300*time.Millisecond)
+
+	env.seedCursor(t, id, time.Now().UTC().Add(-time.Minute).Format(time.RFC3339), 1)
+	// The seed itself is a database write, not an API one, so nothing is heard yet.
+	env.sweepAnnouncements(t)
+	if e := s.expect("resource_changed", 3*time.Second); e.str("resource") != "announcements" {
+		t.Errorf("resource_changed: %+v; want announcements", e)
+	}
+	s.expectNone("resource_changed", 300*time.Millisecond)
 }
 
 // sweepAnnouncements runs the announcement scheduler just long enough for its

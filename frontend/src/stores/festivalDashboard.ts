@@ -17,6 +17,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import type { HistoryState } from 'vue-router'
+import { api, unwrap, type RaffleEnterResult } from '@/api/client'
 import { ApiError } from '@/lib/api'
 import { endpoints } from '@/lib/endpoints'
 import {
@@ -27,7 +28,7 @@ import {
   savedFestivalVisit,
   savedRallySignup,
 } from '@/lib/signups'
-import type { FestivalDashboard, PublicFestivalMap, RaffleEnterResponse } from '@/types/api'
+import type { FestivalDashboard, PublicFestivalMap } from '@/types/api'
 import { useGaraponsStore } from './garapons'
 import { useStampRalliesStore } from './stampRallies'
 import { useUiStore } from './ui'
@@ -84,7 +85,7 @@ export const useFestivalDashboardStore = defineStore('festivalDashboard', () => 
   /** Google Fonts family names for the plaque designer (loaded on first use). */
   const googleFonts = ref<string[]>([])
   /** The confirmation of the latest raffle entry made here, keyed by raffle id. */
-  const entered = ref<Partial<Record<number, RaffleEnterResponse>>>({})
+  const entered = ref<Partial<Record<number, RaffleEnterResult>>>({})
 
   const card = computed(() => stampRallies.publicCard)
   const cardToken = computed(() => dashboard.value?.card_token ?? '')
@@ -368,12 +369,17 @@ export const useFestivalDashboardStore = defineStore('festivalDashboard', () => 
     }
     busy.value = true
     try {
-      const res = await endpoints.raffles.enter(raffleId, {
-        character_name: name,
-        world,
-        num_entries: numEntries,
-        turnstile_token: turnstileToken || undefined,
-      })
+      const res = await unwrap(
+        api.POST('/raffles/{id}/enter', {
+          params: { path: { id: raffleId } },
+          body: {
+            characterName: name,
+            world,
+            numEntries,
+            turnstileToken: turnstileToken || undefined,
+          },
+        }),
+      )
       entered.value = { ...entered.value, [raffleId]: res }
       saveRaffleSignup({ raffleId, raffleTitle: row.raffle.title, name, world })
       await refresh()

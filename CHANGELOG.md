@@ -114,6 +114,67 @@ version is next bumped, under a `### App` or `### Plugin` heading here until the
   state again every time a stream opens. `/api/ws`, the `?token=` fallback and the
   WebSocket dependency are gone, the CSP drops `wss:`, and the Apache vhost no longer
   needs the `/api/ws` line (`deploy/README.md`).
+- **Raffles are on huma**, under `/api/v1` with camelCase fields and their SQL from
+  sqlc, the rules in `internal/raffles`. `GET /raffles` and `GET /raffles/{id}` show
+  the public what they may see (open raffles inside their window, any closed one);
+  the Raffles page also gets each raffle's winner name and gil collected, from the
+  list only. Entries are `/raffles/{id}/entries`; recording a payment is a command,
+  `POST …/entries/{entryId}/settle` with `{paidEntries?, waived}`, and `…/unsettle`
+  clears it. Gil amounts are whole numbers. Picking a winner is `…/pick-winner`,
+  `…/pick-another` and `…/verify-winner`. A raffle allowance over 100 is a 422
+  rather than a 400. Public sign-up is `POST …/enter` (a 404 only for an unknown
+  raffle, a 409 when the raffle is closed, outside its window, details-only or the
+  allowance is used up) and the entry search `POST …/lookup`, which matches a
+  case-insensitive substring. Fixed with it:
+  - Picking a winner is refused (409) while one is pending, and picking another or
+    confirming a winner names the winner it means, so two consoles can't pick or
+    confirm over each other; the entry being replaced is left out of the redraw.
+  - Signing up for a raffle sends the update the Raffles page needs, and the public
+    entry search no longer sends one to every console.
+  - The public winner carries only a name, world and ticket count, no payment fields.
+- **Affiliates and tea rooms are on huma**, with their SQL from sqlc and their rules
+  in `internal/affiliates` and `internal/tearooms`: lists, create, `PUT`, delete
+  (404 for an unknown id, which several used to answer 204), `POST …/reorder`
+  (an unknown id is a 422), and `POST …/{id}/post` for the Discord embed. A tea room's
+  open, discount and lock are one `PATCH`: `locked: true` locks it until `lockedUntil`
+  if that comes with it, otherwise until staff unlock it, and `lockedUntil` alone moves
+  the unlock time. The affiliate and tea-room webhooks are read and set on their own
+  pages (`GET`/`PUT …/webhook`), no longer in the lists.
+- **The public tea-room API follows the standard.** `GET /api/v1/tea-rooms/public`
+  answers `{ teaRooms: […] }` and `…/public/{number}` the room itself, every field as
+  before but in camelCase, with `no-cache` and an ETag (a repeat is a 304). CORS is an
+  allowlist, not `*`: an origin on the new `teaRoomOrigins` setting is echoed back
+  (never with credentials, `Vary: Origin` always), and the preflight is answered for
+  those origins. Migration 74 seeds it with `https://senpan.cafe` and
+  `https://*.senpan.cafe`, a `*.` entry covering any subdomain but not the apex; staff
+  edit it on System -> Settings, and saved empty it allows no cross-origin read. The
+  Carrd pages' scripts need the camelCase fields and the new address.
+- **Announcements are on huma**: types (`/announcement-types`), roles
+  (`/announcement-roles`) and announcements, with `POST …/{id}/send`, `…/skip` and
+  `…/reorder`, SQL from sqlc and the rules in `internal/announcements` and
+  `internal/schedule`. Deleting a type or role that is in use is a 409 saying how
+  many announcements use it; the skip takes an optional `count` (0-52, 1 when left
+  out); the form no longer sends `active`, which follows from the schedule. The
+  background scheduler now tells the open Announcements pages after a sweep that
+  posted, consumed a skip or gave up on an announcement.
+- **Book clubs are on huma**: reading lists and their items under
+  `/book-clubs/{club}`, with `…/publish` and the AniList lookup (`…/lookup`), the
+  AniList client in `internal/anilist`. The guard answers 401 for nobody, 404 for an
+  unknown club and 403 without `bookclub-<club>`. Publishing an empty list is a 409,
+  a cancelled request a 408, and a failure part-way says "Posted N of M, then: …".
+  Each club's Discord webhook moved off the integrations onto its own page
+  (`GET`/`PUT …/webhook`), so the integrations hold only the Google Fonts key; the
+  saved webhooks carry over. The cover upload (`POST /api/bookclub/upload`) is
+  unchanged until the media phase.
+- **A Discord failure is never a 502 any more.** The transport moved to
+  `internal/discord` (the `Sender`, with the dry-run and override policy), and its
+  errors are typed: a rate limit answers 429 with `Retry-After`, Discord unreachable
+  or silent after the request may have gone out answers 503 (the ambiguous case says
+  to check the channel before trying again), and a refusal or a missing webhook
+  answers 500. Ema's posts, still on the old routes, answer the same. AniList failures
+  map the same way (503, 429, 500), and no longer 424.
+- **A request its client cancelled is logged at Debug** by the operations, not as an
+  error.
 - **glob 14 for the build and test tools.** Workbox's service-worker build (through
   vite-plugin-pwa) and js-beautify (through Vue Test Utils) take glob 14.0.4 by an npm
   override, in place of the deprecated glob 11.1.0 and glob 13. Both call only

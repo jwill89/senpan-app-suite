@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"app-suite/internal/model"
 )
 
 // latestVersion is the newest migration's version.
@@ -220,7 +218,11 @@ func TestTimestampMigrationConvertsEveryForm(t *testing.T) {
 			t.Errorf("%s = %q, want %q", query, got, want)
 		}
 	}
-	id, err := s.CreateRaffle(t.Context(), &model.Raffle{Title: "next"})
+	res, err := s.write.ExecContext(t.Context(), `INSERT INTO raffles (title) VALUES ('next')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, err := res.LastInsertId()
 	if err != nil {
 		t.Fatal(err)
 	}

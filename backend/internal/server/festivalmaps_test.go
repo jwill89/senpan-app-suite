@@ -751,17 +751,13 @@ func TestFestivalMap_RemovingAnOccupantClearsItsRallyStamp(t *testing.T) {
 func (e *testEnv) assignRaffle(t *testing.T, title string, mapID, occupantID int, over map[string]any) int {
 	t.Helper()
 	body := map[string]any{
-		"title": title, "max_entries": 1, "entry_mode": "details",
-		"festival_map_id": mapID, "occupant_id": occupantID,
+		"title": title, "maxEntries": 1, "entryMode": "details",
+		"festivalMapId": mapID, "occupantId": occupantID,
 	}
 	for k, v := range over {
 		body[k] = v
 	}
-	resp := e.postJSON(t, "/api/raffles", body)
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("create raffle status = %d; want 201", resp.StatusCode)
-	}
-	return int(decodeBody(t, resp)["raffle"].(map[string]any)["id"].(float64))
+	return e.createRaffle(t, body)
 }
 
 // stallRaffle returns the `raffle` block on a published map's first occupant of
@@ -786,7 +782,7 @@ func TestFestivalMap_RunningRaffleLinksFromItsStall(t *testing.T) {
 	occupantID := int(firstOccupant(stalls[0])["id"].(float64))
 
 	raffleID := env.assignRaffle(t, "Gaelicat Raffle", mapID, occupantID,
-		map[string]any{"prize_image": "images/raffles/prize.png"})
+		map[string]any{"prizeImage": "images/raffles/prize.png"})
 
 	raffle := env.stallRaffle(t, mapID, 0)
 	if raffle == nil {
@@ -814,7 +810,7 @@ func TestFestivalMap_ClosedOrOutOfWindowRaffleIsNotLinked(t *testing.T) {
 
 	// A raffle whose window opens next year isn't something a visitor can enter.
 	env.assignRaffle(t, "Future Raffle", mapID, occupantID,
-		map[string]any{"available_from": "2099-01-01T00:00:00Z"})
+		map[string]any{"availableFrom": "2099-01-01T00:00:00Z"})
 	if raffle := env.stallRaffle(t, mapID, 0); raffle != nil {
 		t.Errorf("linked %v; want a raffle outside its window left off", raffle)
 	}
@@ -833,7 +829,7 @@ func TestFestivalMap_ClosingARaffleDropsItsStallLink(t *testing.T) {
 		t.Fatal("the open raffle should be linked before it is closed")
 	}
 
-	resp := env.postJSON(t, fmt.Sprintf("/api/raffles/%d/close", raffleID), nil)
+	resp := env.postJSON(t, fmt.Sprintf("/api/v1/raffles/%d/close", raffleID), nil)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("close raffle status = %d; want 200", resp.StatusCode)
 	}
@@ -853,16 +849,12 @@ func TestFestivalMap_UnlinkedRaffleClearsItsStall(t *testing.T) {
 	occupantID := int(firstOccupant(stallsOf(env.mapDetail(t, mapID))[0])["id"].(float64))
 
 	// A stall on a raffle that names no map claims a festival link it doesn't have.
-	resp := env.postJSON(t, "/api/raffles", map[string]any{
-		"title": "Standalone Raffle", "max_entries": 1, "entry_mode": "details",
-		"occupant_id": occupantID,
-	})
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("create raffle status = %d; want 201", resp.StatusCode)
-	}
-	raffle := decodeBody(t, resp)["raffle"].(map[string]any)
-	if raffle["occupant_id"] != nil {
-		t.Errorf("occupant_id = %v; want it cleared on a raffle with no map", raffle["occupant_id"])
+	var raffle map[string]any
+	decodeInto(t, env.postJSON(t, "/api/v1/raffles", raffleBody(map[string]any{
+		"title": "Standalone Raffle", "maxEntries": 1, "entryMode": "details", "occupantId": occupantID,
+	})), http.StatusCreated, &raffle)
+	if raffle["occupantId"] != nil {
+		t.Errorf("occupantId = %v; want it cleared on a raffle with no map", raffle["occupantId"])
 	}
 }
 
@@ -895,13 +887,13 @@ func TestFestivalMap_RaffleKeepsItsMapWhenTheStallGoesAway(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	after := decodeBody(t, env.get(t, fmt.Sprintf("/api/raffles/%d", raffleID)))["raffle"].(map[string]any)
+	after := env.raffleDetail(t, raffleID)["raffle"].(map[string]any)
 	// It is still part of the festival - it just isn't pinned to a pitch any more.
-	if after["festival_map_id"] == nil {
+	if after["festivalMapId"] == nil {
 		t.Error("the raffle lost its festival map along with the stall")
 	}
-	if after["occupant_id"] != nil {
-		t.Errorf("occupant_id = %v; want it cleared with the stall", after["occupant_id"])
+	if after["occupantId"] != nil {
+		t.Errorf("occupantId = %v; want it cleared with the stall", after["occupantId"])
 	}
 }
 
@@ -920,9 +912,9 @@ func TestFestivalMap_DeleteReleasesItsRaffles(t *testing.T) {
 	resp.Body.Close()
 
 	// The raffle survives the festival it was filed under.
-	after := decodeBody(t, env.get(t, fmt.Sprintf("/api/raffles/%d", raffleID)))["raffle"].(map[string]any)
-	if after["festival_map_id"] != nil || after["occupant_id"] != nil {
-		t.Errorf("raffle links = %v/%v; want both cleared", after["festival_map_id"], after["occupant_id"])
+	after := env.raffleDetail(t, raffleID)["raffle"].(map[string]any)
+	if after["festivalMapId"] != nil || after["occupantId"] != nil {
+		t.Errorf("raffle links = %v/%v; want both cleared", after["festivalMapId"], after["occupantId"])
 	}
 	if after["title"] != "Gaelicat Raffle" {
 		t.Errorf("title = %v; want the raffle intact", after["title"])

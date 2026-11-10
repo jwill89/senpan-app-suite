@@ -2,9 +2,9 @@
  * Announcement management store (admin).
  *
  * Covers Announcement Types (a named Discord webhook destination) and the
- * Announcements that post to them - CRUD, image upload + reuse, manual "send
- * now", "skip next occurrence", and a client-side search filter. Mirrors the
- * structure of the book-club store.
+ * Announcements that post to them - CRUD, manual "send now", "skip next
+ * occurrence", and a client-side search filter. Mirrors the structure of the
+ * book-club store.
  *
  * One IANA `timezone` anchors every time on an announcement: the form holds
  * wall-clock values (start/end window, one-time post, and the recurring
@@ -13,52 +13,103 @@
  */
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { endpoints } from '@/lib/endpoints'
+import {
+  api,
+  unwrap,
+  type Announcement,
+  type AnnouncementButton,
+  type AnnouncementInput,
+  type AnnouncementRole,
+  type AnnouncementRoleInput,
+  type AnnouncementType,
+  type AnnouncementTypeInput,
+} from '@/api/client'
 import { detectTimezone } from '@/lib/constants'
 import { nextUid } from '@/lib/uid'
-import type {
-  Announcement,
-  AnnouncementForm,
-  AnnouncementType,
-  AnnouncementTypeForm,
-  AnnouncementRole,
-  AnnouncementRoleForm,
-  ScheduleKind,
-} from '@/types/api'
+import type { DiscordTimeFormat, ScheduleKind } from '@/types/api'
 import { useUiStore } from './ui'
+
+/** The editable form model for an announcement type (id 0 = new). */
+export interface AnnouncementTypeForm extends AnnouncementTypeInput {
+  id: number
+}
+
+/** The editable form model for a taggable role (id 0 = new). */
+export interface AnnouncementRoleForm extends AnnouncementRoleInput {
+  id: number
+}
+
+/**
+ * A Discord button row in the announcement form. `_uid` is a client-only stable
+ * key for the repeater (see lib/uid.ts); it's stripped when the payload is built.
+ */
+export interface AnnouncementButtonForm extends AnnouncementButton {
+  _uid?: number
+}
+
+/**
+ * Form model for the admin announcement create/edit form (id 0 = new). Holds
+ * *local* wall-clock strings and a friendly recurrence builder in place of the
+ * wire's schedule fields: `startLocal`/`endLocal`/`onceLocal` are `datetime-local`
+ * values; `timeLocal` is an "HH:mm" wall-clock time anchored to `timezone` (an IANA
+ * name, so recurring times survive DST); `weekdays` are weekday numbers
+ * (0=Sun..6=Sat) in that zone.
+ */
+export interface AnnouncementForm extends Omit<
+  AnnouncementInput,
+  | 'buttons'
+  | 'scheduleKind'
+  | 'scheduleMinutes'
+  | 'scheduleWeekdays'
+  | 'scheduleWeekOfMonth'
+  | 'startFormat'
+  | 'endFormat'
+> {
+  id: number
+  /** Discord timestamp style for the start display (see DISCORD_TIME_FORMATS). */
+  startFormat: DiscordTimeFormat
+  /** Discord timestamp style for the end display (see DISCORD_TIME_FORMATS). */
+  endFormat: DiscordTimeFormat
+  scheduleKind: ScheduleKind
+  timeLocal: string
+  weekdays: number[]
+  weekOfMonth: number
+  /** Optional Discord link buttons (max 5) rendered beneath the embed. */
+  buttons: AnnouncementButtonForm[]
+}
 
 /** A blank announcement-type form (used for "Add type" and reset after save). */
 function emptyTypeForm(): AnnouncementTypeForm {
-  return { id: 0, name: '', webhook_url: '' }
+  return { id: 0, name: '', webhookUrl: '' }
 }
 
 /** A blank taggable-role form (used for "Add role" and reset after save). */
 function emptyRoleForm(): AnnouncementRoleForm {
-  return { id: 0, name: '', role_id: '' }
+  return { id: 0, name: '', roleId: '' }
 }
 
 /** A blank announcement form with sensible schedule defaults. */
 function emptyForm(): AnnouncementForm {
   return {
     id: 0,
-    type_id: 0,
+    typeId: 0,
     title: '',
     details: '',
     image: '',
     thumbnail: '',
     color: '#ff3131',
     location: '',
-    start_local: '',
-    end_local: '',
-    start_format: 'F',
-    end_format: 't',
-    dynamic_dates: false,
-    schedule_kind: '',
+    startLocal: '',
+    endLocal: '',
+    startFormat: 'F',
+    endFormat: 't',
+    dynamicDates: false,
+    scheduleKind: '',
     timezone: detectTimezone(),
-    once_local: '',
-    time_local: '19:00',
+    onceLocal: '',
+    timeLocal: '19:00',
     weekdays: [],
-    week_of_month: 3,
+    weekOfMonth: 3,
     buttons: [],
     mention: '',
   }
@@ -109,13 +160,13 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
     const q = search.value.trim().toLowerCase()
     const tf = typeFilter.value
     return announcements.value.filter((a) => {
-      if (tf && a.type_id !== tf) {
+      if (tf && a.typeId !== tf) {
         return false
       }
       if (!q) {
         return true
       }
-      return [a.title, a.type_name ?? '', a.details].some((s) => s.toLowerCase().includes(q))
+      return [a.title, a.typeName, a.details].some((s) => s.toLowerCase().includes(q))
     })
   })
 
@@ -133,9 +184,9 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
     loading.value = true
     try {
       const [t, r, a] = await Promise.all([
-        endpoints.announcements.types(),
-        endpoints.announcements.roles(),
-        endpoints.announcements.list(),
+        unwrap(api.GET('/announcement-types')),
+        unwrap(api.GET('/announcement-roles')),
+        unwrap(api.GET('/announcements')),
       ])
       types.value = t.types
       roles.value = r.roles
@@ -149,8 +200,7 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
 
   async function loadTypes(): Promise<void> {
     try {
-      const data = await endpoints.announcements.types()
-      types.value = data.types
+      types.value = (await unwrap(api.GET('/announcement-types'))).types
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     }
@@ -158,8 +208,7 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
 
   async function loadRoles(): Promise<void> {
     try {
-      const data = await endpoints.announcements.roles()
-      roles.value = data.roles
+      roles.value = (await unwrap(api.GET('/announcement-roles'))).roles
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     }
@@ -167,8 +216,7 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
 
   async function loadAnnouncements(): Promise<void> {
     try {
-      const data = await endpoints.announcements.list()
-      announcements.value = data.announcements
+      announcements.value = (await unwrap(api.GET('/announcements'))).announcements
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     }
@@ -181,7 +229,7 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
    */
   async function reorder(orderedIds: number[]): Promise<void> {
     try {
-      await endpoints.announcements.reorder(orderedIds)
+      await unwrap(api.POST('/announcements/reorder', { body: { orderedIds } }))
     } catch (e) {
       ui.notify((e as Error).message, 'error')
       await loadAnnouncements() // revert to the persisted order
@@ -195,24 +243,27 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
   }
 
   function editType(t: AnnouncementType): void {
-    typeForm.value = { id: t.id, name: t.name, webhook_url: t.webhook_url }
+    typeForm.value = { id: t.id, name: t.name, webhookUrl: t.webhookUrl }
   }
 
   async function saveType(): Promise<boolean> {
-    const f = typeForm.value
-    if (!f.name.trim()) {
+    const { id, ...rest } = typeForm.value
+    if (!rest.name.trim()) {
       ui.notify('Type name is required', 'error')
       return false
     }
     savingType.value = true
     try {
-      const payload = { ...f, name: f.name.trim() }
-      if (f.id) {
-        await endpoints.announcements.updateType(f.id, payload)
-      } else {
-        await endpoints.announcements.createType(payload)
+      const body: AnnouncementTypeInput = {
+        name: rest.name.trim(),
+        webhookUrl: rest.webhookUrl.trim(),
       }
-      ui.notify(f.id ? 'Type updated' : 'Type added', 'success')
+      if (id) {
+        await unwrap(api.PUT('/announcement-types/{id}', { params: { path: { id } }, body }))
+      } else {
+        await unwrap(api.POST('/announcement-types', { body }))
+      }
+      ui.notify(id ? 'Type updated' : 'Type added', 'success')
       resetTypeForm()
       await loadTypes()
       return true
@@ -234,7 +285,7 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
       return
     }
     try {
-      await endpoints.announcements.deleteType(t.id)
+      await unwrap(api.DELETE('/announcement-types/{id}', { params: { path: { id: t.id } } }))
       ui.notify('Type deleted', 'info')
       if (typeForm.value.id === t.id) {
         resetTypeForm()
@@ -252,28 +303,28 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
   }
 
   function editRole(r: AnnouncementRole): void {
-    roleForm.value = { id: r.id, name: r.name, role_id: r.role_id }
+    roleForm.value = { id: r.id, name: r.name, roleId: r.roleId }
   }
 
   async function saveRole(): Promise<boolean> {
-    const f = roleForm.value
-    if (!f.name.trim()) {
+    const { id, ...rest } = roleForm.value
+    if (!rest.name.trim()) {
       ui.notify('Role name is required', 'error')
       return false
     }
-    if (!/^\d+$/.test(f.role_id.trim())) {
+    if (!/^\d+$/.test(rest.roleId.trim())) {
       ui.notify('Role ID must be a Discord role ID (digits only)', 'error')
       return false
     }
     savingRole.value = true
     try {
-      const payload = { ...f, name: f.name.trim(), role_id: f.role_id.trim() }
-      if (f.id) {
-        await endpoints.announcements.updateRole(f.id, payload)
+      const body: AnnouncementRoleInput = { name: rest.name.trim(), roleId: rest.roleId.trim() }
+      if (id) {
+        await unwrap(api.PUT('/announcement-roles/{id}', { params: { path: { id } }, body }))
       } else {
-        await endpoints.announcements.createRole(payload)
+        await unwrap(api.POST('/announcement-roles', { body }))
       }
-      ui.notify(f.id ? 'Role updated' : 'Role added', 'success')
+      ui.notify(id ? 'Role updated' : 'Role added', 'success')
       resetRoleForm()
       await loadRoles()
       return true
@@ -295,7 +346,7 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
       return
     }
     try {
-      await endpoints.announcements.deleteRole(r.id)
+      await unwrap(api.DELETE('/announcement-roles/{id}', { params: { path: { id: r.id } } }))
       ui.notify('Role deleted', 'info')
       if (roleForm.value.id === r.id) {
         resetRoleForm()
@@ -315,7 +366,7 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
   function editAnnouncement(a: Announcement): void {
     const f = emptyForm()
     f.id = a.id
-    f.type_id = a.type_id
+    f.typeId = a.typeId
     f.title = a.title
     f.details = a.details
     f.image = a.image
@@ -324,34 +375,34 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
     f.location = a.location || ''
     f.mention = a.mention || ''
     f.buttons = a.buttons.map((b) => ({ ...b, _uid: nextUid() }))
-    f.start_local = a.start_local
-    f.end_local = a.end_local
-    f.start_format = (a.start_format || 'F') as AnnouncementForm['start_format']
-    f.end_format = (a.end_format || 't') as AnnouncementForm['end_format']
-    f.dynamic_dates = a.dynamic_dates
-    f.schedule_kind = (a.schedule_kind || '') as ScheduleKind
+    f.startLocal = a.startLocal
+    f.endLocal = a.endLocal
+    f.startFormat = (a.startFormat || 'F') as DiscordTimeFormat
+    f.endFormat = (a.endFormat || 't') as DiscordTimeFormat
+    f.dynamicDates = a.dynamicDates
+    f.scheduleKind = (a.scheduleKind || '') as ScheduleKind
     if (a.timezone) {
       f.timezone = a.timezone
     }
-    if (a.schedule_kind === 'once') {
-      f.once_local = a.once_local
-    } else if (a.schedule_kind === 'daily') {
-      f.time_local = minutesToTime(a.schedule_minutes)
-    } else if (a.schedule_kind === 'weekly' || a.schedule_kind === 'monthly') {
-      f.time_local = minutesToTime(a.schedule_minutes)
-      f.weekdays = parseWeekdays(a.schedule_weekdays)
-      f.week_of_month = a.schedule_week_of_month || 3
+    if (a.scheduleKind === 'once') {
+      f.onceLocal = a.onceLocal
+    } else if (a.scheduleKind === 'daily') {
+      f.timeLocal = minutesToTime(a.scheduleMinutes)
+    } else if (a.scheduleKind === 'weekly' || a.scheduleKind === 'monthly') {
+      f.timeLocal = minutesToTime(a.scheduleMinutes)
+      f.weekdays = parseWeekdays(a.scheduleWeekdays)
+      f.weekOfMonth = a.scheduleWeekOfMonth || 3
     }
     form.value = f
   }
 
   /**
-   * Build the announcement payload from the form. Wall-clock values are sent
-   * as-is together with the timezone; the backend resolves them to UTC instants.
+   * Build the announcement body from the form. Wall-clock values are sent as-is
+   * together with the timezone; the backend resolves them to UTC instants.
    */
-  function buildPayload(f: AnnouncementForm): Partial<Announcement> {
-    const payload: Partial<Announcement> = {
-      type_id: f.type_id,
+  function buildPayload(f: AnnouncementForm): AnnouncementInput {
+    const payload: AnnouncementInput = {
+      typeId: f.typeId,
       title: f.title.trim(),
       details: f.details,
       image: f.image,
@@ -364,28 +415,28 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
         .filter((b) => b.label && /^https?:\/\//i.test(b.url))
         .slice(0, 5),
       timezone: f.timezone,
-      start_local: f.start_local,
-      end_local: f.end_local,
-      start_format: f.start_format,
-      end_format: f.end_format,
-      dynamic_dates: f.dynamic_dates,
-      schedule_kind: f.schedule_kind,
-      once_local: '',
-      schedule_minutes: 0,
-      schedule_weekdays: '',
-      schedule_week_of_month: 0,
+      startLocal: f.startLocal,
+      endLocal: f.endLocal,
+      startFormat: f.startFormat,
+      endFormat: f.endFormat,
+      dynamicDates: f.dynamicDates,
+      scheduleKind: f.scheduleKind,
+      onceLocal: '',
+      scheduleMinutes: 0,
+      scheduleWeekdays: '',
+      scheduleWeekOfMonth: 0,
     }
-    if (f.schedule_kind === 'once') {
-      payload.once_local = f.once_local
-    } else if (f.schedule_kind === 'daily') {
-      payload.schedule_minutes = timeToMinutes(f.time_local)
-    } else if (f.schedule_kind === 'weekly') {
-      payload.schedule_minutes = timeToMinutes(f.time_local)
-      payload.schedule_weekdays = [...new Set(f.weekdays)].sort((a, b) => a - b).join(',')
-    } else if (f.schedule_kind === 'monthly') {
-      payload.schedule_minutes = timeToMinutes(f.time_local)
-      payload.schedule_weekdays = String(f.weekdays[0] ?? 6)
-      payload.schedule_week_of_month = f.week_of_month
+    if (f.scheduleKind === 'once') {
+      payload.onceLocal = f.onceLocal
+    } else if (f.scheduleKind === 'daily') {
+      payload.scheduleMinutes = timeToMinutes(f.timeLocal)
+    } else if (f.scheduleKind === 'weekly') {
+      payload.scheduleMinutes = timeToMinutes(f.timeLocal)
+      payload.scheduleWeekdays = [...new Set(f.weekdays)].sort((a, b) => a - b).join(',')
+    } else if (f.scheduleKind === 'monthly') {
+      payload.scheduleMinutes = timeToMinutes(f.timeLocal)
+      payload.scheduleWeekdays = String(f.weekdays[0] ?? 6)
+      payload.scheduleWeekOfMonth = f.weekOfMonth
     }
     return payload
   }
@@ -395,22 +446,22 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
     if (!f.title.trim()) {
       return 'Title is required'
     }
-    if (!f.type_id) {
+    if (!f.typeId) {
       return 'An announcement type is required'
     }
     if (!f.details.trim()) {
       return 'Details are required'
     }
-    if (f.schedule_kind === 'once' && !f.once_local) {
+    if (f.scheduleKind === 'once' && !f.onceLocal) {
       return 'Pick a date & time for the one-time post'
     }
-    if ((f.schedule_kind === 'weekly' || f.schedule_kind === 'monthly') && !f.time_local) {
+    if ((f.scheduleKind === 'weekly' || f.scheduleKind === 'monthly') && !f.timeLocal) {
       return 'Pick a time for the recurring post'
     }
-    if (f.schedule_kind === 'weekly' && f.weekdays.length === 0) {
+    if (f.scheduleKind === 'weekly' && f.weekdays.length === 0) {
       return 'Pick at least one weekday'
     }
-    if (f.schedule_kind === 'monthly' && f.weekdays.length === 0) {
+    if (f.scheduleKind === 'monthly' && f.weekdays.length === 0) {
       return 'Pick a weekday'
     }
     return null
@@ -425,7 +476,12 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
     }
     saving.value = true
     try {
-      await endpoints.announcements.save(f.id, buildPayload(f))
+      const body = buildPayload(f)
+      if (f.id) {
+        await unwrap(api.PUT('/announcements/{id}', { params: { path: { id: f.id } }, body }))
+      } else {
+        await unwrap(api.POST('/announcements', { body }))
+      }
       ui.notify(f.id ? 'Announcement updated' : 'Announcement created', 'success')
       resetForm()
       await loadAnnouncements()
@@ -448,7 +504,7 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
       return
     }
     try {
-      await endpoints.announcements.delete(a.id)
+      await unwrap(api.DELETE('/announcements/{id}', { params: { path: { id: a.id } } }))
       ui.notify('Announcement deleted', 'info')
       if (form.value.id === a.id) {
         resetForm()
@@ -470,7 +526,7 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
     }
     sendingId.value = a.id
     try {
-      await endpoints.announcements.sendNow(a.id)
+      await unwrap(api.POST('/announcements/{id}/send', { params: { path: { id: a.id } } }))
       ui.notify('Announcement posted to Discord', 'success')
       await loadAnnouncements()
     } catch (e) {
@@ -482,13 +538,15 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
 
   /**
    * Sets how many upcoming occurrences to skip (0 clears it). No confirm dialog:
-   * the caller's number prompt IS the deliberate step, and unlike the old
-   * fire-and-forget toggle this is reversible - setting 0 undoes it.
+   * the caller's number prompt IS the deliberate step, and it is reversible -
+   * setting 0 undoes it.
    */
   async function setSkip(a: Announcement, count: number): Promise<boolean> {
     skippingId.value = a.id
     try {
-      await endpoints.announcements.setSkip(a.id, count)
+      await unwrap(
+        api.POST('/announcements/{id}/skip', { params: { path: { id: a.id } }, body: { count } }),
+      )
       ui.notify(
         count > 0
           ? `Skipping the next ${count} ${count === 1 ? 'occurrence' : 'occurrences'}`

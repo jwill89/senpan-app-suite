@@ -33,11 +33,17 @@ const PAYMENT_LABELS: Record<string, { text: string; badge: string }> = {
 const store = useFestivalDashboardStore()
 
 const raffle = computed(() => props.row.raffle)
+/** The raffle's pricing, in the shape the store's helpers read. */
+const priced = computed(() => ({
+  entryMode: raffle.value.entry_mode,
+  costPerEntry: raffle.value.cost_per_entry,
+  tierCosts: raffle.value.tier_costs,
+}))
 const held = computed(() => props.row.entry?.num_entries ?? 0)
 /** Entries the visitor may still add: the allowance is per player, in total. */
 const remaining = computed(() => Math.max(0, raffle.value.max_entries - held.value))
-const takesSignups = computed(() => raffleAcceptsSignups(raffle.value))
-const costLabel = computed(() => raffleCostLabel(raffle.value))
+const takesSignups = computed(() => raffleAcceptsSignups(priced.value))
+const costLabel = computed(() => raffleCostLabel(priced.value))
 const confirmation = computed(() => store.entered[raffle.value.id] ?? null)
 const payment = computed(() =>
   props.row.entry ? (PAYMENT_LABELS[props.row.entry.payment_state] ?? null) : null,
@@ -58,8 +64,8 @@ const clamped = computed(() =>
  */
 const addedCost = computed(
   () =>
-    raffleEntryCost(raffle.value, held.value + clamped.value) -
-    raffleEntryCost(raffle.value, held.value),
+    raffleEntryCost(priced.value, held.value + clamped.value) -
+    raffleEntryCost(priced.value, held.value),
 )
 
 function toggleForm(): void {
@@ -132,13 +138,13 @@ async function submit(): Promise<void> {
       <p class="m-0">
         <font-awesome-icon :icon="['fad', 'circle-check']" /> {{ confirmation.message }}
       </p>
-      <p v-if="confirmation.amount_due > 0" class="text-lg text-highlight m-0">
-        <strong>Amount due:</strong> {{ confirmation.amount_due.toLocaleString() }} gil
+      <p v-if="confirmation.amountDue > 0" class="text-lg text-highlight m-0">
+        <strong>Amount due:</strong> {{ confirmation.amountDue.toLocaleString() }} gil
       </p>
       <MarkdownText
-        v-if="confirmation.signup_instructions"
+        v-if="confirmation.signupInstructions"
         class="game-details"
-        :source="confirmation.signup_instructions"
+        :source="confirmation.signupInstructions"
       />
       <figure v-if="raffle.pay_image" class="captioned-figure">
         <figcaption>Where to pay</figcaption>

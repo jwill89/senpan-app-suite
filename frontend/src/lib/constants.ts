@@ -387,6 +387,7 @@ export const DEFAULT_SETTINGS: SettingsInput = {
   customCardCost: 0,
   hideBingo: false,
   hideCustomCards: false,
+  teaRoomOrigins: [],
 }
 
 /** The browser's current IANA timezone (e.g. "America/New_York"); 'UTC' fallback. */

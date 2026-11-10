@@ -1,50 +1,72 @@
 /**
  * Raffles store: public browsing + sign-up, and admin management (CRUD,
- * entries, winner picking, image upload). Mirrors all raffle logic from app.js.
+ * entries, payments, winner picking).
  */
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
+import {
+  api,
+  unwrap,
+  type Raffle,
+  type RaffleEnterResult,
+  type RaffleEntry,
+  type RaffleInput,
+  type RaffleLookupEntry,
+  type RaffleSettlement,
+  type RaffleWinner,
+} from '@/api/client'
 import { endpoints } from '@/lib/endpoints'
 import { utcToDatetimeLocal, datetimeLocalToUtc, parseServerTimestamp } from '@/lib/datetime'
-import type {
-  FestivalMap,
-  FestivalStallOccupant,
-  Raffle,
-  RaffleEnterResponse,
-  RaffleEntry,
-  RaffleForm,
-  RaffleLookupEntry,
-  RaffleMode,
-} from '@/types/api'
+import type { FestivalMap, FestivalStallOccupant, RaffleMode } from '@/types/api'
 import { useUiStore } from './ui'
 import { withLoading } from '@/lib/withLoading'
 import { saveRaffleSignup } from '@/lib/signups'
 import { RAFFLE_MAX_ENTRIES, RAFFLE_LOOKUP_MIN_QUERY } from '@/lib/constants'
 
+/** What the pricing helpers need of a raffle: how it prices a ticket. */
+export interface PricedRaffle {
+  entryMode: string
+  costPerEntry: number
+  tierCosts: readonly number[]
+}
+
+/** What the settlement helpers need of an entry: its tickets and how far they are settled. */
+export type SettledEntry = Pick<RaffleEntry, 'numEntries' | 'paidEntries' | 'amountWaived'>
+
+/** The admin form model for a raffle (id 0 = new). */
+export interface RaffleForm extends Omit<RaffleInput, 'availableFrom' | 'availableTo'> {
+  id: number
+  /** `datetime-local` value in this admin's wall clock; '' for none. */
+  availableFrom: string
+  availableTo: string
+}
+
 /**
  * Whether a raffle is enterable by the public right now: it must be `open` and
- * inside its availability window - past `available_from` (if set) and before
- * `available_to` (if set). This mirrors the backend's public list query
- * (store.ListRaffles, non-admin) so the two never disagree.
+ * inside its availability window - past `availableFrom` (if set) and before
+ * `availableTo` (if set). This mirrors the server's `raffles.IsOpen` so the two
+ * never disagree.
  *
- * The public `GET /api/raffles` already applies the same window for normal
+ * The public `GET /raffles` already applies the same window for normal
  * visitors, so this is a second line of defence for the two cases the list
- * query can't cover: a raffle reached by a direct link to its detail page
- * (GetRaffle ignores the window), and an admin browsing the public pages (the
- * list endpoint returns every raffle in admin mode). A raffle keeps its `open`
- * status outside its window, so checking `status` alone is not enough. (Admin
- * tabs intentionally do not use this - admins manage out-of-window raffles.)
+ * can't cover: a raffle reached by a direct link to its detail page, and an
+ * admin browsing the public pages (the list returns every raffle to staff). A
+ * raffle keeps its `open` status outside its window, so checking `status` alone
+ * is not enough. (Admin tabs intentionally do not use this - admins manage
+ * out-of-window raffles.)
  */
-export function isRaffleEnterable(r: Raffle): boolean {
+export function isRaffleEnterable(
+  r: Pick<Raffle, 'status' | 'availableFrom' | 'availableTo'>,
+): boolean {
   if (r.status !== 'open') {
     return false
   }
   const now = Date.now()
-  const startsAt = parseServerTimestamp(r.available_from)
+  const startsAt = parseServerTimestamp(r.availableFrom)
   if (!Number.isNaN(startsAt) && startsAt > now) {
     return false // not yet open
   }
-  const endsAt = parseServerTimestamp(r.available_to)
+  const endsAt = parseServerTimestamp(r.availableTo)
   if (!Number.isNaN(endsAt) && endsAt <= now) {
     return false // already ended
   }
@@ -54,42 +76,42 @@ export function isRaffleEnterable(r: Raffle): boolean {
 /**
  * A raffle's entry mode, defaulting anything unrecognized to 'single'. Raffles
  * saved before entry modes existed carry an empty string, and that has always
- * meant "flat cost_per_entry" - so an unknown value must never read as free or
- * as sign-ups-disabled. Mirrors the backend's NormalizeRaffleMode.
+ * meant "flat costPerEntry" - so an unknown value must never read as free or
+ * as sign-ups-disabled. Mirrors the server's `raffles.NormalizeMode`.
  */
-export function raffleMode(r: Pick<Raffle, 'entry_mode'>): RaffleMode {
-  return r.entry_mode === 'details' || r.entry_mode === 'custom' ? r.entry_mode : 'single'
+export function raffleMode(r: Pick<PricedRaffle, 'entryMode'>): RaffleMode {
+  return r.entryMode === 'details' || r.entryMode === 'custom' ? r.entryMode : 'single'
 }
 
 /** Whether this raffle takes sign-ups through the site (false = details only). */
-export function raffleAcceptsSignups(r: Pick<Raffle, 'entry_mode'>): boolean {
+export function raffleAcceptsSignups(r: Pick<PricedRaffle, 'entryMode'>): boolean {
   return raffleMode(r) !== 'details'
 }
 
 /**
  * The price of the n-th entry (1-based). Tickets past the end of a custom ladder
- * cost nothing - max_entries is pinned to the ladder length server-side, so that
+ * cost nothing - maxEntries is pinned to the ladder length server-side, so that
  * only guards a hand-edited raffle rather than a reachable state.
  */
-export function raffleTicketCost(r: Raffle, n: number): number {
+export function raffleTicketCost(r: PricedRaffle, n: number): number {
   switch (raffleMode(r)) {
     case 'details':
       return 0
     case 'custom':
       // Past either end of the ladder, n entries cost nothing.
-      return r.tier_costs[n - 1] ?? 0
+      return r.tierCosts[n - 1] ?? 0
     default:
-      return r.cost_per_entry
+      return r.costPerEntry
   }
 }
 
 /**
- * What holding `n` entries costs in total: n x cost_per_entry in 'single' mode,
+ * What holding `n` entries costs in total: n x costPerEntry in 'single' mode,
  * the sum of the first n rungs in 'custom' mode, 0 for details-only. Mirrors the
- * backend's Raffle.EntryCost so the previewed total can never disagree with the
+ * server's `Pricing.EntryCost` so the previewed total can never disagree with the
  * one the server reports back.
  */
-export function raffleEntryCost(r: Raffle, n: number): number {
+export function raffleEntryCost(r: PricedRaffle, n: number): number {
   if (n < 1) {
     return 0
   }
@@ -98,12 +120,12 @@ export function raffleEntryCost(r: Raffle, n: number): number {
     return 0
   }
   if (mode === 'single') {
-    return n * r.cost_per_entry
+    return n * r.costPerEntry
   }
   // Walk the LADDER, not the ticket count - only rungs that exist carry a price,
-  // so a raffle whose max_entries drifted above its ladder costs one pass over
+  // so a raffle whose maxEntries drifted above its ladder costs one pass over
   // the tiers rather than one per ticket.
-  const rungs = Math.min(n, r.tier_costs.length)
+  const rungs = Math.min(n, r.tierCosts.length)
   let total = 0
   for (let i = 1; i <= rungs; i++) {
     total += raffleTicketCost(r, i)
@@ -112,15 +134,15 @@ export function raffleEntryCost(r: Raffle, n: number): number {
 }
 
 /** Whether this raffle charges anything at all (drives the cost UI). */
-export function raffleHasCost(r: Raffle): boolean {
+export function raffleHasCost(r: PricedRaffle): boolean {
   const mode = raffleMode(r)
   if (mode === 'details') {
     return false
   }
   if (mode === 'custom') {
-    return r.tier_costs.some((c) => c > 0)
+    return r.tierCosts.some((c) => c > 0)
   }
-  return r.cost_per_entry > 0
+  return r.costPerEntry > 0
 }
 
 /** Ladder rungs a one-line summary spells out before it switches to a total. */
@@ -133,17 +155,17 @@ const LADDER_LABEL_LIMIT = 4
  * charges nothing.
  *
  * A long ladder is summarised instead of spelled out - this lands in a card and
- * in an admin badge, and a raffle may carry up to 50 rungs, which would run off
+ * in an admin badge, and a raffle may carry up to 100 rungs, which would run off
  * the tile. The full ladder is always on the raffle's own page.
  */
-export function raffleCostLabel(r: Raffle): string {
+export function raffleCostLabel(r: PricedRaffle): string {
   if (!raffleHasCost(r)) {
     return ''
   }
   if (raffleMode(r) !== 'custom') {
-    return `${r.cost_per_entry.toLocaleString()} gil per entry`
+    return `${r.costPerEntry.toLocaleString()} gil per entry`
   }
-  const tiers = r.tier_costs
+  const tiers = r.tierCosts
   if (tiers.length > LADDER_LABEL_LIMIT) {
     const all = raffleEntryCost(r, tiers.length).toLocaleString()
     return `${tiers.length} entries, ${all} gil for all`
@@ -151,31 +173,19 @@ export function raffleCostLabel(r: Raffle): string {
   return `${tiers.map((c) => c.toLocaleString()).join(' / ')} gil`
 }
 
-/**
- * How far an entry has settled. Entries merge per character+world, so a row that
- * was paid can gain tickets later - `paid_entries` is what makes that middle
- * state visible instead of the new tickets hiding behind the old paid flag.
- */
-export function entryPaymentState(e: RaffleEntry): 'unpaid' | 'partial' | 'paid' {
-  if (e.paid_entries <= 0) {
-    return 'unpaid'
-  }
-  return e.paid_entries < e.num_entries ? 'partial' : 'paid'
-}
-
 /** Sticker price of every ticket on an entry, before any waiver. */
-export function entryTicketPrice(r: Raffle, e: RaffleEntry): number {
-  return raffleEntryCost(r, e.num_entries)
+export function entryTicketPrice(r: PricedRaffle, e: SettledEntry): number {
+  return raffleEntryCost(r, e.numEntries)
 }
 
 /**
  * Gil this entry actually handed over: the price of the tickets it has settled,
  * less everything waived on it. Floored at zero so an over-generous waiver reads
  * as "collected nothing" rather than eating into another entry's contribution.
- * Mirrors the backend's Raffle.AmountCollected.
+ * Mirrors the server's `Pricing.AmountCollected`.
  */
-export function entryAmountCollected(r: Raffle, e: RaffleEntry): number {
-  return Math.max(0, raffleEntryCost(r, e.paid_entries) - e.amount_waived)
+export function entryAmountCollected(r: PricedRaffle, e: SettledEntry): number {
+  return Math.max(0, raffleEntryCost(r, e.paidEntries) - e.amountWaived)
 }
 
 /**
@@ -183,8 +193,8 @@ export function entryAmountCollected(r: Raffle, e: RaffleEntry): number {
  * predicted - one is chosen when a payment is recorded - so unsettled tickets
  * are quoted at full price.
  */
-export function entryAmountOutstanding(r: Raffle, e: RaffleEntry): number {
-  return Math.max(0, raffleEntryCost(r, e.num_entries) - raffleEntryCost(r, e.paid_entries))
+export function entryAmountOutstanding(r: PricedRaffle, e: SettledEntry): number {
+  return Math.max(0, raffleEntryCost(r, e.numEntries) - raffleEntryCost(r, e.paidEntries))
 }
 
 export const useRafflesStore = defineStore('raffles', () => {
@@ -209,7 +219,7 @@ export const useRafflesStore = defineStore('raffles', () => {
     world: '',
     numEntries: 1,
   })
-  const raffleSignupResult = ref<RaffleEnterResponse | null>(null)
+  const raffleSignupResult = ref<RaffleEnterResult | null>(null)
   /** Cloudflare Turnstile token for the public sign-up (empty when disabled/unset). */
   const signupTurnstileToken = ref('')
   // Public "have I already entered?" search. `null` means no search has run yet,
@@ -230,7 +240,7 @@ export const useRafflesStore = defineStore('raffles', () => {
   // In flight while a settlement is being recorded (drives the modal's button).
   const settlingEntry = ref(false)
   const raffleWinner = ref<RaffleEntry | null>(null)
-  const raffleWinnerEntry = ref<RaffleEntry | null>(null) // public closed view
+  const raffleWinnerEntry = ref<RaffleWinner | null>(null) // public closed view
   const raffleTotalEntryCount = ref(0)
   // In-flight flags driving spinners / button disabling.
   const rafflesLoading = ref(false)
@@ -264,36 +274,44 @@ export const useRafflesStore = defineStore('raffles', () => {
 
   async function loadRaffles(): Promise<void> {
     await withLoading(rafflesLoading, async () => {
-      const data = await endpoints.raffles.list()
-      raffles.value = data.raffles
+      raffles.value = (await unwrap(api.GET('/raffles'))).raffles
     })
   }
 
   /** Preloads open raffles (home page card visibility). */
   async function loadHomeRaffles(): Promise<void> {
     try {
-      const data = await endpoints.raffles.list()
+      const data = await unwrap(api.GET('/raffles'))
       homeRaffles.value = data.raffles.filter(isRaffleEnterable)
     } catch {
       /* silent */
     }
   }
 
+  /** Admin: reads the selected raffle and its entries again. */
   async function loadRaffleDetail(id: number): Promise<void> {
     const reqId = ++detailSeq
     detailLoading.value = true
     try {
-      const data = await endpoints.raffles.detail(id)
+      const path = { params: { path: { id } } }
+      const [detail, entries] = await Promise.all([
+        unwrap(api.GET('/raffles/{id}', path)),
+        unwrap(api.GET('/raffles/{id}/entries', path)),
+      ])
       if (reqId !== detailSeq) {
         return // a newer load superseded this one
       }
-      selectedRaffle.value = data.raffle
-      raffleEntries.value = data.entries ?? []
-      raffleWinner.value = null
-      if (data.raffle.winner_entry_id && raffleEntries.value.length) {
-        raffleWinner.value =
-          raffleEntries.value.find((e) => e.id === data.raffle.winner_entry_id) ?? null
+      // The detail leaves out the staff totals the list gave the raffle, so they are
+      // carried over from it.
+      const listed = selectedRaffle.value?.id === id ? selectedRaffle.value : null
+      selectedRaffle.value = {
+        ...detail.raffle,
+        winnerName: listed?.winnerName ?? null,
+        paidTotal: listed?.paidTotal ?? null,
       }
+      raffleEntries.value = entries.entries
+      raffleWinner.value =
+        raffleEntries.value.find((e) => e.id === detail.raffle.winnerEntryId) ?? null
     } catch (e) {
       if (reqId === detailSeq) {
         ui.notify((e as Error).message, 'error')
@@ -329,14 +347,11 @@ export const useRafflesStore = defineStore('raffles', () => {
     raffleWinnerEntry.value = null
     raffleTotalEntryCount.value = 0
     clearEntryLookup()
-    endpoints.raffles
-      .detail(raffle.id)
+    unwrap(api.GET('/raffles/{id}', { params: { path: { id: raffle.id } } }))
       .then((data) => {
         selectedRaffle.value = data.raffle
-        raffleTotalEntryCount.value = data.total_entries ?? 0
-        if (data.winner_entry) {
-          raffleWinnerEntry.value = data.winner_entry
-        }
+        raffleTotalEntryCount.value = data.totalEntries
+        raffleWinnerEntry.value = data.winnerEntry ?? null
       })
       .catch(() => {
         // Best effort: the raffle from the list is already showing, so a failed
@@ -360,15 +375,13 @@ export const useRafflesStore = defineStore('raffles', () => {
     clearEntryLookup()
     detailLoading.value = true
     try {
-      const data = await endpoints.raffles.detail(id)
+      const data = await unwrap(api.GET('/raffles/{id}', { params: { path: { id } } }))
       if (reqId !== detailSeq) {
         return true // superseded; the newer load owns the state
       }
       selectedRaffle.value = data.raffle
-      raffleTotalEntryCount.value = data.total_entries ?? 0
-      if (data.winner_entry) {
-        raffleWinnerEntry.value = data.winner_entry
-      }
+      raffleTotalEntryCount.value = data.totalEntries
+      raffleWinnerEntry.value = data.winnerEntry ?? null
       return true
     } catch {
       // A superseded request must not report failure (which would redirect the
@@ -389,17 +402,17 @@ export const useRafflesStore = defineStore('raffles', () => {
       title: '',
       description: '',
       rules: '',
-      max_entries: 1,
-      signup_instructions: '',
-      entry_mode: 'single',
-      cost_per_entry: 0,
-      tier_costs: [0],
-      available_from: '',
-      available_to: '',
-      prize_image: '',
-      pay_image: '',
-      festival_map_id: null,
-      occupant_id: null,
+      maxEntries: 1,
+      signupInstructions: '',
+      entryMode: 'single',
+      costPerEntry: 0,
+      tierCosts: [0],
+      availableFrom: '',
+      availableTo: '',
+      prizeImage: '',
+      payImage: '',
+      festivalMapId: null,
+      occupantId: null,
     }
   }
 
@@ -408,13 +421,23 @@ export const useRafflesStore = defineStore('raffles', () => {
     // datetime-local inputs show the correct wall-clock for *this* admin's
     // timezone (a window set by an admin in another zone reads correctly).
     raffleForm.value = {
-      ...(raffle as unknown as RaffleForm),
-      entry_mode: raffleMode(raffle),
+      id: raffle.id,
+      title: raffle.title,
+      description: raffle.description,
+      rules: raffle.rules,
+      maxEntries: raffle.maxEntries,
+      signupInstructions: raffle.signupInstructions,
+      entryMode: raffleMode(raffle),
+      costPerEntry: raffle.costPerEntry,
       // The tier editor always needs a row to type into, even for a raffle
       // saved in another mode (whose stored ladder is empty by design).
-      tier_costs: raffle.tier_costs.length ? [...raffle.tier_costs] : [0],
-      available_from: utcToDatetimeLocal(raffle.available_from),
-      available_to: utcToDatetimeLocal(raffle.available_to),
+      tierCosts: raffle.tierCosts.length ? [...raffle.tierCosts] : [0],
+      availableFrom: utcToDatetimeLocal(raffle.availableFrom),
+      availableTo: utcToDatetimeLocal(raffle.availableTo),
+      prizeImage: raffle.prizeImage,
+      payImage: raffle.payImage,
+      festivalMapId: raffle.festivalMapId,
+      occupantId: raffle.occupantId,
     }
   }
 
@@ -432,21 +455,21 @@ export const useRafflesStore = defineStore('raffles', () => {
       title: `${raffle.title} (Copy)`,
       description: raffle.description,
       rules: raffle.rules,
-      max_entries: raffle.max_entries,
-      signup_instructions: raffle.signup_instructions,
-      entry_mode: raffleMode(raffle),
-      cost_per_entry: raffle.cost_per_entry,
-      tier_costs: raffle.tier_costs.length ? [...raffle.tier_costs] : [0],
-      available_from: '',
-      available_to: '',
-      prize_image: raffle.prize_image,
-      pay_image: raffle.pay_image,
+      maxEntries: raffle.maxEntries,
+      signupInstructions: raffle.signupInstructions,
+      entryMode: raffleMode(raffle),
+      costPerEntry: raffle.costPerEntry,
+      tierCosts: raffle.tierCosts.length ? [...raffle.tierCosts] : [0],
+      availableFrom: '',
+      availableTo: '',
+      prizeImage: raffle.prizeImage,
+      payImage: raffle.payImage,
       // The festival link points at the map the ORIGINAL raffle ran at. A copy is
       // almost always next year's, so keeping it would quietly file the new raffle
       // under the finished festival - the same reason a garapon copy drops its
-      // stamp_rally_id. Pick the festival again on the copy.
-      festival_map_id: null,
-      occupant_id: null,
+      // stampRallyId. Pick the festival again on the copy.
+      festivalMapId: null,
+      occupantId: null,
     }
   }
 
@@ -468,7 +491,7 @@ export const useRafflesStore = defineStore('raffles', () => {
       // and the raffle simply belongs to no festival.
       festivalMaps.value = []
     }
-    await loadMapStalls(raffleForm.value?.festival_map_id ?? null)
+    await loadMapStalls(raffleForm.value?.festivalMapId ?? null)
   }
 
   /** Loads a festival map's stalls for the stall select (null clears them). */
@@ -493,11 +516,11 @@ export const useRafflesStore = defineStore('raffles', () => {
    */
   async function setFestivalMap(mapId: number | null): Promise<void> {
     const f = raffleForm.value
-    if (!f || f.festival_map_id === mapId) {
+    if (!f || f.festivalMapId === mapId) {
       return
     }
-    f.festival_map_id = mapId
-    f.occupant_id = null
+    f.festivalMapId = mapId
+    f.occupantId = null
     await loadMapStalls(mapId)
   }
 
@@ -508,19 +531,19 @@ export const useRafflesStore = defineStore('raffles', () => {
    */
   function addRaffleTier(): void {
     const f = raffleForm.value
-    if (!f || f.tier_costs.length >= RAFFLE_MAX_ENTRIES) {
+    if (!f || f.tierCosts.length >= RAFFLE_MAX_ENTRIES) {
       return
     }
-    f.tier_costs.push(f.tier_costs[f.tier_costs.length - 1] ?? 0)
+    f.tierCosts.push(f.tierCosts[f.tierCosts.length - 1] ?? 0)
   }
 
   /** Removes one rung; the ladder always keeps at least one row to type into. */
   function removeRaffleTier(index: number): void {
     const f = raffleForm.value
-    if (!f || f.tier_costs.length <= 1) {
+    if (!f || f.tierCosts.length <= 1) {
       return
     }
-    f.tier_costs.splice(index, 1)
+    f.tierCosts.splice(index, 1)
   }
 
   /** Saves the raffle form. Returns true on success (caller navigates). */
@@ -536,31 +559,44 @@ export const useRafflesStore = defineStore('raffles', () => {
     // A cleared number input leaves NaN behind, which would serialize as null and
     // be rejected by the server - normalize the costs the chosen mode actually
     // uses, and drop the ones it doesn't so a mode switch leaves no shadow price.
-    const tiers = f.tier_costs.map((c) => (Number.isFinite(c) ? c : 0))
-    if (f.entry_mode === 'custom' && tiers.some((c) => c < 0)) {
+    const tiers = f.tierCosts.map((c) => (Number.isFinite(c) ? c : 0))
+    if (f.entryMode === 'custom' && tiers.some((c) => c < 0)) {
       ui.notify('Entry costs cannot be negative', 'error')
       return false
     }
-    if (f.entry_mode === 'single' && (!Number.isFinite(f.cost_per_entry) || f.cost_per_entry < 0)) {
+    if (f.entryMode === 'single' && (!Number.isFinite(f.costPerEntry) || f.costPerEntry < 0)) {
       ui.notify('Cost per entry must be a non-negative number', 'error')
+      return false
+    }
+    const costs =
+      f.entryMode === 'custom' ? tiers : f.entryMode === 'single' ? [f.costPerEntry] : []
+    if (!costs.every(Number.isInteger)) {
+      ui.notify('Costs are whole numbers of gil', 'error')
+      return false
+    }
+    if (f.entryMode !== 'custom' && f.maxEntries > RAFFLE_MAX_ENTRIES) {
+      ui.notify(`Max entries per person cannot exceed ${RAFFLE_MAX_ENTRIES}`, 'error')
       return false
     }
     savingRaffle.value = true
     try {
       // The form holds local datetime-local values; convert the availability
       // window to UTC so the stored instant is timezone-unambiguous.
-      const payload = {
-        ...f,
-        cost_per_entry: f.entry_mode === 'single' ? f.cost_per_entry : 0,
-        tier_costs: f.entry_mode === 'custom' ? tiers : [],
-        available_from: datetimeLocalToUtc(f.available_from),
-        available_to: datetimeLocalToUtc(f.available_to),
+      const { id, ...rest } = f
+      const body: RaffleInput = {
+        ...rest,
+        title: f.title.trim(),
+        maxEntries: f.entryMode === 'custom' ? tiers.length : f.maxEntries,
+        costPerEntry: f.entryMode === 'single' ? f.costPerEntry : 0,
+        tierCosts: f.entryMode === 'custom' ? tiers : [],
+        availableFrom: datetimeLocalToUtc(f.availableFrom) || null,
+        availableTo: datetimeLocalToUtc(f.availableTo) || null,
       }
-      if (f.id) {
-        await endpoints.raffles.update(f.id, payload)
+      if (id) {
+        await unwrap(api.PUT('/raffles/{id}', { params: { path: { id } }, body }))
         ui.notify('Raffle updated', 'success')
       } else {
-        await endpoints.raffles.create(payload)
+        await unwrap(api.POST('/raffles', { body }))
         ui.notify('Raffle created', 'success')
       }
       raffleForm.value = null
@@ -584,7 +620,7 @@ export const useRafflesStore = defineStore('raffles', () => {
       return
     }
     try {
-      await endpoints.raffles.delete(id)
+      await unwrap(api.DELETE('/raffles/{id}', { params: { path: { id } } }))
       raffles.value = raffles.value.filter((r) => r.id !== id)
       if (selectedRaffle.value?.id === id) {
         selectedRaffle.value = null
@@ -598,7 +634,7 @@ export const useRafflesStore = defineStore('raffles', () => {
   // -- Public sign-up ---------------------------------------------------------
 
   /**
-   * The entry count clamped to a whole number in [1, max_entries]. The raw
+   * The entry count clamped to a whole number in [1, maxEntries]. The raw
    * `numEntries` can be out of range or non-integer (typed value, stepper, or a
    * cleared field), so both the live cost preview and the submitted request go
    * through this - the displayed total can never disagree with what's sent, and
@@ -608,7 +644,7 @@ export const useRafflesStore = defineStore('raffles', () => {
     if (!selectedRaffle.value) {
       return 1
     }
-    const max = Math.max(1, Math.floor(selectedRaffle.value.max_entries || 1))
+    const max = Math.max(1, Math.floor(selectedRaffle.value.maxEntries || 1))
     const raw = Math.floor(raffleSignup.value.numEntries || 1)
     return Math.min(Math.max(raw, 1), max)
   }
@@ -639,7 +675,7 @@ export const useRafflesStore = defineStore('raffles', () => {
       return
     }
     const trimmed = name.trim()
-    // Count CODE POINTS, matching the server's []rune check - a two-character
+    // Count CODE POINTS, matching the server's rune count - a two-character
     // name in a script outside the BMP must not be rejected here for being
     // "one character" by UTF-16 measure.
     if (Array.from(trimmed).length < RAFFLE_LOOKUP_MIN_QUERY) {
@@ -651,7 +687,12 @@ export const useRafflesStore = defineStore('raffles', () => {
     }
     entryLookupLoading.value = true
     try {
-      const data = await endpoints.raffles.lookup(selectedRaffle.value.id, trimmed)
+      const data = await unwrap(
+        api.POST('/raffles/{id}/lookup', {
+          params: { path: { id: selectedRaffle.value.id } },
+          body: { name: trimmed },
+        }),
+      )
       entryLookupResults.value = data.entries
       entryLookupTruncated.value = data.truncated
     } catch (e) {
@@ -683,12 +724,17 @@ export const useRafflesStore = defineStore('raffles', () => {
     clampSignupEntries()
     entering.value = true
     try {
-      const data = await endpoints.raffles.enter(selectedRaffle.value.id, {
-        character_name: s.characterName.trim(),
-        world: s.world.trim(),
-        num_entries: s.numEntries,
-        turnstile_token: signupTurnstileToken.value || undefined,
-      })
+      const data = await unwrap(
+        api.POST('/raffles/{id}/enter', {
+          params: { path: { id: selectedRaffle.value.id } },
+          body: {
+            characterName: s.characterName.trim(),
+            world: s.world.trim(),
+            numEntries: s.numEntries,
+            turnstileToken: signupTurnstileToken.value || undefined,
+          },
+        }),
+      )
       raffleSignupResult.value = data
       // Entries merge on character+world, so the exact spelling is what a repeat
       // visit needs: a different one silently starts a second entry and splits
@@ -713,7 +759,7 @@ export const useRafflesStore = defineStore('raffles', () => {
 
   /**
    * Admin: manually add a player to the selected open raffle (optionally already
-   * paid). The entry count is clamped to [1, max_entries] to match the field's
+   * paid). The entry count is clamped to [1, maxEntries] to match the field's
    * bound; the server enforces the same limit. On success the form resets and the
    * detail view reloads so the entries table + counts reflect the new entry.
    */
@@ -726,18 +772,26 @@ export const useRafflesStore = defineStore('raffles', () => {
       ui.notify('Character name and world are required', 'error')
       return
     }
-    const max = Math.max(1, Math.floor(selectedRaffle.value.max_entries || 1))
+    const max = Math.max(1, Math.floor(selectedRaffle.value.maxEntries || 1))
     const num = Math.min(Math.max(Math.floor(f.numEntries || 1), 1), max)
     addingEntry.value = true
     try {
-      await endpoints.raffles.addEntry(selectedRaffle.value.id, {
-        character_name: f.characterName.trim(),
-        world: f.world.trim(),
-        num_entries: num,
-        paid: f.paid,
-        // Only meaningful alongside paid; the server ignores it otherwise.
-        amount_waived: f.paid && Number.isFinite(f.amountWaived) ? Math.max(0, f.amountWaived) : 0,
-      })
+      await unwrap(
+        api.POST('/raffles/{id}/entries', {
+          params: { path: { id: selectedRaffle.value.id } },
+          body: {
+            characterName: f.characterName.trim(),
+            world: f.world.trim(),
+            numEntries: num,
+            paid: f.paid,
+            // Only meaningful alongside paid; the server ignores it otherwise.
+            amountWaived:
+              f.paid && Number.isFinite(f.amountWaived)
+                ? Math.max(0, Math.floor(f.amountWaived))
+                : 0,
+          },
+        }),
+      )
       ui.notify('Entry added', 'success')
       resetEntryAdd()
       await loadRaffleDetail(selectedRaffle.value.id)
@@ -767,16 +821,24 @@ export const useRafflesStore = defineStore('raffles', () => {
     if (!selectedRaffle.value) {
       return false
     }
+    const params = { path: { id: selectedRaffle.value.id, entryId: entry.id } }
     settlingEntry.value = true
     try {
-      const data = await endpoints.raffles.markEntryPaid(
-        selectedRaffle.value.id,
-        entry.id,
-        paid,
-        paid ? amountWaived : 0,
-        paid ? paidEntries : 0,
-      )
-      Object.assign(entry, data.entry)
+      let updated: RaffleEntry
+      if (paid) {
+        // Left out, the settlement covers every ticket.
+        const body: RaffleSettlement = {}
+        if (paidEntries > 0 && paidEntries < entry.numEntries) {
+          body.paidEntries = paidEntries
+        }
+        if (amountWaived > 0) {
+          body.waived = amountWaived
+        }
+        updated = await unwrap(api.POST('/raffles/{id}/entries/{entryId}/settle', { params, body }))
+      } else {
+        updated = await unwrap(api.POST('/raffles/{id}/entries/{entryId}/unsettle', { params }))
+      }
+      Object.assign(entry, updated)
       return true
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -796,8 +858,17 @@ export const useRafflesStore = defineStore('raffles', () => {
       return
     }
     try {
-      await endpoints.raffles.deleteEntry(selectedRaffle.value.id, entry.id)
+      await unwrap(
+        api.DELETE('/raffles/{id}/entries/{entryId}', {
+          params: { path: { id: selectedRaffle.value.id, entryId: entry.id } },
+        }),
+      )
       raffleEntries.value = raffleEntries.value.filter((e) => e.id !== entry.id)
+      // Deleting the pending winner leaves the raffle with none.
+      if (raffleWinner.value?.id === entry.id) {
+        raffleWinner.value = null
+        selectedRaffle.value.winnerEntryId = null
+      }
       ui.notify('Entry deleted', 'info')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -810,28 +881,41 @@ export const useRafflesStore = defineStore('raffles', () => {
     }
     pickingWinner.value = true
     try {
-      const data = await endpoints.raffles.pickWinner(selectedRaffle.value.id)
-      raffleWinner.value = data.winner
-      selectedRaffle.value.winner_entry_id = data.winner.id
+      const winner = await unwrap(
+        api.POST('/raffles/{id}/pick-winner', {
+          params: { path: { id: selectedRaffle.value.id } },
+        }),
+      )
+      raffleWinner.value = winner
+      selectedRaffle.value.winnerEntryId = winner.id
       ui.notify('Winner picked!', 'success')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
+      // Another console may have picked first: read where the raffle stands.
+      await loadRaffleDetail(selectedRaffle.value.id)
     } finally {
       pickingWinner.value = false
     }
   }
 
   async function verifyRaffleWinner(): Promise<void> {
-    if (!selectedRaffle.value) {
+    const raffle = selectedRaffle.value
+    if (!raffle || !raffleWinner.value) {
       return
     }
     try {
-      await endpoints.raffles.verifyWinner(selectedRaffle.value.id)
-      selectedRaffle.value.status = 'closed'
+      const closed = await unwrap(
+        api.POST('/raffles/{id}/verify-winner', {
+          params: { path: { id: raffle.id } },
+          body: { winnerEntryId: raffleWinner.value.id },
+        }),
+      )
+      raffle.status = closed.status
       ui.notify('Winner verified! Raffle closed.', 'success')
       await loadRaffles()
     } catch (e) {
       ui.notify((e as Error).message, 'error')
+      await loadRaffleDetail(raffle.id)
     }
   }
 
@@ -856,8 +940,13 @@ export const useRafflesStore = defineStore('raffles', () => {
       return
     }
     try {
-      await endpoints.raffles.setStatus(raffle.id, closed)
-      raffle.status = closed ? 'closed' : 'open'
+      const params = { path: { id: raffle.id } }
+      const changed = await unwrap(
+        closed
+          ? api.POST('/raffles/{id}/close', { params })
+          : api.POST('/raffles/{id}/reopen', { params }),
+      )
+      raffle.status = changed.status
       ui.notify(closed ? 'Raffle closed' : 'Raffle reopened', 'success')
       await loadRaffles()
     } catch (e) {
@@ -866,17 +955,25 @@ export const useRafflesStore = defineStore('raffles', () => {
   }
 
   async function pickAnotherWinner(): Promise<void> {
-    if (!selectedRaffle.value) {
+    if (!selectedRaffle.value || !raffleWinner.value) {
       return
     }
     pickingWinner.value = true
     try {
-      const data = await endpoints.raffles.pickAnotherWinner(selectedRaffle.value.id)
-      raffleWinner.value = data.winner
-      selectedRaffle.value.winner_entry_id = data.winner.id
+      const winner = await unwrap(
+        api.POST('/raffles/{id}/pick-another', {
+          params: { path: { id: selectedRaffle.value.id } },
+          body: { replaces: raffleWinner.value.id },
+        }),
+      )
+      raffleWinner.value = winner
+      selectedRaffle.value.winnerEntryId = winner.id
       ui.notify('New winner picked!', 'success')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
+      // Nobody else to draw clears the winner, and another console may have changed
+      // it: read where the raffle stands.
+      await loadRaffleDetail(selectedRaffle.value.id)
     } finally {
       pickingWinner.value = false
     }

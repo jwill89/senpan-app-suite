@@ -367,7 +367,7 @@ func TestResourceChangedFollowsItsPage(t *testing.T) {
 	without := staffStream(t, env, garapons)
 	admin := staffStream(t, env, env.client)
 
-	decodeInto(t, env.postJSON(t, "/api/raffles", map[string]any{"title": "Prize Raffle", "max_entries": 10}), http.StatusCreated, nil)
+	decodeInto(t, env.postJSON(t, "/api/v1/raffles", raffleBody(map[string]any{"maxEntries": 10})), http.StatusCreated, nil)
 	for name, s := range map[string]*stream{"raffles": withPage, "admin": admin} {
 		if e := s.expect("resource_changed", time.Second); e.str("resource") != "raffles" {
 			t.Errorf("%s: %+v", name, e)

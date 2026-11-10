@@ -461,24 +461,24 @@ func TestLoginAfterPasswordChangeStampsEpoch(t *testing.T) {
 // deliberately public reads are NOT listed, since asserting 403 on them would be
 // asserting the wrong thing: GET /api/v1/game is public and varies what it shows by
 // role (staff with the Game page see numbers inside the draw delay), and GET
-// /api/raffles is the public raffle list, which varies its payload by role
-// (raffleStaff), rather than refusing outright.
+// /api/v1/raffles is the public raffle list, which varies its payload by role
+// (the Raffles page's staff get every raffle), rather than refusing outright.
 func TestPermission_EveryPageGuardsAReadRoute(t *testing.T) {
 	routes := map[string]string{
 		"bingo-cards":            "/api/v1/cards",
 		"bingo-winners-log":      "/api/v1/winners-log",
 		"bingo-patterns":         "/api/v1/patterns",
-		"teahouse-announcements": "/api/announcements",
-		"teahouse-affiliates":    "/api/affiliates",
-		"teahouse-tea-rooms":     "/api/tea-rooms",
+		"teahouse-announcements": "/api/v1/announcements",
+		"teahouse-affiliates":    "/api/v1/affiliates",
+		"teahouse-tea-rooms":     "/api/v1/tea-rooms",
 		"festival-map":           "/api/festival-maps",
 		"festival-garapon":       "/api/garapons",
 		"festival-stamp-rally":   "/api/stamp-rallies",
 		"atelier-fonts":          "/api/fonts",
 		"system-themes":          "/api/v1/styles",
 		"system-images":          "/api/images?dir=announcements",
-		"bookclub-yaoi":          "/api/book-clubs/yaoi/reading-lists",
-		"bookclub-yuri":          "/api/book-clubs/yuri/reading-lists",
+		"bookclub-yaoi":          "/api/v1/book-clubs/yaoi/reading-lists",
+		"bookclub-yuri":          "/api/v1/book-clubs/yuri/reading-lists",
 	}
 
 	env := newTestEnv(t)

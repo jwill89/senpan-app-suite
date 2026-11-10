@@ -1,4 +1,4 @@
-package server
+package discord
 
 import (
 	"bytes"
@@ -19,17 +19,17 @@ import (
 func TestPostDiscordWebhookComponentsFlag(t *testing.T) {
 	cases := []struct {
 		name      string
-		payload   discordWebhookPayload
+		payload   Payload
 		wantParam bool
 	}{
 		{
 			name: "with buttons",
-			payload: discordWebhookPayload{
-				Embeds: []discordEmbed{{Title: "Hi"}},
-				Components: []discordComponent{{
-					Type: componentActionRow,
-					Components: []discordComponent{{
-						Type: componentButton, Style: buttonStyleLink, Label: "Go", URL: "https://example.com",
+			payload: Payload{
+				Embeds: []Embed{{Title: "Hi"}},
+				Components: []Component{{
+					Type: ComponentActionRow,
+					Components: []Component{{
+						Type: ComponentButton, Style: ButtonStyleLink, Label: "Go", URL: "https://example.com",
 					}},
 				}},
 			},
@@ -37,7 +37,7 @@ func TestPostDiscordWebhookComponentsFlag(t *testing.T) {
 		},
 		{
 			name:      "embed only",
-			payload:   discordWebhookPayload{Embeds: []discordEmbed{{Title: "Hi"}}},
+			payload:   Payload{Embeds: []Embed{{Title: "Hi"}}},
 			wantParam: false,
 		},
 	}
@@ -52,8 +52,8 @@ func TestPostDiscordWebhookComponentsFlag(t *testing.T) {
 			}))
 			defer srv.Close()
 
-			target := webhookTarget{Kind: "test", Name: tc.name}
-			if err := (&Server{}).postDiscordWebhook(context.Background(), target, srv.URL, tc.payload); err != nil {
+			target := Target{Kind: "test", Name: tc.name}
+			if err := (&Sender{}).Post(context.Background(), target, srv.URL, tc.payload); err != nil {
 				t.Fatalf("postDiscordWebhook: %v", err)
 			}
 			hasParam := strings.Contains(gotQuery, "with_components=true")
@@ -77,9 +77,9 @@ func TestPostDiscordWebhookLogsSuccess(t *testing.T) {
 	}))
 	defer ok.Close()
 
-	target := webhookTarget{Kind: "announcement", Name: "Bingo Night"}
-	payload := discordWebhookPayload{Embeds: []discordEmbed{{Title: "Hi"}}}
-	if err := (&Server{}).postDiscordWebhook(context.Background(), target, ok.URL, payload); err != nil {
+	target := Target{Kind: "announcement", Name: "Bingo Night"}
+	payload := Payload{Embeds: []Embed{{Title: "Hi"}}}
+	if err := (&Sender{}).Post(context.Background(), target, ok.URL, payload); err != nil {
 		t.Fatalf("postDiscordWebhook: %v", err)
 	}
 	for _, want := range []string{
@@ -100,7 +100,7 @@ func TestPostDiscordWebhookLogsSuccess(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 	defer bad.Close()
-	if err := (&Server{}).postDiscordWebhook(context.Background(), target, bad.URL, payload); err == nil {
+	if err := (&Sender{}).Post(context.Background(), target, bad.URL, payload); err == nil {
 		t.Fatal("expected an error for a 404 response, got nil")
 	}
 	if added := logged()[before:]; strings.Contains(added, "discord post sent") {
@@ -134,14 +134,13 @@ func TestWebhookPolicy(t *testing.T) {
 	}))
 	defer live.Close()
 
-	payload := discordWebhookPayload{Embeds: []discordEmbed{{Title: "Hi"}}}
-	target := webhookTarget{Kind: "announcement", Name: "Bingo Night"}
+	payload := Payload{Embeds: []Embed{{Title: "Hi"}}}
+	target := Target{Kind: "announcement", Name: "Bingo Night"}
 
 	t.Run("dry run sends nothing", func(t *testing.T) {
 		hits = 0
-		srv := &Server{}
-		srv.SetWebhookPolicy("", true)
-		if err := srv.postDiscordWebhook(context.Background(), target, live.URL, payload); err != nil {
+		srv := &Sender{DryRun: true}
+		if err := srv.Post(context.Background(), target, live.URL, payload); err != nil {
 			t.Fatalf("dry run should succeed without posting: %v", err)
 		}
 		if hits != 0 {
@@ -159,9 +158,9 @@ func TestWebhookPolicy(t *testing.T) {
 		}))
 		defer test.Close()
 
-		srv := &Server{}
-		srv.SetWebhookPolicy(test.URL, false)
-		if err := srv.postDiscordWebhook(context.Background(), target, live.URL, payload); err != nil {
+		srv := &Sender{}
+		srv.Override = test.URL
+		if err := srv.Post(context.Background(), target, live.URL, payload); err != nil {
 			t.Fatalf("override post: %v", err)
 		}
 		if hits != 0 {
@@ -180,9 +179,9 @@ func TestWebhookPolicy(t *testing.T) {
 		}))
 		defer test.Close()
 
-		srv := &Server{}
-		srv.SetWebhookPolicy(test.URL, true)
-		if err := srv.postDiscordWebhook(context.Background(), target, live.URL, payload); err != nil {
+		srv := &Sender{}
+		srv.Override, srv.DryRun = test.URL, true
+		if err := srv.Post(context.Background(), target, live.URL, payload); err != nil {
 			t.Fatalf("dry run + override: %v", err)
 		}
 		if overrideHits != 0 {
@@ -192,9 +191,8 @@ func TestWebhookPolicy(t *testing.T) {
 
 	t.Run("unset policy posts normally", func(t *testing.T) {
 		hits = 0
-		srv := &Server{}
-		srv.SetWebhookPolicy("", false)
-		if err := srv.postDiscordWebhook(context.Background(), target, live.URL, payload); err != nil {
+		srv := &Sender{}
+		if err := srv.Post(context.Background(), target, live.URL, payload); err != nil {
 			t.Fatalf("normal post: %v", err)
 		}
 		if hits != 1 {
@@ -224,8 +222,8 @@ func TestPostDiscordWebhookSurfacesDiscordReason(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err := (&Server{}).postDiscordWebhook(context.Background(), webhookTarget{Kind: "test"}, srv.URL,
-		discordWebhookPayload{Embeds: []discordEmbed{{Title: "Hi"}}})
+	err := (&Sender{}).Post(context.Background(), Target{Kind: "test"}, srv.URL,
+		Payload{Embeds: []Embed{{Title: "Hi"}}})
 	if err == nil {
 		t.Fatal("expected an error for a 404 response, got nil")
 	}
@@ -250,8 +248,8 @@ func TestDiscordErrorMessage(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := discordErrorMessage([]byte(tc.body)); got != tc.want {
-				t.Fatalf("discordErrorMessage(%q) = %q, want %q", tc.body, got, tc.want)
+			if got := errorMessage([]byte(tc.body)); got != tc.want {
+				t.Fatalf("errorMessage(%q) = %q, want %q", tc.body, got, tc.want)
 			}
 		})
 	}
@@ -265,7 +263,7 @@ func TestSanitizeWebhookErrHidesToken(t *testing.T) {
 	webhookURL := "https://discord.com/api/webhooks/123/" + secret
 
 	connErr := &url.Error{Op: "Post", URL: webhookURL, Err: errors.New("dial tcp 1.2.3.4:443: connect: connection refused")}
-	got := sanitizeWebhookErr(connErr)
+	got := sanitize(connErr, defaultClient)
 	if strings.Contains(got, secret) || strings.Contains(got, "discord.com") {
 		t.Fatalf("sanitized error leaked the URL/token: %q", got)
 	}
@@ -274,12 +272,12 @@ func TestSanitizeWebhookErrHidesToken(t *testing.T) {
 	}
 
 	timeoutErr := &url.Error{Op: "Post", URL: webhookURL, Err: timeoutError{}}
-	if got := sanitizeWebhookErr(timeoutErr); strings.Contains(got, secret) || !strings.Contains(got, "timed out") {
+	if got := sanitize(timeoutErr, defaultClient); strings.Contains(got, secret) || !strings.Contains(got, "timed out") {
 		t.Fatalf("timeout path leaked token or lost label: %q", got)
 	}
 
 	// A non-*url.Error passes through unchanged.
-	if got := sanitizeWebhookErr(errors.New("plain error")); got != "plain error" {
+	if got := sanitize(errors.New("plain error"), defaultClient); got != "plain error" {
 		t.Fatalf("passthrough = %q, want %q", got, "plain error")
 	}
 }
@@ -310,9 +308,9 @@ func TestNormalizeEmbedURL(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, ok := normalizeEmbedURL(tc.in)
+			got, ok := NormalizeEmbedURL(tc.in)
 			if ok != tc.wantOK || got != tc.want {
-				t.Fatalf("normalizeEmbedURL(%q) = (%q,%v), want (%q,%v)", tc.in, got, ok, tc.want, tc.wantOK)
+				t.Fatalf("NormalizeEmbedURL(%q) = (%q,%v), want (%q,%v)", tc.in, got, ok, tc.want, tc.wantOK)
 			}
 		})
 	}
@@ -322,11 +320,11 @@ func TestNormalizeEmbedURL(t *testing.T) {
 // spaced image/thumbnail URL carries the encoded form, so the payload Discord
 // receives is well-formed.
 func TestBuildEmbedEncodesImageURL(t *testing.T) {
-	e := newEmbed().
-		title("Hi").
-		image("https://x.co/images/a/My Photo.png").
-		thumbnail("https://x.co/images/a/My Logo.png").
-		build()
+	e := NewEmbed().
+		Title("Hi").
+		Image("https://x.co/images/a/My Photo.png").
+		Thumbnail("https://x.co/images/a/My Logo.png").
+		Build()
 	if e.Image == nil || e.Image.URL != "https://x.co/images/a/My%20Photo.png" {
 		t.Errorf("image URL = %v, want encoded", e.Image)
 	}

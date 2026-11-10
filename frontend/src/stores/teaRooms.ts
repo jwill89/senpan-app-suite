@@ -10,8 +10,7 @@
  */
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { endpoints } from '@/lib/endpoints'
-import type { TeaRoom, TeaRoomForm } from '@/types/api'
+import { api, unwrap, type TeaRoom, type TeaRoomChanges, type TeaRoomInput } from '@/api/client'
 import { useUiStore } from './ui'
 import { withLoading } from '@/lib/withLoading'
 import { datetimeLocalToUtc, utcToDatetimeLocal } from '@/lib/datetime'
@@ -27,15 +26,24 @@ export function teaRoomUnlockedMessage(name: string, roomNumber: string): string
   return `${label} has been marked as unlocked. Please check the room to remind the occupants or extend the time.`
 }
 
+/**
+ * The editable form model for a tea room (id 0 = new). The unlock time is held as the
+ * local wall-clock value of a datetime-local input, and sent as a UTC instant.
+ */
+export interface TeaRoomForm extends Omit<TeaRoomInput, 'lockedUntil'> {
+  id: number
+  lockedUntil: string
+}
+
 /** A fresh, empty tea-room form (open by default, brand-pink accent). */
 function emptyForm(): TeaRoomForm {
   return {
     id: 0,
     name: '',
     subtitle: '',
-    room_owner: '',
-    room_number: '',
-    cost_per_half_hour: 0,
+    roomOwner: '',
+    roomNumber: '',
+    costPerHalfHour: 0,
     hashtags: '',
     description: '',
     seasonal: false,
@@ -43,7 +51,7 @@ function emptyForm(): TeaRoomForm {
     lockable: false,
     discounted: false,
     locked: false,
-    locked_until: '',
+    lockedUntil: '',
     image: '',
     color: '#ff3131',
   }
@@ -64,7 +72,7 @@ export const useTeaRoomsStore = defineStore('teaRooms', () => {
       return teaRooms.value
     }
     return teaRooms.value.filter((t) =>
-      [t.name, t.room_number, t.hashtags, t.description].some((s) => s.toLowerCase().includes(q)),
+      [t.name, t.roomNumber, t.hashtags, t.description].some((s) => s.toLowerCase().includes(q)),
     )
   })
 
@@ -77,9 +85,12 @@ export const useTeaRoomsStore = defineStore('teaRooms', () => {
   // -- Load -------------------------------------------------------------------
   async function loadTeaRooms(): Promise<void> {
     await withLoading(loading, async () => {
-      const data = await endpoints.teaRooms.list()
-      teaRooms.value = data.tea_rooms
-      webhookUrl.value = data.webhook_url
+      const [list, hook] = await Promise.all([
+        unwrap(api.GET('/tea-rooms')),
+        unwrap(api.GET('/tea-rooms/webhook')),
+      ])
+      teaRooms.value = list.teaRooms
+      webhookUrl.value = hook.webhookUrl
     })
   }
 
@@ -93,9 +104,9 @@ export const useTeaRoomsStore = defineStore('teaRooms', () => {
       id: t.id,
       name: t.name,
       subtitle: t.subtitle,
-      room_owner: t.room_owner,
-      room_number: t.room_number,
-      cost_per_half_hour: t.cost_per_half_hour,
+      roomOwner: t.roomOwner,
+      roomNumber: t.roomNumber,
+      costPerHalfHour: t.costPerHalfHour,
       hashtags: t.hashtags,
       description: t.description,
       seasonal: t.seasonal,
@@ -104,7 +115,7 @@ export const useTeaRoomsStore = defineStore('teaRooms', () => {
       discounted: t.discounted,
       locked: t.locked,
       // Stored as a UTC instant; the form edits it as local wall-clock time.
-      locked_until: utcToDatetimeLocal(t.locked_until),
+      lockedUntil: utcToDatetimeLocal(t.lockedUntil),
       image: t.image,
       color: t.color || '#ff3131',
     }
@@ -124,11 +135,11 @@ export const useTeaRoomsStore = defineStore('teaRooms', () => {
       ui.notify('Room name is required', 'error')
       return false
     }
-    if (!f.room_number.trim()) {
+    if (!f.roomNumber.trim()) {
       ui.notify('Room number is required', 'error')
       return false
     }
-    if (f.cost_per_half_hour < 0) {
+    if (f.costPerHalfHour < 0) {
       ui.notify('Cost cannot be negative', 'error')
       return false
     }
@@ -137,12 +148,12 @@ export const useTeaRoomsStore = defineStore('teaRooms', () => {
       // The form holds a local datetime-local value; the stored unlock time is a
       // UTC instant, so the two clients (and the sweeper) agree on the moment.
       const { id, ...rest } = f
-      const payload = { ...rest, locked_until: datetimeLocalToUtc(f.locked_until) }
+      const body: TeaRoomInput = { ...rest, lockedUntil: datetimeLocalToUtc(f.lockedUntil) || null }
       if (id) {
-        await endpoints.teaRooms.update(id, payload)
+        await unwrap(api.PUT('/tea-rooms/{id}', { params: { path: { id } }, body }))
         ui.notify('Tea room updated', 'success')
       } else {
-        await endpoints.teaRooms.create(payload)
+        await unwrap(api.POST('/tea-rooms', { body }))
         ui.notify('Tea room created', 'success')
       }
       teaRoomForm.value = null
@@ -166,7 +177,7 @@ export const useTeaRoomsStore = defineStore('teaRooms', () => {
       return
     }
     try {
-      await endpoints.teaRooms.delete(t.id)
+      await unwrap(api.DELETE('/tea-rooms/{id}', { params: { path: { id: t.id } } }))
       teaRooms.value = teaRooms.value.filter((r) => r.id !== t.id)
       if (teaRoomForm.value?.id === t.id) {
         teaRoomForm.value = null
@@ -183,7 +194,7 @@ export const useTeaRoomsStore = defineStore('teaRooms', () => {
    */
   async function reorder(orderedIds: number[]): Promise<void> {
     try {
-      await endpoints.teaRooms.reorder(orderedIds)
+      await unwrap(api.POST('/tea-rooms/reorder', { body: { orderedIds } }))
     } catch (e) {
       ui.notify((e as Error).message, 'error')
       await loadTeaRooms() // revert to the persisted order
@@ -206,7 +217,7 @@ export const useTeaRoomsStore = defineStore('teaRooms', () => {
     }
     postingId.value = t.id
     try {
-      await endpoints.teaRooms.post(t.id)
+      await unwrap(api.POST('/tea-rooms/{id}/post', { params: { path: { id: t.id } } }))
       ui.notify('Tea room posted to Discord', 'success')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -244,7 +255,7 @@ export const useTeaRoomsStore = defineStore('teaRooms', () => {
       ui.notify('The unlock time must be in the future', 'error')
       return false
     }
-    await patchFlag(t, { locked: true, locked_until: until })
+    await patchFlag(t, until ? { locked: true, lockedUntil: until } : { locked: true })
     return true
   }
 
@@ -254,18 +265,15 @@ export const useTeaRoomsStore = defineStore('teaRooms', () => {
   }
 
   /** Shared PATCH for the quick-toggle flags, replacing the row with the server's copy. */
-  async function patchFlag(
-    t: TeaRoom,
-    fields: { open?: boolean; discounted?: boolean; locked?: boolean; locked_until?: string },
-  ): Promise<void> {
+  async function patchFlag(t: TeaRoom, body: TeaRoomChanges): Promise<void> {
     togglingId.value = t.id
     try {
-      const data = await endpoints.teaRooms.patch(t.id, fields)
-      if (data.tea_room) {
-        const i = teaRooms.value.findIndex((r) => r.id === t.id)
-        if (i !== -1) {
-          teaRooms.value[i] = data.tea_room
-        }
+      const saved = await unwrap(
+        api.PATCH('/tea-rooms/{id}', { params: { path: { id: t.id } }, body }),
+      )
+      const i = teaRooms.value.findIndex((r) => r.id === t.id)
+      if (i !== -1) {
+        teaRooms.value[i] = saved
       }
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -278,8 +286,10 @@ export const useTeaRoomsStore = defineStore('teaRooms', () => {
   async function saveWebhook(url: string): Promise<boolean> {
     savingWebhook.value = true
     try {
-      const data = await endpoints.teaRooms.setWebhook(url.trim())
-      webhookUrl.value = data.webhook_url
+      const saved = await unwrap(
+        api.PUT('/tea-rooms/webhook', { body: { webhookUrl: url.trim() } }),
+      )
+      webhookUrl.value = saved.webhookUrl
       ui.notify('Discord webhook saved', 'success')
       return true
     } catch (e) {

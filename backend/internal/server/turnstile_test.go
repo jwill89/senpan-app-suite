@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 )
 
@@ -138,5 +139,41 @@ func TestCardRequestGatedByTurnstile(t *testing.T) {
 	}
 	if code := post("good"); code != http.StatusAccepted {
 		t.Errorf("good token should take the request in: got %d, want 202", code)
+	}
+}
+
+// TestRaffleEnterGatedByTurnstile checks the bot gate guards the public raffle
+// sign-up: no token or a bad one -> 403 and no entry kept; a valid token lets the
+// sign-up through (201).
+func TestRaffleEnterGatedByTurnstile(t *testing.T) {
+	s, st, ts := newInternalServer(t)
+	stubSiteverify(t)
+	s.turnstileSecret = "sekret"
+	res, err := st.DB().ExecContext(t.Context(), `INSERT INTO raffles (title, max_entries) VALUES ('Gated', 3)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, _ := res.LastInsertId()
+
+	post := func(token string) int {
+		body := map[string]any{"characterName": "Aria", "world": "Gilgamesh", "numEntries": 1}
+		if token != "" {
+			body["turnstileToken"] = token
+		}
+		code, _ := postFrom(t, ts, "/api/v1/raffles/"+strconv.FormatInt(id, 10)+"/enter", body)
+		return code
+	}
+	if code := post(""); code != http.StatusForbidden {
+		t.Errorf("missing token: got %d, want 403", code)
+	}
+	if code := post("bad"); code != http.StatusForbidden {
+		t.Errorf("bad token: got %d, want 403", code)
+	}
+	var entries int
+	if err := st.DB().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM raffle_entries`).Scan(&entries); err != nil || entries != 0 {
+		t.Fatalf("a sign-up that failed the bot check was kept: %d entries, %v", entries, err)
+	}
+	if code := post("good"); code != http.StatusCreated {
+		t.Errorf("good token should take the sign-up in: got %d, want 201", code)
 	}
 }

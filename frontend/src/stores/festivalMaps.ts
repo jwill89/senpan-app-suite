@@ -11,8 +11,8 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { endpoints } from '@/lib/endpoints'
+import { api, unwrap, type Affiliate } from '@/api/client'
 import type {
-  Affiliate,
   EventTimeForm,
   FestivalMap,
   FestivalMapForm,
@@ -177,7 +177,7 @@ export const useFestivalMapsStore = defineStore('festivalMaps', () => {
   /** Loads the affiliates list for the per-stall operator select. */
   async function loadFormSources(): Promise<void> {
     try {
-      affiliates.value = (await endpoints.affiliates.list()).affiliates
+      affiliates.value = (await unwrap(api.GET('/affiliates'))).affiliates
     } catch {
       affiliates.value = []
     }

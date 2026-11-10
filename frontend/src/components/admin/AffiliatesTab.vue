@@ -24,7 +24,7 @@ import EmptyState from '@/components/common/ui/EmptyState.vue'
 import AffiliateFormTab from './AffiliateFormTab.vue'
 import { useAffiliatesStore } from '@/stores/affiliates'
 import { assetUrl } from '@/lib/assets'
-import type { Affiliate } from '@/types/api'
+import type { Affiliate } from '@/api/client'
 
 const store = useAffiliatesStore()
 
@@ -180,7 +180,7 @@ async function submitWebhook(): Promise<void> {
               </span>
               <span
                 class="list-row-swatch"
-                :style="{ background: a.embed_color || '#ff3131' }"
+                :style="{ background: a.embedColor || '#ff3131' }"
                 aria-hidden="true"
               ></span>
               <img
@@ -208,11 +208,11 @@ async function submitWebhook(): Promise<void> {
               <font-awesome-icon :icon="['fad', 'location-dot']" /> {{ a.location }}
             </p>
             <p
-              v-if="a.discord_link || a.carrd_link || a.hours.length"
+              v-if="a.discordLink || a.carrdLink || a.hours.length"
               class="list-row-meta list-row-meta--inline"
             >
-              <span v-if="a.discord_link" class="badge badge--accent">Discord</span>
-              <span v-if="a.carrd_link" class="badge badge--muted">Carrd</span>
+              <span v-if="a.discordLink" class="badge badge--accent">Discord</span>
+              <span v-if="a.carrdLink" class="badge badge--muted">Carrd</span>
               <span v-if="a.hours.length" class="badge badge--muted">
                 {{ a.hours.length }} open time{{ a.hours.length === 1 ? '' : 's' }}
               </span>

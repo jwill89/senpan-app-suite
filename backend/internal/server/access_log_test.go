@@ -69,7 +69,7 @@ func TestAccessLog_CanceledRequestIsNotAnError(t *testing.T) {
 	env := newTestEnv(t)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel() // the client has already given up
-	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/raffles", nil)
+	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/stamp-signup", nil)
 	rec := httptest.NewRecorder()
 	env.srv.ServeHTTP(rec, req)
 
@@ -80,7 +80,7 @@ func TestAccessLog_CanceledRequestIsNotAnError(t *testing.T) {
 	if strings.Contains(out, `"level":"ERROR"`) {
 		t.Errorf("a canceled request was logged at ERROR:\n%s", out)
 	}
-	if !strings.Contains(out, `"canceled":true`) || !strings.Contains(out, `"path":"/api/raffles"`) {
+	if !strings.Contains(out, `"canceled":true`) || !strings.Contains(out, `"path":"/api/stamp-signup"`) {
 		t.Errorf("want the request recorded and marked canceled; got:\n%s", out)
 	}
 }

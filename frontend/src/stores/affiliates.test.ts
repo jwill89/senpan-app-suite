@@ -1,29 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import type { Affiliate } from '@/types/api'
+import type { Affiliate } from '@/api/client'
 
-// Mock the typed endpoint layer so store actions run without the network.
-const ep = vi.hoisted(() => ({
-  list: vi.fn(async () => ({ affiliates: [] as Affiliate[], webhook_url: '' })),
-  create: vi.fn(async () => ({ ok: true })),
-  update: vi.fn(async () => ({ ok: true })),
-  del: vi.fn(async () => ({ ok: true })),
-  reorder: vi.fn(async () => ({ ok: true })),
-  post: vi.fn(async () => ({ ok: true })),
-  setWebhook: vi.fn(async (url: string) => ({ webhook_url: url })),
-}))
-vi.mock('@/lib/endpoints', () => ({
-  endpoints: {
-    affiliates: {
-      list: ep.list,
-      create: ep.create,
-      update: ep.update,
-      delete: ep.del,
-      reorder: ep.reorder,
-      post: ep.post,
-      setWebhook: ep.setWebhook,
-    },
-  },
+// The store calls the API client; only its calls are faked (unwrap is the real
+// one). Each fake answers a call's `{ data, error, response }`.
+const ok = (data: unknown, status = 200) => ({ data, response: new Response(null, { status }) })
+const api = vi.hoisted(() => ({ GET: vi.fn(), POST: vi.fn(), PUT: vi.fn(), DELETE: vi.fn() }))
+vi.mock('@/api/client', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  api,
 }))
 
 import { useAffiliatesStore } from './affiliates'
@@ -42,26 +27,41 @@ function affiliate(over: Partial<Affiliate> = {}): Affiliate {
     details: '',
     logo: '',
     screenshot: '',
-    embed_color: '',
-    discord_link: '',
-    carrd_link: '',
-    sort_order: 0,
-    created_at: '',
+    embedColor: '',
+    discordLink: '',
+    carrdLink: '',
+    sortOrder: 0,
+    createdAt: '2026-11-09T10:00:00Z',
     ...over,
   }
 }
 
+const hook = (webhookUrl = '') => ok({ webhookUrl })
+
 beforeEach(() => {
   setActivePinia(createPinia())
-  Object.values(ep).forEach((fn) => fn.mockClear())
+  Object.values(api).forEach((fn) => fn.mockReset())
+  api.GET.mockImplementation(async (path: string) =>
+    path === '/affiliates' ? ok({ affiliates: [] }) : hook(),
+  )
+  api.POST.mockResolvedValue(ok({}, 201))
+  api.PUT.mockResolvedValue(ok({}))
+  api.DELETE.mockResolvedValue(ok(undefined, 204))
 })
+
+/** The body of the call made to a method and path. */
+function sent(method: 'POST' | 'PUT', path: string): { body: Record<string, unknown> } {
+  const call = api[method].mock.calls.find((c) => c[0] === path)
+  return call![1]
+}
 
 describe('loading', () => {
   it('loadAffiliates populates the list and the shared webhook', async () => {
-    ep.list.mockResolvedValueOnce({
-      affiliates: [affiliate(), affiliate({ id: 2 })],
-      webhook_url: 'https://discord.com/api/webhooks/1/x',
-    })
+    api.GET.mockImplementation(async (path: string) =>
+      path === '/affiliates'
+        ? ok({ affiliates: [affiliate(), affiliate({ id: 2 })] })
+        : hook('https://discord.com/api/webhooks/1/x'),
+    )
     const s = useAffiliatesStore()
     await s.loadAffiliates()
     expect(s.affiliates).toHaveLength(2)
@@ -118,7 +118,7 @@ describe('saveAffiliate', () => {
     s.newAffiliateForm() // name is blank
     const ok = await s.saveAffiliate()
     expect(ok).toBe(false)
-    expect(ep.create).not.toHaveBeenCalled()
+    expect(api.POST).not.toHaveBeenCalled()
     expect(ui.notify).toHaveBeenCalled()
   })
 
@@ -131,7 +131,7 @@ describe('saveAffiliate', () => {
     s.affiliateForm!.owners = [{ value: '  ' }] // blanks only
     const ok = await s.saveAffiliate()
     expect(ok).toBe(false)
-    expect(ep.create).not.toHaveBeenCalled()
+    expect(api.POST).not.toHaveBeenCalled()
   })
 
   it('creates with blank owners/hours stripped', async () => {
@@ -145,11 +145,8 @@ describe('saveAffiliate', () => {
     ]
     const ok = await s.saveAffiliate()
     expect(ok).toBe(true)
-    expect(ep.create).toHaveBeenCalledTimes(1)
-    const payload = (ep.create.mock.calls[0] as unknown[])[0] as {
-      owners: string[]
-      hours: unknown[]
-    }
+    expect(api.POST).toHaveBeenCalledTimes(1)
+    const payload = sent('POST', '/affiliates').body as { owners: string[]; hours: unknown[] }
     expect(payload.owners).toEqual(['Tataru', 'Hildibrand'])
     expect(payload.hours).toHaveLength(1)
     expect(s.affiliateForm).toBeNull()
@@ -160,10 +157,11 @@ describe('saveAffiliate', () => {
     s.editAffiliateForm(affiliate({ id: 4, name: 'Tavern', owners: ['Solo'] }))
     const ok = await s.saveAffiliate()
     expect(ok).toBe(true)
-    expect(ep.update).toHaveBeenCalledTimes(1)
-    // PUT /api/affiliates/{id}: the id is passed separately from the payload.
-    expect((ep.update.mock.calls[0] as unknown[])[0]).toBe(4)
-    expect(ep.create).not.toHaveBeenCalled()
+    expect(api.PUT).toHaveBeenCalledWith(
+      '/affiliates/{id}',
+      expect.objectContaining({ params: { path: { id: 4 } } }),
+    )
+    expect(api.POST).not.toHaveBeenCalled()
   })
 })
 
@@ -174,7 +172,7 @@ describe('deleteAffiliate', () => {
     const s = useAffiliatesStore()
     s.affiliates = [affiliate({ id: 1 })]
     await s.deleteAffiliate(1)
-    expect(ep.del).not.toHaveBeenCalled()
+    expect(api.DELETE).not.toHaveBeenCalled()
     expect(s.affiliates).toHaveLength(1)
   })
 
@@ -184,7 +182,7 @@ describe('deleteAffiliate', () => {
     const s = useAffiliatesStore()
     s.affiliates = [affiliate({ id: 1 }), affiliate({ id: 2 })]
     await s.deleteAffiliate(1)
-    expect(ep.del).toHaveBeenCalledWith(1)
+    expect(api.DELETE).toHaveBeenCalledWith('/affiliates/{id}', { params: { path: { id: 1 } } })
     expect(s.affiliates.map((a) => a.id)).toEqual([2])
   })
 })
@@ -193,24 +191,29 @@ describe('reorder / webhook / post', () => {
   it('reorder persists the new id order', async () => {
     const s = useAffiliatesStore()
     await s.reorder([3, 1, 2])
-    expect(ep.reorder).toHaveBeenCalledWith([3, 1, 2])
+    expect(api.POST).toHaveBeenCalledWith('/affiliates/reorder', {
+      body: { orderedIds: [3, 1, 2] },
+    })
   })
 
   it('reorder reverts (reloads) on failure', async () => {
     const ui = useUiStore()
     ui.notify = vi.fn()
-    ep.reorder.mockRejectedValueOnce(new Error('nope'))
+    api.POST.mockRejectedValueOnce(new Error('nope'))
     const s = useAffiliatesStore()
     await s.reorder([1])
-    expect(ep.list).toHaveBeenCalled() // reload to revert
+    expect(api.GET).toHaveBeenCalledWith('/affiliates') // reload to revert
     expect(ui.notify).toHaveBeenCalled()
   })
 
   it('saveWebhook stores the trimmed url', async () => {
+    api.PUT.mockResolvedValue(hook('https://discord.com/api/webhooks/1/x'))
     const s = useAffiliatesStore()
     const ok = await s.saveWebhook('  https://discord.com/api/webhooks/1/x  ')
     expect(ok).toBe(true)
-    expect(ep.setWebhook).toHaveBeenCalledWith('https://discord.com/api/webhooks/1/x')
+    expect(api.PUT).toHaveBeenCalledWith('/affiliates/webhook', {
+      body: { webhookUrl: 'https://discord.com/api/webhooks/1/x' },
+    })
     expect(s.webhookUrl).toBe('https://discord.com/api/webhooks/1/x')
   })
 
@@ -220,7 +223,7 @@ describe('reorder / webhook / post', () => {
     const s = useAffiliatesStore()
     s.webhookUrl = ''
     await s.postAffiliate(affiliate({ id: 5 }))
-    expect(ep.post).not.toHaveBeenCalled()
+    expect(api.POST).not.toHaveBeenCalled()
     expect(ui.notify).toHaveBeenCalled()
   })
 
@@ -230,6 +233,8 @@ describe('reorder / webhook / post', () => {
     const s = useAffiliatesStore()
     s.webhookUrl = 'https://discord.com/api/webhooks/1/x'
     await s.postAffiliate(affiliate({ id: 5 }))
-    expect(ep.post).toHaveBeenCalledWith(5)
+    expect(api.POST).toHaveBeenCalledWith('/affiliates/{id}/post', {
+      params: { path: { id: 5 } },
+    })
   })
 })

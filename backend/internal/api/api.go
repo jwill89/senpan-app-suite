@@ -11,6 +11,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"reflect"
@@ -22,7 +23,9 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humago"
 
+	"app-suite/internal/anilist"
 	"app-suite/internal/db"
+	"app-suite/internal/discord"
 	"app-suite/internal/game"
 	"app-suite/internal/live"
 	"app-suite/internal/model"
@@ -64,6 +67,9 @@ type Deps struct {
 	SignInLimit, RegisterLimit, PasskeyLimit Limiter
 	// CardRequestLimit counts every personal card request, by client address.
 	CardRequestLimit Limiter
+	// RaffleEntryLimit counts every public raffle sign-up and RaffleLookupLimit every
+	// public entry search, each by client address.
+	RaffleEntryLimit, RaffleLookupLimit Limiter
 	// Game is the bingo game: its state, its commands, and the live events each one
 	// publishes.
 	Game *game.Service
@@ -73,6 +79,14 @@ type Deps struct {
 	// Turnstile reports whether a Cloudflare Turnstile response passes, or true when
 	// the check is off.
 	Turnstile func(ctx context.Context, response, ip string) bool
+	// Discord posts to Discord webhooks.
+	Discord *discord.Sender
+	// AniList looks titles up for the book clubs.
+	AniList *anilist.Client
+	// RemoveUnusedCovers deletes, from among the book-club cover urls, the uploaded
+	// files no reading-list item uses any more. It is called after the rows that held
+	// them are gone.
+	RemoveUnusedCovers func(ctx context.Context, urls ...string)
 }
 
 // Limiter counts attempts by key (a client address) within a window.
@@ -154,10 +168,15 @@ func New(mux *http.ServeMux, d Deps) huma.API {
 	h.registerUsers(api)
 	h.registerPatterns(api)
 	h.registerPresets(api)
+	h.registerTeaRooms(api)
+	h.registerAffiliates(api)
+	h.registerAnnouncements(api)
+	h.registerBookClubs(api)
 	h.registerWinners(api)
 	h.registerCards(api)
 	h.registerGame(api)
 	h.registerBoard(api)
+	h.registerRaffles(api)
 	h.registerLive(api)
 	return api
 }
@@ -246,9 +265,15 @@ func (h handlers) begin(ctx context.Context) (*sql.Tx, *db.Queries, error) {
 }
 
 // fail logs an unexpected error once, here, and answers a generic 500: its message
-// never reaches the client, so it can't leak a query, a path or a stack.
+// never reaches the client, so it can't leak a query, a path or a stack. A query
+// cancelled because its client went away is not a fault of the server's, so it is
+// logged at Debug.
 func (h handlers) fail(where string, err error) error {
-	h.Logger.Error("request failed", "where", where, "error", err)
+	level := slog.LevelError
+	if errors.Is(err, context.Canceled) || store.Interrupted(err) {
+		level = slog.LevelDebug
+	}
+	h.Logger.Log(context.Background(), level, "request failed", "where", where, "error", err)
 	return huma.Error500InternalServerError("Something went wrong on the server.")
 }
 

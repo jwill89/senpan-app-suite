@@ -54,7 +54,7 @@ function cancel(): void {
           help="Unique - this is the public key the Carrd site and public API look the room up by."
         >
           <input
-            v-model="store.teaRoomForm.room_number"
+            v-model="store.teaRoomForm.roomNumber"
             placeholder="e.g. 12"
             aria-label="Room number"
           />
@@ -74,7 +74,7 @@ function cancel(): void {
         </FormField>
         <FormField label="Room owner" help="The character who owns the room.">
           <input
-            v-model="store.teaRoomForm.room_owner"
+            v-model="store.teaRoomForm.roomOwner"
             placeholder="e.g. Firstname Lastname"
             aria-label="Room owner"
           />
@@ -88,7 +88,7 @@ function cancel(): void {
           help="Whole gil. When a room is discounted the embed shows this halved (50% off)."
         >
           <input
-            v-model.number="store.teaRoomForm.cost_per_half_hour"
+            v-model.number="store.teaRoomForm.costPerHalfHour"
             type="number"
             min="0"
             step="1000"
@@ -171,7 +171,7 @@ function cancel(): void {
         help="When the lock lifts on its own. Leave empty to keep the room locked until someone unlocks it."
       >
         <input
-          v-model="store.teaRoomForm.locked_until"
+          v-model="store.teaRoomForm.lockedUntil"
           type="datetime-local"
           aria-label="Unlock at"
         />
@@ -192,7 +192,7 @@ function cancel(): void {
           type="button"
           class="btn-confirm"
           :disabled="
-            !store.teaRoomForm.name.trim() || !store.teaRoomForm.room_number.trim() || store.saving
+            !store.teaRoomForm.name.trim() || !store.teaRoomForm.roomNumber.trim() || store.saving
           "
           @click="save"
         >

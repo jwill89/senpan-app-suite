@@ -40,11 +40,50 @@ operations, a path or method the API doesn't have (404, or 405 with `Allow`), an
 crash (a generic 500). The routes still registered by hand answer
 `{ "error": "message" }` until they move.
 
+A failed validation is a 422, each field named in `errors`; a state conflict is a 409
+(a raffle that is closed, a winner changed by another console, a tea-room number taken,
+a type still used by announcements); an unknown or hidden item is a 404.
+
+### Posting to Discord
+
+An operation that posts to Discord (`post-affiliate`, `post-tea-room`,
+`send-announcement`, `publish-reading-list`) declares the same three errors, and never
+answers 502:
+
+| Status | When |
+|---|---|
+| 429 | Discord is rate-limiting; `Retry-After` says when to try again |
+| 503 | Discord can't be reached, or didn't answer after the post may have gone out (the detail then says to check the channel before trying again) |
+| 500 | The webhook isn't set, or Discord refused the post (a deleted webhook, a bad token); the detail carries Discord's message |
+
+Publishing a reading list is a 409 when it has no items and a 408 when the request is
+cancelled; when a post fails part-way, the detail says how far it got ("Posted N of M,
+then: ..."). The AniList lookup (`look-up-title`) fails the same way: 503, 429 or 500.
+
+A Discord webhook is read and set through its own page: `GET`/`PUT /affiliates/webhook`,
+`/tea-rooms/webhook` and `/book-clubs/{club}/webhook` (`{ webhookUrl }`, empty for
+none), guarded by that page. An announcement type carries its own `webhookUrl`.
+
 ## Caching
 
 An answer is `Cache-Control: private, no-store`, except a public read (the same for
 everyone), which is `no-cache` with an `ETag`; a request that already holds that ETag
-gets `304 Not Modified` with no body.
+gets `304 Not Modified` with no body. The public reads are the two public tea-room ones.
+
+### The public tea-room API
+
+`GET /api/v1/tea-rooms/public` answers `{ teaRooms: [...] }` and
+`GET /api/v1/tea-rooms/public/{number}` the room itself (404 for an unknown number), for
+the Carrd pages that show live availability and pricing. Every field is camelCase, and
+no webhook is in it.
+
+A browser may read it cross-origin only from an origin on the `teaRoomOrigins` setting
+(System -> Settings). `Vary: Origin` is always sent; for an allowed origin the answer
+echoes it in `Access-Control-Allow-Origin` (never `*`, never with credentials). A
+`https://*.example.com` entry covers every subdomain of `example.com`, not the apex.
+The preflight is answered for an allowed origin (`GET`, the `If-None-Match` header,
+`Access-Control-Max-Age` 600). Migration 74 seeds `https://senpan.cafe` and
+`https://*.senpan.cafe`; saved empty, the list allows no cross-origin read.
 
 ## Authentication (orientation)
 
@@ -103,7 +142,7 @@ The hub filters every event by viewer. Admins hold every permission.
 | `card_deleted` | none; that board's stream then ends | that board |
 | `cards_changed` | none | holders of Cards |
 | `patterns_changed` | none | holders of Patterns |
-| `resource_changed` | `{ resource }` | holders of the page that shows the resource; `users` and `integrations` go to admins; `bookclub-<slug>` to that club's page |
+| `resource_changed` | `{ resource }` | holders of the page that shows the resource; `users` and `integrations` go to admins; `bookclub-<slug>` to that club's page. A write under `/raffles`, `/affiliates`, `/tea-rooms`, `/announcements`, `/announcement-types`, `/announcement-roles` or `/book-clubs/{club}` sends it by itself; a public raffle sign-up sends `raffles`, the announcement scheduler sends `announcements` after a sweep that wrote, and the public raffle entry search sends nothing |
 | `settings_changed` | none | everyone |
 | `theme_changed` | `{ styleId }`, `null` when the site went back to the default look | everyone |
 | `tea_room_unlocked` | `{ id, name, roomNumber }` | Tea Rooms staff |

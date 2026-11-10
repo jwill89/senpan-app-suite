@@ -2,227 +2,308 @@ package server_test
 
 import (
 	"fmt"
+	"io"
 	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync/atomic"
 	"testing"
 )
 
-// -- Affiliates admin CRUD ---------------------------------------------------
-
-func TestAffiliates_RequiresAuth(t *testing.T) {
-	env := newTestEnv(t)
-
-	if resp := env.get(t, "/api/affiliates"); resp.StatusCode != http.StatusUnauthorized {
-		t.Errorf("list status = %d; want 401", resp.StatusCode)
-		resp.Body.Close()
+// affiliateBody is a full affiliate save with the given name; extra overrides or
+// adds fields.
+func affiliateBody(name string, extra map[string]any) map[string]any {
+	body := map[string]any{
+		"name":        name,
+		"subtitle":    "",
+		"owners":      []string{"Tataru", "  ", "Hildibrand"}, // the blank one is dropped
+		"location":    "Ul'dah",
+		"timezone":    "America/New_York",
+		"hours":       []map[string]any{{"label": "Mon-Fri", "start": "18:00", "end": "23:00"}, {"label": "Closed row", "start": "  ", "end": ""}},
+		"details":     "Cozy.",
+		"logo":        "images/affiliate_logos/x.png",
+		"screenshot":  "images/affiliate_images/x.png",
+		"embedColor":  "",
+		"discordLink": "",
+		"carrdLink":   "",
 	}
-	resp := env.postJSON(t, "/api/affiliates", map[string]any{"action": "create", "name": "X"})
-	if resp.StatusCode != http.StatusUnauthorized {
-		t.Errorf("create status = %d; want 401", resp.StatusCode)
+	for k, v := range extra {
+		body[k] = v
 	}
-	resp.Body.Close()
+	return body
 }
 
-// createAffiliate posts a valid create and returns the new affiliate's id.
+// createAffiliate makes an affiliate and returns its id.
 func (e *testEnv) createAffiliate(t *testing.T, name string) int {
 	t.Helper()
-	resp := e.postJSON(t, "/api/affiliates", map[string]any{
-		"action":   "create",
-		"name":     name,
-		"owners":   []string{"Tataru", "  ", "Hildibrand"}, // blank dropped
-		"location": "Ul'dah",
-		"timezone": "America/New_York",
-		"hours": []map[string]any{
-			{"label": "Mon-Fri", "start": "18:00", "end": "23:00"},
-			{"label": "Closed row", "start": "  "}, // dropped (no start)
-		},
-		"details":    "Cozy.",
-		"logo":       "images/affiliate_logos/x.png",
-		"screenshot": "images/affiliate_images/x.png",
-	})
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("create affiliate status = %d; want 201", resp.StatusCode)
-	}
-	a := decodeBody(t, resp)["affiliate"].(map[string]any)
-	return int(a["id"].(float64))
+	var made map[string]any
+	decodeInto(t, e.postJSON(t, "/api/v1/affiliates", affiliateBody(name, nil)), http.StatusCreated, &made)
+	return int(made["id"].(float64))
 }
 
-func TestAffiliates_CreateListAndSanitize(t *testing.T) {
+// affiliateIDs is the ids of the listed affiliates, in order.
+func affiliateIDs(t *testing.T, e *testEnv) []int {
+	t.Helper()
+	var list struct {
+		Affiliates []map[string]any `json:"affiliates"`
+	}
+	decodeInto(t, e.get(t, "/api/v1/affiliates"), http.StatusOK, &list)
+	ids := []int{}
+	for _, a := range list.Affiliates {
+		ids = append(ids, int(a["id"].(float64)))
+	}
+	return ids
+}
+
+// The list needs any one of the three pages that name an operator; nobody gets 401,
+// anyone else 403; every other operation needs the Affiliates page.
+func TestAffiliatesGuard(t *testing.T) {
+	env := newTestEnv(t)
+	if got := status(env.get(t, "/api/v1/affiliates")); got != http.StatusUnauthorized {
+		t.Errorf("signed out: %d, want 401", got)
+	}
+	if got := status(env.postJSON(t, "/api/v1/affiliates", affiliateBody("X", nil))); got != http.StatusUnauthorized {
+		t.Errorf("a create signed out: %d, want 401", got)
+	}
+
+	addAccount(t, env, "other", "correct horse battery", []string{"bingo-cards"})
+	env.signIn(t, "other", "correct horse battery")
+	if got := status(env.get(t, "/api/v1/affiliates")); got != http.StatusForbidden {
+		t.Errorf("without a page: %d, want 403", got)
+	}
+
+	for _, page := range []string{"teahouse-affiliates", "festival-map", "festival-stamp-rally"} {
+		name := "reader-" + page
+		addAccount(t, env, name, "correct horse battery", []string{page})
+		env.signIn(t, name, "correct horse battery")
+		if got := status(env.get(t, "/api/v1/affiliates")); got != http.StatusOK {
+			t.Errorf("list with %s: %d, want 200", page, got)
+		}
+		wantWrite := http.StatusForbidden
+		if page == "teahouse-affiliates" {
+			wantWrite = http.StatusCreated
+		}
+		if got := status(env.postJSON(t, "/api/v1/affiliates", affiliateBody("By "+page, nil))); got != wantWrite {
+			t.Errorf("create with %s: %d, want %d", page, got, wantWrite)
+		}
+	}
+}
+
+// An affiliate is made (201, in full, with blank owners and start-less hours
+// dropped), listed, replaced, and deleted (204, then 404).
+func TestAffiliatesLifecycle(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 
-	env.createAffiliate(t, "The Tipsy Moogle")
+	var made map[string]any
+	decodeInto(t, env.postJSON(t, "/api/v1/affiliates", affiliateBody(" The Tipsy Moogle ", nil)), http.StatusCreated, &made)
+	if made["name"] != "The Tipsy Moogle" || len(made["owners"].([]any)) != 2 || len(made["hours"].([]any)) != 1 ||
+		made["createdAt"] == nil || made["sortOrder"] != float64(0) {
+		t.Errorf("made: %v", made)
+	}
+	id := int(made["id"].(float64))
+	path := fmt.Sprintf("/api/v1/affiliates/%d", id)
 
-	list := decodeBody(t, env.get(t, "/api/affiliates"))["affiliates"].([]any)
-	if len(list) != 1 {
-		t.Fatalf("expected 1 affiliate, got %d", len(list))
+	var saved map[string]any
+	decodeInto(t, env.putJSON(t, path, affiliateBody("Renamed", map[string]any{"owners": []string{"Solo"}})), http.StatusOK, &saved)
+	if saved["name"] != "Renamed" || len(saved["owners"].([]any)) != 1 || saved["id"] != made["id"] {
+		t.Errorf("replaced: %v", saved)
 	}
-	a := list[0].(map[string]any)
-	// Blank owner + the start-less hours row are sanitized away.
-	owners := a["owners"].([]any)
-	if len(owners) != 2 {
-		t.Errorf("owners = %v; want 2 (blank dropped)", owners)
+	if got := status(env.putJSON(t, "/api/v1/affiliates/999999", affiliateBody("Lost", nil))); got != http.StatusNotFound {
+		t.Errorf("replacing an unknown affiliate: %d, want 404", got)
 	}
-	hours := a["hours"].([]any)
-	if len(hours) != 1 {
-		t.Errorf("hours = %v; want 1 (start-less row dropped)", hours)
+
+	if got := status(env.del(t, path)); got != http.StatusNoContent {
+		t.Fatalf("delete: %d, want 204", got)
+	}
+	if got := status(env.del(t, path)); got != http.StatusNotFound {
+		t.Errorf("deleting it again: %d, want 404", got)
+	}
+	if ids := affiliateIDs(t, env); len(ids) != 0 {
+		t.Errorf("affiliates after the delete: %v", ids)
 	}
 }
 
-func TestAffiliates_CreateValidation(t *testing.T) {
+// A blank name is a 422 on a create and a replace alike.
+func TestAffiliatesValidation(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
-
-	resp := env.postJSON(t, "/api/affiliates", map[string]any{"action": "create", "name": "  "})
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("missing name status = %d; want 400", resp.StatusCode)
-	}
-	resp.Body.Close()
-}
-
-func TestAffiliates_UpdateAndDelete(t *testing.T) {
-	env := newTestEnv(t)
-	env.loginAdmin(t)
-
 	id := env.createAffiliate(t, "Original")
 
-	// Update (PUT /api/affiliates/{id}).
-	resp := env.putJSON(t, fmt.Sprintf("/api/affiliates/%d", id), map[string]any{
-		"name": "Renamed", "owners": []string{"Solo"},
-	})
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("update status = %d; want 200", resp.StatusCode)
-	}
-	resp.Body.Close()
-
-	list := decodeBody(t, env.get(t, "/api/affiliates"))["affiliates"].([]any)
-	if list[0].(map[string]any)["name"] != "Renamed" {
-		t.Errorf("name = %v; want Renamed", list[0].(map[string]any)["name"])
-	}
-
-	// Delete (DELETE /api/affiliates/{id} -> 204).
-	resp = env.del(t, fmt.Sprintf("/api/affiliates/%d", id))
-	if resp.StatusCode != http.StatusNoContent {
-		t.Fatalf("delete status = %d; want 204", resp.StatusCode)
-	}
-	resp.Body.Close()
-
-	if list := decodeBody(t, env.get(t, "/api/affiliates"))["affiliates"].([]any); len(list) != 0 {
-		t.Errorf("expected affiliate deleted, got %d remaining", len(list))
+	for _, name := range []string{"", "   "} {
+		if got := status(env.postJSON(t, "/api/v1/affiliates", affiliateBody(name, nil))); got != http.StatusUnprocessableEntity {
+			t.Errorf("create named %q: %d, want 422", name, got)
+		}
+		if got := status(env.putJSON(t, fmt.Sprintf("/api/v1/affiliates/%d", id), affiliateBody(name, nil))); got != http.StatusUnprocessableEntity {
+			t.Errorf("replace named %q: %d, want 422", name, got)
+		}
 	}
 }
 
-func TestAffiliates_UpdateValidation(t *testing.T) {
+// A reorder answers the list as it is now; an empty list, a repeat and an unknown id
+// are each a 422.
+func TestAffiliatesReorder(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
+	a := env.createAffiliate(t, "Alpha")
+	b := env.createAffiliate(t, "Bravo")
+	c := env.createAffiliate(t, "Charlie")
 
-	id := env.createAffiliate(t, "Original")
-
-	// A blank name is rejected on update (PUT /api/affiliates/{id}).
-	resp := env.putJSON(t, fmt.Sprintf("/api/affiliates/%d", id),
-		map[string]any{"name": "  ", "owners": []string{"Solo"}})
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("update blank name status = %d; want 400", resp.StatusCode)
+	var list struct {
+		Affiliates []map[string]any `json:"affiliates"`
 	}
-	resp.Body.Close()
-}
-
-// TestAffiliates_PermissionGating verifies a non-admin account needs the
-// teahouse-affiliates page permission specifically: a different grant gets 403,
-// and granting teahouse-affiliates opens access. Permissions are toggled directly
-// via the store and read fresh on each request (currentUser reloads per request),
-// so a single logged-in staff session exercises both states.
-func TestAffiliates_PermissionGating(t *testing.T) {
-	env := newTestEnv(t)
-
-	// Grant an unrelated permission first -> still forbidden on affiliates.
-	staff := addAccount(t, env, "staff", "password123", []string{"bingo-cards"})
-	env.signIn(t, "staff", "password123")
-
-	if resp := env.get(t, "/api/affiliates"); resp.StatusCode != http.StatusForbidden {
-		t.Errorf("wrong-permission status = %d; want 403", resp.StatusCode)
-		resp.Body.Close()
+	decodeInto(t, env.postJSON(t, "/api/v1/affiliates/reorder", map[string]any{"orderedIds": []int{c, a, b}}), http.StatusOK, &list)
+	got := []int{}
+	for _, af := range list.Affiliates {
+		got = append(got, int(af["id"].(float64)))
 	}
-
-	// Grant teahouse-affiliates -> the next request reloads perms and is allowed.
-	setAccess(t, env, staff, []string{"teahouse-affiliates"})
-	if resp := env.get(t, "/api/affiliates"); resp.StatusCode != http.StatusOK {
-		t.Errorf("granted status = %d; want 200", resp.StatusCode)
-		resp.Body.Close()
-	}
-}
-
-// -- Reorder, webhook, and post-to-Discord -----------------------------------
-
-func TestAffiliates_Reorder(t *testing.T) {
-	env := newTestEnv(t)
-	env.loginAdmin(t)
-
-	// Three affiliates; all share sort_order 0, so they list alphabetically first.
-	idA := env.createAffiliate(t, "Alpha")
-	idB := env.createAffiliate(t, "Bravo")
-	idC := env.createAffiliate(t, "Charlie")
-
-	// Drag into C, A, B order.
-	resp := env.postJSON(t, "/api/affiliates/reorder", map[string]any{
-		"ordered_ids": []int{idC, idA, idB},
-	})
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("reorder status = %d; want 200", resp.StatusCode)
-	}
-	resp.Body.Close()
-
-	list := decodeBody(t, env.get(t, "/api/affiliates"))["affiliates"].([]any)
-	got := make([]int, 0, len(list))
-	for _, a := range list {
-		got = append(got, int(a.(map[string]any)["id"].(float64)))
-	}
-	want := []int{idC, idA, idB}
-	if fmt.Sprint(got) != fmt.Sprint(want) {
+	if want := []int{c, a, b}; fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Errorf("order after reorder = %v; want %v", got, want)
 	}
+	if ids := affiliateIDs(t, env); fmt.Sprint(ids) != fmt.Sprint([]int{c, a, b}) {
+		t.Errorf("listed order = %v", ids)
+	}
+
+	for name, body := range map[string]any{
+		"empty":   map[string]any{"orderedIds": []int{}},
+		"repeat":  map[string]any{"orderedIds": []int{a, a}},
+		"unknown": map[string]any{"orderedIds": []int{a, 999999}},
+	} {
+		if got := status(env.postJSON(t, "/api/v1/affiliates/reorder", body)); got != http.StatusUnprocessableEntity {
+			t.Errorf("%s: %d, want 422", name, got)
+		}
+	}
+	if ids := affiliateIDs(t, env); fmt.Sprint(ids) != fmt.Sprint([]int{c, a, b}) {
+		t.Errorf("a refused reorder changed the order: %v", ids)
+	}
 }
 
-func TestAffiliates_Webhook(t *testing.T) {
+// The webhook is saved (trimmed), read back, cleared, and refused when it isn't a
+// Discord webhook.
+func TestAffiliatesWebhook(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 
-	// A valid Discord webhook saves and comes back on the list response.
-	hook := "https://discord.com/api/webhooks/123/abc"
-	resp := env.putJSON(t, "/api/affiliates/webhook", map[string]any{"webhook_url": hook})
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("set webhook status = %d; want 200", resp.StatusCode)
-	}
-	resp.Body.Close()
-	if got := decodeBody(t, env.get(t, "/api/affiliates"))["webhook_url"]; got != hook {
-		t.Errorf("webhook_url = %v; want %q", got, hook)
+	var hook map[string]any
+	decodeInto(t, env.get(t, "/api/v1/affiliates/webhook"), http.StatusOK, &hook)
+	if hook["webhookUrl"] != "" {
+		t.Errorf("unset: %v", hook)
 	}
 
-	// A non-Discord URL is rejected.
-	resp = env.putJSON(t, "/api/affiliates/webhook", map[string]any{"webhook_url": "https://evil.example.com/x"})
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("bad webhook status = %d; want 400", resp.StatusCode)
+	const url = "https://discord.com/api/webhooks/123/abc"
+	decodeInto(t, env.putJSON(t, "/api/v1/affiliates/webhook", map[string]any{"webhookUrl": " " + url + " "}), http.StatusOK, &hook)
+	if hook["webhookUrl"] != url {
+		t.Errorf("saved: %v", hook)
 	}
-	resp.Body.Close()
+	decodeInto(t, env.get(t, "/api/v1/affiliates/webhook"), http.StatusOK, &hook)
+	if hook["webhookUrl"] != url {
+		t.Errorf("read back: %v", hook)
+	}
+
+	resp := env.putJSON(t, "/api/v1/affiliates/webhook", map[string]any{"webhookUrl": "https://evil.example.com/x"})
+	var problem struct {
+		Errors []struct {
+			Location string `json:"location"`
+		} `json:"errors"`
+	}
+	decodeInto(t, resp, http.StatusUnprocessableEntity, &problem)
+	if len(problem.Errors) != 1 || problem.Errors[0].Location != "body.webhookUrl" {
+		t.Errorf("problem: %+v", problem)
+	}
+	decodeInto(t, env.get(t, "/api/v1/affiliates/webhook"), http.StatusOK, &hook)
+	if hook["webhookUrl"] != url {
+		t.Errorf("a refused save changed the webhook: %v", hook)
+	}
+
+	decodeInto(t, env.putJSON(t, "/api/v1/affiliates/webhook", map[string]any{"webhookUrl": ""}), http.StatusOK, &hook)
+	if hook["webhookUrl"] != "" {
+		t.Errorf("cleared: %v", hook)
+	}
 }
 
-func TestAffiliates_Post(t *testing.T) {
+// useAffiliateWebhook points the affiliates' webhook at a test server that answers
+// with answer, and counts the posts it gets.
+func useAffiliateWebhook(t *testing.T, env *testEnv, answer http.HandlerFunc) *atomic.Int32 {
+	t.Helper()
+	var posts atomic.Int32
+	hook := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		posts.Add(1)
+		answer(w, r)
+	}))
+	t.Cleanup(hook.Close)
+	if err := env.store.SetSetting(t.Context(), "affiliate_webhook_url", hook.URL); err != nil {
+		t.Fatal(err)
+	}
+	return &posts
+}
+
+// Posting an affiliate answers it; a missing one is a 404 and no webhook a 500 that
+// never calls Discord.
+func TestAffiliatesPost(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 	id := env.createAffiliate(t, "Poster")
+	path := fmt.Sprintf("/api/v1/affiliates/%d/post", id)
 
-	// Posting with no webhook configured is a 400.
-	resp := env.postJSON(t, fmt.Sprintf("/api/affiliates/%d/post", id), map[string]any{})
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("post without webhook status = %d; want 400", resp.StatusCode)
+	var problem struct {
+		Detail string `json:"detail"`
 	}
-	resp.Body.Close()
+	decodeInto(t, env.postJSON(t, path, nil), http.StatusInternalServerError, &problem)
+	if !strings.Contains(problem.Detail, "No Discord webhook is set for the affiliates") {
+		t.Errorf("no webhook: %q", problem.Detail)
+	}
 
-	// Posting an unknown affiliate is a 404 (even with a webhook set).
-	env.putJSON(t, "/api/affiliates/webhook",
-		map[string]any{"webhook_url": "https://discord.com/api/webhooks/1/x"}).Body.Close()
-	resp = env.postJSON(t, "/api/affiliates/999999/post", map[string]any{})
-	if resp.StatusCode != http.StatusNotFound {
-		t.Fatalf("post unknown affiliate status = %d; want 404", resp.StatusCode)
+	var body string
+	posts := useAffiliateWebhook(t, env, func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		body = string(raw)
+		w.WriteHeader(http.StatusNoContent)
+	})
+	var posted map[string]any
+	decodeInto(t, env.postJSON(t, path, nil), http.StatusOK, &posted)
+	if posted["name"] != "Poster" || posts.Load() != 1 || !strings.Contains(body, "Poster") {
+		t.Errorf("posted: %v after %d posts, body %q", posted, posts.Load(), body)
 	}
-	resp.Body.Close()
+
+	if got := status(env.postJSON(t, "/api/v1/affiliates/999999/post", nil)); got != http.StatusNotFound {
+		t.Errorf("an unknown affiliate: %d, want 404", got)
+	}
+	if posts.Load() != 1 {
+		t.Errorf("an unknown affiliate posted anyway: %d posts", posts.Load())
+	}
+}
+
+// A post Discord refuses, limits or can't answer is a 500, 429 (with Retry-After) or
+// 503, never a 502.
+func TestAffiliatesPostDiscordFailures(t *testing.T) {
+	cases := []struct {
+		name      string
+		answer    http.HandlerFunc
+		want      int
+		wantRetry string
+	}{
+		{"refused", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNotFound) }, http.StatusInternalServerError, ""},
+		{"rate limited", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Retry-After", "3")
+			w.WriteHeader(http.StatusTooManyRequests)
+		}, http.StatusTooManyRequests, "3"},
+		{"Discord down", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusBadGateway) }, http.StatusServiceUnavailable, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			env := newTestEnv(t)
+			env.loginAdmin(t)
+			id := env.createAffiliate(t, "Poster")
+			useAffiliateWebhook(t, env, tc.answer)
+
+			resp := env.postJSON(t, fmt.Sprintf("/api/v1/affiliates/%d/post", id), nil)
+			defer resp.Body.Close()
+			if resp.StatusCode != tc.want {
+				t.Errorf("status = %d; want %d", resp.StatusCode, tc.want)
+			}
+			if got := resp.Header.Get("Retry-After"); got != tc.wantRetry {
+				t.Errorf("Retry-After = %q; want %q", got, tc.wantRetry)
+			}
+		})
+	}
 }

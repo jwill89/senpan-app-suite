@@ -12,7 +12,6 @@ const ep = vi.hoisted(() => ({
   setStatus: vi.fn(async () => ({ ok: true, status: 'published' })),
   publicList: vi.fn(async () => ({ maps: [] as PublicFestivalMapSummary[] })),
   publicDetail: vi.fn(async () => ({}) as PublicFestivalMap),
-  affiliates: vi.fn(async () => ({ affiliates: [] })),
 }))
 vi.mock('@/lib/endpoints', () => ({
   endpoints: {
@@ -26,7 +25,6 @@ vi.mock('@/lib/endpoints', () => ({
       publicList: ep.publicList,
       publicDetail: ep.publicDetail,
     },
-    affiliates: { list: ep.affiliates },
   },
 }))
 

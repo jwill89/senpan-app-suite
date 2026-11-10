@@ -38,7 +38,7 @@ import { detailPartCount } from '@/lib/announcementDetails'
 import { formatServerTimestamp } from '@/lib/datetime'
 import { supportedTimezones } from '@/lib/constants'
 import { nextUid } from '@/lib/uid'
-import type { Announcement, AnnouncementType, AnnouncementRole } from '@/types/api'
+import type { Announcement, AnnouncementType, AnnouncementRole } from '@/api/client'
 import { DISCORD_TIME_FORMATS } from '@/types/api'
 
 const store = useAnnouncementsStore()
@@ -82,15 +82,13 @@ const mentionOptions = computed(() => [
   ...store.roles.map((r) => ({ value: `role:${r.id}`, label: `Tag @${r.name}` })),
 ])
 
-const isRecurring = computed(() =>
-  ['daily', 'weekly', 'monthly'].includes(store.form.schedule_kind),
-)
+const isRecurring = computed(() => ['daily', 'weekly', 'monthly'].includes(store.form.scheduleKind))
 
 const typeName = (a: Announcement): string =>
-  a.type_name || store.types.find((t) => t.id === a.type_id)?.name || '-'
+  a.typeName || store.types.find((t) => t.id === a.typeId)?.name || '-'
 
 /** Format a stored UTC instant in the announcement's own timezone. */
-function inZone(iso: string, tz: string): string {
+function inZone(iso: string | null, tz: string): string {
   if (!iso) {
     return ''
   }
@@ -106,7 +104,7 @@ function inZone(iso: string, tz: string): string {
 }
 
 function scheduleLabel(a: Announcement): string {
-  switch (a.schedule_kind) {
+  switch (a.scheduleKind) {
     case 'once':
       return 'One-time'
     case 'daily':
@@ -170,7 +168,7 @@ const skipValueValid = computed(
 /** Opens the dialog seeded with what's already pending (or 1 for a fresh skip). */
 function openSkip(a: Announcement): void {
   skipTarget.value = a
-  skipValue.value = a.skip_count > 0 ? a.skip_count : 1
+  skipValue.value = a.skipCount > 0 ? a.skipCount : 1
 }
 
 async function submitSkip(): Promise<void> {
@@ -334,23 +332,23 @@ async function submitRole(): Promise<void> {
             <p class="text-sm text-muted list-row-meta">
               <font-awesome-icon :icon="['fad', 'folder-open']" /> {{ typeName(a) }}
             </p>
-            <p v-if="a.start_at" class="text-sm list-row-meta">
+            <p v-if="a.startAt" class="text-sm list-row-meta">
               <font-awesome-icon :icon="['fad', 'calendar-days']" />
-              {{ inZone(a.start_at, a.timezone) }}
-              <span v-if="a.end_at">- {{ inZone(a.end_at, a.timezone) }}</span>
+              {{ inZone(a.startAt, a.timezone) }}
+              <span v-if="a.endAt">- {{ inZone(a.endAt, a.timezone) }}</span>
               <span v-if="a.timezone" class="text-muted">({{ a.timezone }})</span>
             </p>
             <p class="text-sm list-row-meta">
-              <span v-if="a.schedule_kind" class="badge badge--accent announcement-badge">
+              <span v-if="a.scheduleKind" class="badge badge--accent announcement-badge">
                 {{ scheduleLabel(a) }}
-                <template v-if="a.next_post_at">
-                  - next {{ inZone(a.next_post_at, a.timezone) }}
+                <template v-if="a.nextPostAt">
+                  - next {{ inZone(a.nextPostAt, a.timezone) }}
                 </template>
               </span>
               <span v-else class="badge badge--muted announcement-badge">Manual only</span>
-              <span v-if="a.skip_count > 0" class="badge badge--warning announcement-badge"
+              <span v-if="a.skipCount > 0" class="badge badge--warning announcement-badge"
                 ><font-awesome-icon :icon="['fas', 'forward-step']" />
-                {{ a.skip_count === 1 ? 'next skipped' : `next ${a.skip_count} skipped` }}</span
+                {{ a.skipCount === 1 ? 'next skipped' : `next ${a.skipCount} skipped` }}</span
               >
             </p>
 
@@ -368,7 +366,7 @@ async function submitRole(): Promise<void> {
                 >
               </button>
               <button
-                v-if="a.schedule_kind && a.next_post_at"
+                v-if="a.scheduleKind && a.nextPostAt"
                 type="button"
                 class="btn-caution btn-sm"
                 :disabled="store.skippingId === a.id"
@@ -376,7 +374,7 @@ async function submitRole(): Promise<void> {
                 @click="openSkip(a)"
               >
                 <font-awesome-icon :icon="['fas', 'forward-step']" />
-                {{ a.skip_count > 0 ? 'Change skip' : 'Skip' }}
+                {{ a.skipCount > 0 ? 'Change skip' : 'Skip' }}
               </button>
               <button
                 type="button"
@@ -427,7 +425,7 @@ async function submitRole(): Promise<void> {
           />
         </FormField>
         <FormField label="Type" required style="flex: 1; min-width: 160px">
-          <select v-model.number="store.form.type_id" aria-label="Announcement type">
+          <select v-model.number="store.form.typeId" aria-label="Announcement type">
             <option :value="0" disabled>Select a type...</option>
             <option v-for="t in store.sortedTypes" :key="t.id" :value="t.id">{{ t.name }}</option>
           </select>
@@ -473,14 +471,14 @@ async function submitRole(): Promise<void> {
       <FormRow>
         <FormField label="Start (optional)">
           <input
-            v-model="store.form.start_local"
+            v-model="store.form.startLocal"
             type="datetime-local"
             aria-label="Start date and time"
           />
         </FormField>
         <FormField label="End (optional)">
           <input
-            v-model="store.form.end_local"
+            v-model="store.form.endLocal"
             type="datetime-local"
             aria-label="End date and time"
           />
@@ -488,34 +486,34 @@ async function submitRole(): Promise<void> {
       </FormRow>
 
       <FormField
-        v-if="store.form.start_local"
+        v-if="store.form.startLocal"
         label="Dynamic dates"
         help="For recurring day-of events: each time this announcement posts, the Start/End shift to the day it's sent, keeping the same time of day (and a next-day end stays next-day). The dates above define that time-of-day template - e.g. set the first occurrence's 10pm-1am and every post shows that day's 10pm-1am."
       >
         <label class="checkbox-inline">
-          <input v-model="store.form.dynamic_dates" type="checkbox" />
+          <input v-model="store.form.dynamicDates" type="checkbox" />
           Re-anchor the Start/End to the day each post is sent
         </label>
       </FormField>
 
-      <FormRow v-if="store.form.start_local || store.form.end_local">
+      <FormRow v-if="store.form.startLocal || store.form.endLocal">
         <FormField
-          v-if="store.form.start_local"
+          v-if="store.form.startLocal"
           label="Start format"
           help="How the start displays in Discord. Each viewer still sees their own time zone."
         >
-          <select v-model="store.form.start_format" aria-label="Discord start time format">
+          <select v-model="store.form.startFormat" aria-label="Discord start time format">
             <option v-for="fmt in DISCORD_TIME_FORMATS" :key="fmt.value" :value="fmt.value">
               {{ fmt.label }}
             </option>
           </select>
         </FormField>
         <FormField
-          v-if="store.form.end_local"
+          v-if="store.form.endLocal"
           label="End format"
           help="How the end displays in Discord. Each viewer still sees their own time zone."
         >
-          <select v-model="store.form.end_format" aria-label="Discord end time format">
+          <select v-model="store.form.endFormat" aria-label="Discord end time format">
             <option v-for="fmt in DISCORD_TIME_FORMATS" :key="fmt.value" :value="fmt.value">
               {{ fmt.label }}
             </option>
@@ -642,7 +640,7 @@ async function submitRole(): Promise<void> {
 
       <!-- Schedule builder -->
       <FormField label="Schedule">
-        <select v-model="store.form.schedule_kind" aria-label="Schedule kind">
+        <select v-model="store.form.scheduleKind" aria-label="Schedule kind">
           <option value="">Not scheduled (send manually)</option>
           <option value="once">One-time</option>
           <option value="daily">Daily</option>
@@ -651,16 +649,16 @@ async function submitRole(): Promise<void> {
         </select>
       </FormField>
 
-      <FormField v-if="store.form.schedule_kind === 'once'" label="Post at" required>
+      <FormField v-if="store.form.scheduleKind === 'once'" label="Post at" required>
         <input
-          v-model="store.form.once_local"
+          v-model="store.form.onceLocal"
           type="datetime-local"
           aria-label="One-time post date and time"
         />
       </FormField>
 
       <template v-else-if="isRecurring">
-        <FormField v-if="store.form.schedule_kind === 'weekly'" label="On these days" required>
+        <FormField v-if="store.form.scheduleKind === 'weekly'" label="On these days" required>
           <div class="toggle-group">
             <button
               v-for="(label, day) in WEEKDAYS"
@@ -675,9 +673,9 @@ async function submitRole(): Promise<void> {
           </div>
         </FormField>
 
-        <div v-if="store.form.schedule_kind === 'monthly'" class="flex-row mb-10">
+        <div v-if="store.form.scheduleKind === 'monthly'" class="flex-row mb-10">
           <FormField label="Week" required style="flex: 0 0 120px">
-            <select v-model.number="store.form.week_of_month" aria-label="Week of month">
+            <select v-model.number="store.form.weekOfMonth" aria-label="Week of month">
               <option v-for="w in WEEK_OF_MONTH" :key="w.value" :value="w.value">
                 {{ w.label }}
               </option>
@@ -697,7 +695,7 @@ async function submitRole(): Promise<void> {
 
         <FormField label="Time" required help="In the timezone selected above.">
           <input
-            v-model="store.form.time_local"
+            v-model="store.form.timeLocal"
             type="time"
             style="max-width: 160px"
             aria-label="Recurring post time"
@@ -736,7 +734,7 @@ async function submitRole(): Promise<void> {
         <ListRow v-for="t in store.sortedTypes" :key="t.id">
           <h4 class="list-row-title">{{ t.name }}</h4>
           <p class="text-sm text-muted">
-            <font-awesome-icon :icon="['fab', 'discord']" /> {{ maskWebhook(t.webhook_url) }}
+            <font-awesome-icon :icon="['fab', 'discord']" /> {{ maskWebhook(t.webhookUrl) }}
           </p>
           <template #actions>
             <button
@@ -781,7 +779,7 @@ async function submitRole(): Promise<void> {
         help="Announcements of this type post to this channel webhook."
       >
         <input
-          v-model="store.typeForm.webhook_url"
+          v-model="store.typeForm.webhookUrl"
           placeholder="https://discord.com/api/webhooks/..."
           aria-label="Discord webhook URL"
         />
@@ -817,7 +815,7 @@ async function submitRole(): Promise<void> {
         <ListRow v-for="r in store.roles" :key="r.id">
           <h4 class="list-row-title">{{ r.name }}</h4>
           <p class="text-sm text-muted">
-            <font-awesome-icon :icon="['fad', 'at']" /> {{ r.role_id }}
+            <font-awesome-icon :icon="['fad', 'at']" /> {{ r.roleId }}
           </p>
           <template #actions>
             <button
@@ -863,7 +861,7 @@ async function submitRole(): Promise<void> {
         help="The numeric role ID. In Discord: Settings -> Advanced -> Developer Mode, then right-click the role -> Copy Role ID."
       >
         <input
-          v-model="store.roleForm.role_id"
+          v-model="store.roleForm.roleId"
           placeholder="e.g. 123456789012345678"
           inputmode="numeric"
           aria-label="Discord role ID"
@@ -875,7 +873,7 @@ async function submitRole(): Promise<void> {
           type="button"
           class="btn-confirm"
           :disabled="
-            store.savingRole || !store.roleForm.name.trim() || !store.roleForm.role_id.trim()
+            store.savingRole || !store.roleForm.name.trim() || !store.roleForm.roleId.trim()
           "
           @click="submitRole()"
         >

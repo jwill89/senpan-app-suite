@@ -108,15 +108,10 @@ func TestGaraponDrawTellsItsPage(t *testing.T) {
 func TestRaffleEnterTellsItsPage(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
-	rid, err := env.store.CreateRaffle(t.Context(), &model.Raffle{Title: "Prize Raffle", MaxEntries: 10})
-	if err != nil {
-		t.Fatal(err)
-	}
+	rid := env.createRaffle(t, map[string]any{"maxEntries": 10})
 	s := staffStream(t, env, env.client)
 
-	decodeInto(t, env.postJSON(t, fmt.Sprintf("/api/raffles/%d/enter", rid), map[string]any{
-		"character_name": "Cloud", "world": "Gaia", "num_entries": 1,
-	}), http.StatusCreated, nil)
+	decodeInto(t, env.postJSON(t, fmt.Sprintf("/api/v1/raffles/%d/enter", rid), enterBody("Cloud", "Gaia", 1)), http.StatusCreated, nil)
 
 	if e := s.expect("resource_changed", 3*time.Second); e.str("resource") != "raffles" {
 		t.Errorf("resource_changed: %+v; want raffles", e)
@@ -131,7 +126,7 @@ func TestBookClubChangeTellsItsClub(t *testing.T) {
 	club := staffStream(t, env, yaoi)
 	other := staffStream(t, env, yuri)
 
-	if resp := env.postJSON(t, "/api/book-clubs/yaoi/reading-lists", map[string]any{"title": "Spring"}); status(resp) != http.StatusCreated {
+	if resp := env.postJSON(t, "/api/v1/book-clubs/yaoi/reading-lists", map[string]any{"title": "Spring"}); status(resp) != http.StatusCreated {
 		t.Fatalf("create a reading list: %d", resp.StatusCode)
 	}
 

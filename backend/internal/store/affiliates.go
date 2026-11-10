@@ -10,37 +10,12 @@ import (
 
 // -- Affiliates ---------------------------------------------------------------
 //
-// An affiliate is a partner establishment (see model.Affiliate). It's a single
-// table: owners and opening hours are stored as JSON arrays in the owners/hours
-// columns (mirroring reading_list_items.sources) rather than sub-tables, since
-// they're small, always loaded with the row, and edited as a set.
+// The affiliates' own API reads and writes through sqlc (internal/db); what stays
+// here is the one lookup the festival map's public card still uses.
 
-// affiliateColumns is the shared SELECT column list (order matches scanAffiliate).
+// affiliateColumns is the SELECT column list (order matches scanAffiliate).
 const affiliateColumns = `id, name, subtitle, owners, location, timezone, hours, details, logo, screenshot,
 	embed_color, discord_link, carrd_link, sort_order, created_at`
-
-// ListAffiliates returns every affiliate in the admin's manual drag order, then
-// alphabetically by name (so a fresh install / never-reordered list stays
-// alphabetical until dragged), each with its owners and hours decoded.
-func (s *Store) ListAffiliates(ctx context.Context) ([]model.Affiliate, error) {
-	rows, err := s.read.QueryContext(ctx,
-		`SELECT `+affiliateColumns+`
-		   FROM affiliates ORDER BY sort_order ASC, name COLLATE NOCASE ASC, id ASC`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	affiliates := make([]model.Affiliate, 0)
-	for rows.Next() {
-		a, err := scanAffiliate(rows)
-		if err != nil {
-			return nil, err
-		}
-		affiliates = append(affiliates, *a)
-	}
-	return affiliates, rows.Err()
-}
 
 // GetAffiliate retrieves a single affiliate by id. Returns nil if not found.
 func (s *Store) GetAffiliate(ctx context.Context, id int64) (*model.Affiliate, error) {
@@ -56,90 +31,8 @@ func (s *Store) GetAffiliate(ctx context.Context, id int64) (*model.Affiliate, e
 	return a, nil
 }
 
-// CreateAffiliate inserts a new affiliate and returns its ID. Owners and hours
-// are stored as JSON arrays.
-func (s *Store) CreateAffiliate(ctx context.Context, a *model.Affiliate) (int64, error) {
-	res, err := s.write.ExecContext(ctx,
-		`INSERT INTO affiliates
-		   (name, subtitle, owners, location, timezone, hours, details, logo, screenshot, embed_color, discord_link, carrd_link)
-		   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		a.Name, a.Subtitle, encodeStrings(a.Owners), a.Location, a.Timezone,
-		encodeHours(a.Hours), a.Details, a.Logo, a.Screenshot,
-		a.EmbedColor, a.DiscordLink, a.CarrdLink)
-	if err != nil {
-		return 0, err
-	}
-	return res.LastInsertId()
-}
-
-// UpdateAffiliate updates an affiliate's editable fields (everything but
-// id/created_at/sort_order - sort_order is managed by BulkReorderAffiliates, so an
-// edit must not reset the drag order).
-func (s *Store) UpdateAffiliate(ctx context.Context, a *model.Affiliate) error {
-	_, err := s.write.ExecContext(ctx,
-		`UPDATE affiliates SET name = ?, subtitle = ?, owners = ?, location = ?, timezone = ?,
-		   hours = ?, details = ?, logo = ?, screenshot = ?,
-		   embed_color = ?, discord_link = ?, carrd_link = ? WHERE id = ?`,
-		a.Name, a.Subtitle, encodeStrings(a.Owners), a.Location, a.Timezone,
-		encodeHours(a.Hours), a.Details, a.Logo, a.Screenshot,
-		a.EmbedColor, a.DiscordLink, a.CarrdLink, a.ID)
-	return err
-}
-
-// BulkReorderAffiliates rewrites sort_order to match the given id order (index 0 =
-// top), in a single transaction. Ids not present are left untouched.
-func (s *Store) BulkReorderAffiliates(ctx context.Context, ids []int64) error {
-	tx, err := s.beginImmediate(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }()
-	for i, id := range ids {
-		if _, err := tx.ExecContext(ctx, `UPDATE affiliates SET sort_order = ? WHERE id = ?`, i, id); err != nil {
-			return err
-		}
-	}
-	return tx.Commit()
-}
-
-// DeleteAffiliate removes an affiliate. Returns true if a row was deleted. The
-// logo/screenshot files live in centrally-managed image categories (System ->
-// Images), so they're intentionally left intact for reuse.
-func (s *Store) DeleteAffiliate(ctx context.Context, id int64) (bool, error) {
-	tx, err := s.beginImmediate(ctx)
-	if err != nil {
-		return false, err
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	// A festival pitch may name this affiliate and NOTHING else - a blank title
-	// with the identity carried entirely by the link, which the map editor allows
-	// on purpose. festival_stall_occupants.affiliate_id is ON DELETE SET NULL, so
-	// dropping the affiliate would leave that occupant with no identity at all -
-	// and the next save of the map, however unrelated, would sanitize the nameless
-	// occupant away and take the whole pitch with it (a pitch left with no
-	// occupants is dropped). Copy the name down first so the pitch keeps saying who
-	// was standing in it. COALESCE guards the no-such-affiliate case, where the
-	// subquery is NULL and title is NOT NULL.
-	if _, err := tx.ExecContext(ctx, `UPDATE festival_stall_occupants
-		SET title = COALESCE((SELECT name FROM affiliates WHERE id = ?), title)
-		WHERE affiliate_id = ? AND TRIM(title) = ''`, id, id); err != nil {
-		return false, err
-	}
-
-	res, err := tx.ExecContext(ctx, `DELETE FROM affiliates WHERE id = ?`, id)
-	if err != nil {
-		return false, err
-	}
-	n, _ := res.RowsAffected()
-	if err := tx.Commit(); err != nil {
-		return false, err
-	}
-	return n > 0, nil
-}
-
 // rowScanner is the shared interface of *sql.Row and *sql.Rows (just Scan), so a
-// single affiliate scan helper serves both the single-row Get and the list Query.
+// single scan helper serves both a single-row Get and a list Query.
 type rowScanner interface {
 	Scan(dest ...any) error
 }
@@ -153,14 +46,7 @@ func scanAffiliate(sc rowScanner) (*model.Affiliate, error) {
 		&a.EmbedColor, &a.DiscordLink, &a.CarrdLink, &a.SortOrder, &a.CreatedAt); err != nil {
 		return nil, err
 	}
-	a.Owners = decodeStrings(ownersJSON)
-	a.Hours = decodeHours(hoursJSON)
+	a.Owners = decodeJSONArray[string](ownersJSON)
+	a.Hours = decodeJSONArray[model.AffiliateHour](hoursJSON)
 	return &a, nil
 }
-
-// These wrap the shared generic JSON-array codecs (jsonarray.go), which always
-// produce a valid array (never "null") and never return nil.
-func encodeStrings(in []string) string               { return encodeJSONArray(in) }
-func decodeStrings(raw string) []string              { return decodeJSONArray[string](raw) }
-func encodeHours(hours []model.AffiliateHour) string { return encodeJSONArray(hours) }
-func decodeHours(raw string) []model.AffiliateHour   { return decodeJSONArray[model.AffiliateHour](raw) }

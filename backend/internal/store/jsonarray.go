@@ -28,3 +28,11 @@ func decodeJSONArray[T any](raw string) []T {
 	}
 	return out
 }
+
+// boolToInt maps a bool to SQLite's 0/1 integer representation.
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}

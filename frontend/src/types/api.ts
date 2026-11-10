@@ -15,14 +15,10 @@
 import type {
   // Domain types referenced by the form models below.
   Placement,
-  AnnouncementButton,
-  ReadingListSource,
 } from './api.generated'
 
 // -- Domain models (generated from the Go `model` package) --------------------
 export type {
-  Affiliate,
-  AffiliateHour,
   Placement,
   StampRally,
   StampRallyStamp,
@@ -34,20 +30,11 @@ export type {
   FestivalMap,
   FestivalStall,
   FestivalStallOccupant,
-  Announcement,
-  AnnouncementButton,
-  AnnouncementType,
-  AnnouncementRole,
   Raffle,
-  RaffleEntry,
   Garapon,
   GaraponPrize,
   GaraponPlayer,
   GaraponDraw,
-  TeaRoom,
-  ReadingList,
-  ReadingListItem,
-  ReadingListSource,
   LogEntry,
 } from './api.generated'
 
@@ -62,14 +49,7 @@ export type {
   PausedResponse,
   SkippedUpload,
   // Raffles
-  RafflesResponse,
-  RaffleResponse,
-  RaffleDetailResponse,
-  RaffleEnterResponse,
-  RaffleEntryResponse,
-  RaffleWinnerResponse,
   RaffleLookupEntry,
-  RaffleLookupResponse,
   // Garapons
   GaraponsResponse,
   GaraponResponse,
@@ -79,16 +59,6 @@ export type {
   GaraponPublicPlayer,
   GaraponPublicResponse,
   GaraponDrawResponse,
-  // Affiliates
-  AffiliatesResponse,
-  AffiliateResponse,
-  AffiliateWebhookResponse,
-  // Tea rooms
-  TeaRoomsResponse,
-  TeaRoomResponse,
-  TeaRoomWebhookResponse,
-  TeaRoomsPublicResponse,
-  TeaRoomPublicResponse,
   // Stamp rally
   StampRalliesResponse,
   StampRallyResponse,
@@ -132,20 +102,8 @@ export type {
   PublicEmaWindow,
   PublicEmaPlaque,
   GoogleFontsResponse,
-  // Book club / reading lists
-  ReadingListsResponse,
-  ReadingListDetailResponse,
-  ReadingListItemResponse,
+  // Book club cover upload
   BookclubUploadResponse,
-  BookclubLookupResponse,
-  PublishResponse,
-  // Announcements
-  AnnouncementTypesResponse,
-  AnnouncementTypeResponse,
-  AnnouncementRolesResponse,
-  AnnouncementRoleResponse,
-  AnnouncementsResponse,
-  AnnouncementResponse,
   // Fonts / Carrd / Images
   Font,
   FontVariant,
@@ -166,42 +124,6 @@ export type {
 } from './api.generated'
 
 // -- Form models (frontend-only) ----------------------------------------------
-
-/**
- * A reading-list source row in the item form. `_uid` is a client-only stable key
- * for the repeater (see lib/uid.ts); it's stripped before the payload is sent.
- */
-export interface ReadingListSourceForm extends ReadingListSource {
-  _uid?: number
-}
-
-// Form model for the admin reading-list item create/edit form.
-export interface ReadingListItemForm {
-  id: number
-  cover_image: string
-  title: string
-  summary: string
-  format: string
-  genres: string
-  tropes: string
-  chapters: string
-  comments: string
-  sources: ReadingListSourceForm[]
-}
-
-// Form model for the admin announcement-type create/edit form.
-export interface AnnouncementTypeForm {
-  id: number
-  name: string
-  webhook_url: string
-}
-
-// Form model for the admin taggable-role create/edit form.
-export interface AnnouncementRoleForm {
-  id: number
-  name: string
-  role_id: string
-}
 
 /**
  * Recurrence builder kinds for the schedule UI.
@@ -232,62 +154,11 @@ export const DISCORD_TIME_FORMATS: { value: DiscordTimeFormat; label: string }[]
 ]
 
 /**
- * A Discord button row in the announcement form. `_uid` is a client-only stable
- * key for the repeater (see lib/uid.ts); it's stripped when the payload is built.
- */
-export interface AnnouncementButtonForm extends AnnouncementButton {
-  _uid?: number
-}
-
-/**
- * Form model for the admin announcement create/edit form. Holds *local*
- * wall-clock strings + a friendly recurrence builder. `start_local`/`end_local`/
- * `once_local` are `datetime-local` values (converted to absolute UTC on save
- * via `lib/datetime.ts`); `time_local` is an "HH:mm" wall-clock time anchored to
- * `timezone` (an IANA name, so recurring times survive DST); `weekdays` are
- * weekday numbers (0=Sun..6=Sat) in that zone.
- */
-export interface AnnouncementForm {
-  id: number
-  type_id: number
-  title: string
-  details: string
-  image: string
-  /** Small top-right embed thumbnail URL (empty = none). Shares uploads with image. */
-  thumbnail: string
-  /** Embed accent colour as "#rrggbb" (empty falls back to the brand default). */
-  color: string
-  /** Optional free-text location (e.g. a Discord voice channel). */
-  location: string
-  start_local: string
-  end_local: string
-  /** Discord timestamp style for the start display (see DISCORD_TIME_FORMATS). */
-  start_format: DiscordTimeFormat
-  /** Discord timestamp style for the end display (see DISCORD_TIME_FORMATS). */
-  end_format: DiscordTimeFormat
-  /** Re-anchor start/end onto the day each post goes out (recurring day-of events). */
-  dynamic_dates: boolean
-  schedule_kind: ScheduleKind
-  timezone: string
-  once_local: string
-  time_local: string
-  weekdays: number[]
-  week_of_month: number
-  /** Optional Discord link buttons (max 5) rendered beneath the embed. */
-  buttons: AnnouncementButtonForm[]
-  /**
-   * Optional role tag posted above the embed: '' (don't tag), 'everyone'
-   * (@everyone), or 'role:<announcement_role_id>' (a managed taggable role).
-   */
-  mention: string
-}
-
-/**
  * How a raffle prices entries, and whether it takes sign-ups here at all.
- * Mirrors the backend's `RaffleMode*` constants (model/raffles.go).
+ * Mirrors the server's `raffles.Mode*` constants.
  *   'details' - published for reference; players sign up somewhere else.
- *   'single'  - every ticket costs `cost_per_entry` (the original behavior).
- *   'custom'  - the Nth ticket costs `tier_costs[N-1]`.
+ *   'single'  - every ticket costs `costPerEntry` (the original behavior).
+ *   'custom'  - the Nth ticket costs `tierCosts[N-1]`.
  */
 export type RaffleMode = 'details' | 'single' | 'custom'
 
@@ -310,29 +181,6 @@ export const RAFFLE_MODES: { value: RaffleMode; label: string; help: string }[] 
   },
 ]
 
-// Form model for the admin raffle create/edit form.
-export interface RaffleForm {
-  /** Optional Festival Map the raffle belongs to (null = not part of a festival). */
-  festival_map_id: number | null
-  /** Optional stall on that map - a pitch OCCUPANT id (null = not pinned). */
-  occupant_id: number | null
-  id: number
-  title: string
-  description: string
-  rules: string
-  max_entries: number
-  signup_instructions: string
-  entry_mode: RaffleMode
-  cost_per_entry: number
-  /** 'custom' mode: price of the 1st, 2nd, ... entry (its length sets max_entries). */
-  tier_costs: number[]
-  available_from: string
-  available_to: string
-  prize_image: string
-  /** "Where to Pay" screenshot, shown under the sign-up instructions. */
-  pay_image: string
-}
-
 // Form models for the admin garapon create/edit form. A prize row carries a name,
 // ball color (hex), an appearance-rate weight, and whether it's the grand prize.
 export interface GaraponPrizeForm {
@@ -354,72 +202,6 @@ export interface GaraponForm {
   /** Draws a link carries when nobody picks a number (public sign-up, or a blank admin field). */
   default_draws: number
   prizes: GaraponPrizeForm[]
-}
-
-// Form models for the admin affiliate create/edit form. The hours form mirrors
-// model.AffiliateHour; owners is a list of plain name strings.
-export interface AffiliateHourForm {
-  label: string
-  start: string
-  end: string
-  /** Client-only stable key for the hours repeater (see lib/uid.ts). */
-  _uid?: number
-}
-/**
- * An owner row in the affiliate form. Owners are plain name strings on the wire,
- * but the form wraps each in an object so the repeater can key on a stable
- * `_uid` (see lib/uid.ts) instead of the array index; the payload sends
- * `value`s only.
- */
-export interface AffiliateOwnerForm {
-  value: string
-  _uid?: number
-}
-export interface AffiliateForm {
-  id: number
-  name: string
-  /** Optional second line under the name - any script (e.g. a Japanese phrase). */
-  subtitle: string
-  owners: AffiliateOwnerForm[]
-  location: string
-  timezone: string
-  hours: AffiliateHourForm[]
-  details: string
-  logo: string
-  screenshot: string
-  /** Discord embed accent, "#rrggbb". */
-  embed_color: string
-  /** Optional Discord invite/link shown in the embed. */
-  discord_link: string
-  /** Optional Carrd (or other site) link shown in the embed. */
-  carrd_link: string
-}
-
-/**
- * Form model for the admin tea-room create/edit form. Mirrors the editable subset
- * of model.TeaRoom (the server owns id/sort_order/created_at). `cost_per_half_hour`
- * is whole gil; `color` is a "#rrggbb" embed accent; `image` is an absolute URL.
- */
-export interface TeaRoomForm {
-  id: number
-  name: string
-  subtitle: string
-  /** Optional informational owner - the character who owns the room. */
-  room_owner: string
-  room_number: string
-  cost_per_half_hour: number
-  hashtags: string
-  description: string
-  seasonal: boolean
-  open: boolean
-  lockable: boolean
-  discounted: boolean
-  /** Whether the room is locked right now (`lockable` is only whether it can be). */
-  locked: boolean
-  /** UTC RFC-3339 instant the lock lifts; '' = it stands until someone unlocks it. */
-  locked_until: string
-  image: string
-  color: string
 }
 
 /** A stamp rally stall's kind. Everything that predates types is a food stamp. */

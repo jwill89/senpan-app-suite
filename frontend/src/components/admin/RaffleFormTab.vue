@@ -37,7 +37,7 @@ onMounted(() => raffles.loadFormSources())
  * Stall select on. Read off the form rather than off the loaded stall list, which
  * is momentarily empty while a newly-picked map's stalls are fetched.
  */
-const linkedToMap = computed(() => raffles.raffleForm?.festival_map_id != null)
+const linkedToMap = computed(() => raffles.raffleForm?.festivalMapId != null)
 
 /** File the raffle under a festival map ('' -> not part of a festival). */
 function setFestivalMap(value: string): void {
@@ -47,28 +47,26 @@ function setFestivalMap(value: string): void {
 /** Pin the raffle to one stall on the linked map ('' -> not pinned). */
 function setOccupant(value: string): void {
   if (raffles.raffleForm) {
-    raffles.raffleForm.occupant_id = value ? Number(value) : null
+    raffles.raffleForm.occupantId = value ? Number(value) : null
   }
 }
 
-const mode = computed<RaffleMode>(() => raffles.raffleForm?.entry_mode ?? 'single')
+const mode = computed<RaffleMode>(() => raffles.raffleForm?.entryMode ?? 'single')
 
 /** Help text for the selected mode, shown under the picker. */
 const modeHelp = computed(() => RAFFLE_MODES.find((m) => m.value === mode.value)?.help ?? '')
 
 /** True once the ladder is as long as a player is allowed to buy. */
-const ladderFull = computed(
-  () => (raffles.raffleForm?.tier_costs.length ?? 0) >= RAFFLE_MAX_ENTRIES,
-)
+const ladderFull = computed(() => (raffles.raffleForm?.tierCosts.length ?? 0) >= RAFFLE_MAX_ENTRIES)
 
 /** Running total of the custom ladder - what buying every entry costs. */
 const tiersTotal = computed(() =>
-  (raffles.raffleForm?.tier_costs ?? []).reduce((sum, c) => sum + (Number.isFinite(c) ? c : 0), 0),
+  (raffles.raffleForm?.tierCosts ?? []).reduce((sum, c) => sum + (Number.isFinite(c) ? c : 0), 0),
 )
 
 function setMode(value: RaffleMode): void {
   if (raffles.raffleForm) {
-    raffles.raffleForm.entry_mode = value
+    raffles.raffleForm.entryMode = value
   }
 }
 
@@ -124,7 +122,7 @@ function cancel(): void {
         "
       >
         <MarkdownEditor
-          v-model="raffles.raffleForm.signup_instructions"
+          v-model="raffles.raffleForm.signupInstructions"
           min-height="120px"
           placeholder="Sign-up instructions (supports markdown)"
         />
@@ -133,7 +131,7 @@ function cancel(): void {
         label="Where to Pay"
         help="Usually a screenshot of where in the area to go to pay. Shown to players beneath the sign-up instructions."
       >
-        <ImagePicker v-model="raffles.raffleForm.pay_image" />
+        <ImagePicker v-model="raffles.raffleForm.payImage" />
       </FormField>
 
       <!-- Festival Map: files the raffle under a festival and, optionally, pins it
@@ -144,7 +142,7 @@ function cancel(): void {
           help="Optional. Files this raffle under a festival, the same way a stamp rally is."
         >
           <select
-            :value="raffles.raffleForm.festival_map_id ?? ''"
+            :value="raffles.raffleForm.festivalMapId ?? ''"
             aria-label="Linked festival map"
             @change="setFestivalMap(($event.target as HTMLSelectElement).value)"
           >
@@ -160,7 +158,7 @@ function cancel(): void {
           help="Optional. The stall running it - its panel on the map links here while the raffle is open and inside its dates."
         >
           <select
-            :value="raffles.raffleForm.occupant_id ?? ''"
+            :value="raffles.raffleForm.occupantId ?? ''"
             aria-label="Festival map stall"
             @change="setOccupant(($event.target as HTMLSelectElement).value)"
           >
@@ -192,7 +190,7 @@ function cancel(): void {
       <FormRow v-if="mode === 'single'">
         <FormField label="Max Entries Per Person" :help="`Up to ${RAFFLE_MAX_ENTRIES}.`">
           <input
-            v-model.number="raffles.raffleForm.max_entries"
+            v-model.number="raffles.raffleForm.maxEntries"
             type="number"
             min="1"
             :max="RAFFLE_MAX_ENTRIES"
@@ -201,10 +199,10 @@ function cancel(): void {
         </FormField>
         <FormField label="Cost Per Entry">
           <input
-            v-model.number="raffles.raffleForm.cost_per_entry"
+            v-model.number="raffles.raffleForm.costPerEntry"
             type="number"
             min="0"
-            step="any"
+            step="1"
             aria-label="Cost per entry"
           />
         </FormField>
@@ -217,20 +215,20 @@ function cancel(): void {
         :help="`One price per entry, in order. The number of rows is also the maximum a player may buy (up to ${RAFFLE_MAX_ENTRIES}).`"
       >
         <div class="stack">
-          <div v-for="(_, i) in raffles.raffleForm.tier_costs" :key="i" class="stack-row">
+          <div v-for="(_, i) in raffles.raffleForm.tierCosts" :key="i" class="stack-row">
             <span class="field-label" style="flex: 0 0 72px; margin: 0">Entry {{ i + 1 }}</span>
             <input
-              v-model.number="raffles.raffleForm.tier_costs[i]"
+              v-model.number="raffles.raffleForm.tierCosts[i]"
               type="number"
               min="0"
-              step="any"
+              step="1"
               style="flex: 1; min-width: 100px"
               :aria-label="`Cost of entry ${i + 1}`"
             />
             <button
               type="button"
               class="btn-danger btn-sm"
-              :disabled="raffles.raffleForm.tier_costs.length <= 1"
+              :disabled="raffles.raffleForm.tierCosts.length <= 1"
               :aria-label="`Remove entry ${i + 1}`"
               title="Remove this entry"
               @click="raffles.removeRaffleTier(i)"
@@ -250,7 +248,7 @@ function cancel(): void {
             <font-awesome-icon :icon="['fas', 'plus']" /> Add Entry Cost
           </button>
           <span class="text-sm text-muted">
-            All {{ raffles.raffleForm.tier_costs.length }} entries:
+            All {{ raffles.raffleForm.tierCosts.length }} entries:
             {{ tiersTotal.toLocaleString() }} gil
           </span>
         </div>
@@ -260,7 +258,7 @@ function cancel(): void {
            publishing, since staff record the entries by hand. -->
       <FormField v-else label="Max Entries Per Person" :help="`Up to ${RAFFLE_MAX_ENTRIES}.`">
         <input
-          v-model.number="raffles.raffleForm.max_entries"
+          v-model.number="raffles.raffleForm.maxEntries"
           type="number"
           min="1"
           :max="RAFFLE_MAX_ENTRIES"
@@ -271,14 +269,14 @@ function cancel(): void {
       <FormRow>
         <FormField label="Available From">
           <input
-            v-model="raffles.raffleForm.available_from"
+            v-model="raffles.raffleForm.availableFrom"
             type="datetime-local"
             aria-label="Available from"
           />
         </FormField>
         <FormField label="Available To">
           <input
-            v-model="raffles.raffleForm.available_to"
+            v-model="raffles.raffleForm.availableTo"
             type="datetime-local"
             aria-label="Available to"
           />
@@ -288,7 +286,7 @@ function cancel(): void {
         label="Prize Image"
         help="Pick from any image category. Upload new images on the System -> Images page."
       >
-        <ImagePicker v-model="raffles.raffleForm.prize_image" />
+        <ImagePicker v-model="raffles.raffleForm.prizeImage" />
       </FormField>
       <FormActions align="start">
         <button type="button" class="btn-neutral" :disabled="raffles.savingRaffle" @click="cancel">

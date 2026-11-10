@@ -22,6 +22,10 @@ const (
 	CustomCardCost          = "custom_card_cost"
 	HideBingo               = "hide_bingo"
 	HideCustomCards         = "hide_custom_cards"
+	// TeaRoomOrigins is the sites whose pages may read the public tea-room API from
+	// a browser: a JSON array of origins (internal/origins). It has no default, so
+	// saved empty it stays empty and no cross-origin read is allowed.
+	TeaRoomOrigins = "tea_room_origins"
 	// UpdatedAt is when the site settings were last saved, RFC 3339: a save made
 	// from an older copy is refused (409).
 	UpdatedAt = "settings_updated_at"

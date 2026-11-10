@@ -17,8 +17,10 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 
+	"app-suite/internal/anilist"
 	"app-suite/internal/api"
 	"app-suite/internal/auth"
+	"app-suite/internal/discord"
 	"app-suite/internal/game"
 	"app-suite/internal/live"
 	"app-suite/internal/model"
@@ -80,10 +82,12 @@ type Server struct {
 	emaLimiter *rateLimiter
 	// The Google Fonts family list, fetched with the server's own key (googlefonts.go).
 	googleFonts googleFontsCache
-	// Dev-safety valves for outbound Discord posts (see SetWebhookPolicy). Empty /
-	// false in production, where posts go to the webhook the feature configured.
-	webhookOverride string
-	webhookDryRun   bool
+	// discord sends every outbound Discord post. Its dev-safety valves (see
+	// SetWebhookPolicy) are off in production, where a post goes to the webhook the
+	// feature configured.
+	discord *discord.Sender
+	// anilist looks titles up for the book clubs.
+	anilist *anilist.Client
 	// Cloudflare Turnstile bot check on the admin login. Disabled (verification
 	// skipped) when turnstileSecret is empty - see SetTurnstile / turnstile.go.
 	turnstileSecret  string
@@ -142,8 +146,8 @@ func (s *Server) SetTurnstile(secret, siteKey string) {
 //
 // dryRun wins when both are set. Both are off in production.
 func (s *Server) SetWebhookPolicy(override string, dryRun bool) {
-	s.webhookOverride = strings.TrimSpace(override)
-	s.webhookDryRun = dryRun
+	s.discord.Override = strings.TrimSpace(override)
+	s.discord.DryRun = dryRun
 }
 
 // SetLogFile tells the admin log viewer (GET /api/logs) which rotating JSON log
@@ -182,6 +186,8 @@ func New(ctx context.Context, st *store.Store, hub *live.Hub, webRoot string, al
 
 	s := &Server{
 		store:          st,
+		discord:        &discord.Sender{},
+		anilist:        anilist.New(),
 		game:           game.New(st.ReadDB(), st.DB(), hub),
 		live:           hub,
 		sessions:       sm,
@@ -216,17 +222,22 @@ func New(ctx context.Context, st *store.Store, hub *live.Hub, webRoot string, al
 	// The operations already on huma (internal/api), on the same mux: they share its
 	// session, CSRF and access-log layers with the routes still registered by hand.
 	api.New(s.mux, api.Deps{
-		Store:            st,
-		Version:          version.Version,
-		Live:             hub,
-		TurnstileSiteKey: func() string { return s.turnstileSiteKey },
-		LogFile:          func() string { return s.logFile },
-		UploadedFonts:    s.uploadedFontRefs,
-		Sessions:         sm,
-		SignInLimit:      s.limiter,
-		RegisterLimit:    s.regLimiter,
-		PasskeyLimit:     s.passkeyBeginLimiter,
-		CardRequestLimit: s.cardReqLimiter,
+		Store:              st,
+		Discord:            s.discord,
+		AniList:            s.anilist,
+		RemoveUnusedCovers: s.removeUnusedCovers,
+		Version:            version.Version,
+		Live:               hub,
+		TurnstileSiteKey:   func() string { return s.turnstileSiteKey },
+		LogFile:            func() string { return s.logFile },
+		UploadedFonts:      s.uploadedFontRefs,
+		Sessions:           sm,
+		SignInLimit:        s.limiter,
+		RegisterLimit:      s.regLimiter,
+		PasskeyLimit:       s.passkeyBeginLimiter,
+		CardRequestLimit:   s.cardReqLimiter,
+		RaffleEntryLimit:   s.raffleLimiter,
+		RaffleLookupLimit:  s.raffleLookupLimiter,
 		Turnstile: func(ctx context.Context, response, ip string) bool {
 			return !s.turnstileEnabled() || s.verifyTurnstile(ctx, response, ip)
 		},
@@ -297,23 +308,6 @@ func (s *Server) withUserCache(next http.Handler) http.Handler {
 // routes registers all API endpoint handlers on the internal mux.
 // Uses Go 1.22+ method-pattern routing ("GET /api/..." syntax).
 func (s *Server) routes() {
-	// Raffles (resource-oriented: methods for CRUD, POST /{id}/{verb} for commands)
-	s.mux.HandleFunc("GET /api/raffles", s.handleRafflesList)
-	s.mux.HandleFunc("POST /api/raffles", s.handleRaffleCreate)
-	s.mux.HandleFunc("GET /api/raffles/{id}", s.handleRaffleDetail)
-	s.mux.HandleFunc("PUT /api/raffles/{id}", s.handleRaffleUpdate)
-	s.mux.HandleFunc("DELETE /api/raffles/{id}", s.handleRaffleDelete)
-	s.mux.HandleFunc("POST /api/raffles/{id}/enter", s.handleRaffleEnter)        // public sign-up
-	s.mux.HandleFunc("POST /api/raffles/{id}/lookup", s.handleRaffleEntryLookup) // public "have I entered?"
-	s.mux.HandleFunc("POST /api/raffles/{id}/close", s.handleRaffleClose)
-	s.mux.HandleFunc("POST /api/raffles/{id}/reopen", s.handleRaffleReopen)
-	s.mux.HandleFunc("POST /api/raffles/{id}/entries", s.handleRaffleEntryAdd)
-	s.mux.HandleFunc("PATCH /api/raffles/{id}/entries/{entryId}", s.handleRaffleEntryPatch)
-	s.mux.HandleFunc("DELETE /api/raffles/{id}/entries/{entryId}", s.handleRaffleEntryDelete)
-	s.mux.HandleFunc("POST /api/raffles/{id}/pick-winner", s.handleRafflePickWinner)
-	s.mux.HandleFunc("POST /api/raffles/{id}/pick-another", s.handleRafflePickAnother)
-	s.mux.HandleFunc("POST /api/raffles/{id}/verify-winner", s.handleRaffleVerifyWinner)
-
 	// Garapon routes (festival lottery drum; resource-oriented: methods for CRUD,
 	// POST /{id}/{verb} for status). Admin CRUD + close/reopen + per-player drawing
 	// links, plus the tokenized public player view + draw. The "garapon/{token}"
@@ -332,38 +326,11 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/garapon/{token}", s.handleGaraponPublic)
 	s.mux.HandleFunc("POST /api/garapon/{token}/draw", s.handleGaraponDraw)
 
-	// Affiliates (Senpan Tea House -> Affiliates). Admin-only CRUD of partner
-	// establishments; logo/screenshot images are picked from the shared image
-	// library managed on System -> Images.
-	s.mux.HandleFunc("GET /api/affiliates", s.handleAffiliatesList)
-	s.mux.HandleFunc("POST /api/affiliates", s.handleAffiliateCreate)
-	s.mux.HandleFunc("POST /api/affiliates/reorder", s.handleAffiliatesReorder)
-	s.mux.HandleFunc("PUT /api/affiliates/webhook", s.handleAffiliateWebhookSet)
-	s.mux.HandleFunc("PUT /api/affiliates/{id}", s.handleAffiliateUpdate)
-	s.mux.HandleFunc("DELETE /api/affiliates/{id}", s.handleAffiliateDelete)
-	s.mux.HandleFunc("POST /api/affiliates/{id}/post", s.handleAffiliatePost)
-
-	// Tea Rooms (Senpan Tea House -> Tea Rooms). Admin CRUD + drag reorder + the
-	// open/discounted flag toggles (PATCH) + post-to-Discord, the shared webhook
-	// setter, and a public cross-origin read API for external Carrd sites. The
-	// literal /reorder, /webhook, /public sub-paths are matched ahead of the {id}
-	// wildcard by the Go 1.22 mux; /public/{id} coexists with them.
-	s.mux.HandleFunc("GET /api/tea-rooms", s.handleTeaRoomsList)
-	s.mux.HandleFunc("POST /api/tea-rooms", s.handleTeaRoomCreate)
-	s.mux.HandleFunc("POST /api/tea-rooms/reorder", s.handleTeaRoomsReorder)
-	s.mux.HandleFunc("PUT /api/tea-rooms/webhook", s.handleTeaRoomWebhookSet)
-	s.mux.HandleFunc("GET /api/tea-rooms/public", s.handleTeaRoomsPublic)
-	s.mux.HandleFunc("GET /api/tea-rooms/public/{number}", s.handleTeaRoomPublic)
-	s.mux.HandleFunc("PUT /api/tea-rooms/{id}", s.handleTeaRoomUpdate)
-	s.mux.HandleFunc("PATCH /api/tea-rooms/{id}", s.handleTeaRoomPatch)
-	s.mux.HandleFunc("DELETE /api/tea-rooms/{id}", s.handleTeaRoomDelete)
-	s.mux.HandleFunc("POST /api/tea-rooms/{id}/post", s.handleTeaRoomPost)
-
 	// Festival Map (Festival -> Festival Map; resource-oriented: methods for CRUD,
 	// PATCH for the publish status). Admin CRUD of maps (stalls with placements
 	// inline), plus the public read API for PUBLISHED maps only. The literal
 	// /public sub-path is matched ahead of the {id} wildcard by the Go 1.22 mux,
-	// and /public/{id} coexists with it (mirrors the tea-room split).
+	// and /public/{id} coexists with it.
 	s.mux.HandleFunc("GET /api/festival-maps", s.handleFestivalMapsList)
 	s.mux.HandleFunc("POST /api/festival-maps", s.handleFestivalMapCreate)
 	s.mux.HandleFunc("GET /api/festival-maps/public", s.handleFestivalMapsPublic)
@@ -425,43 +392,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/stamp-signup/{id}", s.handleStampSignup)
 	s.mux.HandleFunc("POST /api/stamp-lookup", s.handleStampLookup)
 
-	// Book club / reading list routes. Reading lists are nested under their owning
-	// club ({club} path segment), making each book club a first-class parent
-	// entity (resource-oriented: methods for CRUD on lists and their /items
-	// sub-resource; POST /{id}/publish is a verb route). The two club-agnostic
-	// utility endpoints (cover upload, AniList lookup) stay under /api/bookclub.
+	// The book-club cover upload. The rest of the book clubs and the announcements are
+	// operations in internal/api.
 	s.mux.HandleFunc("POST /api/bookclub/upload", s.handleBookclubUpload)
-	s.mux.HandleFunc("GET /api/bookclub/lookup", s.handleBookclubLookup)
-	s.mux.HandleFunc("GET /api/book-clubs/{club}/reading-lists", s.handleReadingListsList)
-	s.mux.HandleFunc("POST /api/book-clubs/{club}/reading-lists", s.handleReadingListCreate)
-	s.mux.HandleFunc("GET /api/book-clubs/{club}/reading-lists/{id}", s.handleReadingListDetail)
-	s.mux.HandleFunc("PUT /api/book-clubs/{club}/reading-lists/{id}", s.handleReadingListUpdate)
-	s.mux.HandleFunc("DELETE /api/book-clubs/{club}/reading-lists/{id}", s.handleReadingListDelete)
-	s.mux.HandleFunc("POST /api/book-clubs/{club}/reading-lists/{id}/items", s.handleReadingListItemCreate)
-	s.mux.HandleFunc("PUT /api/book-clubs/{club}/reading-lists/{id}/items/{itemId}", s.handleReadingListItemUpdate)
-	s.mux.HandleFunc("DELETE /api/book-clubs/{club}/reading-lists/{id}/items/{itemId}", s.handleReadingListItemDelete)
-	s.mux.HandleFunc("POST /api/book-clubs/{club}/reading-lists/{id}/publish", s.handlePublishReadingList)
-
-	// Announcement management (typed Discord destinations + scheduled embeds).
-	// Specific paths before any {id} routes to avoid pattern conflicts.
-	s.mux.HandleFunc("GET /api/announcement-types", s.handleAnnouncementTypesList)
-	s.mux.HandleFunc("POST /api/announcement-types", s.handleAnnouncementTypeCreate)
-	s.mux.HandleFunc("PUT /api/announcement-types/{id}", s.handleAnnouncementTypeUpdate)
-	s.mux.HandleFunc("DELETE /api/announcement-types/{id}", s.handleAnnouncementTypeDelete)
-	s.mux.HandleFunc("GET /api/announcement-roles", s.handleAnnouncementRolesList)
-	s.mux.HandleFunc("POST /api/announcement-roles", s.handleAnnouncementRoleCreate)
-	s.mux.HandleFunc("PUT /api/announcement-roles/{id}", s.handleAnnouncementRoleUpdate)
-	s.mux.HandleFunc("DELETE /api/announcement-roles/{id}", s.handleAnnouncementRoleDelete)
-	// Announcements (resource-oriented: methods for CRUD, POST /{id}/{verb} for
-	// send/skip, POST /reorder for the bulk drag-order). The literal /reorder
-	// sub-path is matched ahead of the {id} wildcard by the Go 1.22 mux.
-	s.mux.HandleFunc("GET /api/announcements", s.handleAnnouncementsList)
-	s.mux.HandleFunc("POST /api/announcements", s.handleAnnouncementCreate)
-	s.mux.HandleFunc("POST /api/announcements/reorder", s.handleAnnouncementsReorder)
-	s.mux.HandleFunc("PUT /api/announcements/{id}", s.handleAnnouncementUpdate)
-	s.mux.HandleFunc("DELETE /api/announcements/{id}", s.handleAnnouncementDelete)
-	s.mux.HandleFunc("POST /api/announcements/{id}/send", s.handleAnnouncementSend)
-	s.mux.HandleFunc("POST /api/announcements/{id}/skip", s.handleAnnouncementSkip)
 
 	// App settings
 
@@ -530,6 +463,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodOptions {
+		s.teaRoomPreflight(w, r)
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -748,15 +682,30 @@ func errorLevel(err error) slog.Level {
 	return slog.LevelError
 }
 
-// writeUpstreamError logs a failed outbound Discord webhook post with context and
-// writes a 502 whose body names the reason. It logs server-side deliberately: a
-// reverse proxy (Cloudflare) can replace a 502's body with its own generic error
-// page before the admin ever sees the reason, so without this the log is often
-// the ONLY surviving record of WHY a "post to Discord" failed. err must already be
-// stripped of the webhook token - postDiscordWebhook does this (sanitizeWebhookErr).
-func writeUpstreamError(w http.ResponseWriter, context string, err error) {
-	slog.Error("discord webhook post failed", "context", context, "error", err)
-	writeError(w, http.StatusBadGateway, "Failed to post to Discord: "+err.Error())
+// writeUpstreamError logs a failed outbound Discord post with context and writes the
+// status discord.HTTPStatus gives it, with a body naming the reason: 429 with
+// Retry-After for a rate limit, 503 when Discord can't be reached or didn't answer,
+// 500 when it refused the post. It logs here deliberately: a reverse proxy
+// (Cloudflare) can replace an error's body with its own page, so the log is
+// often the only surviving record of why a post failed. err carries no webhook
+// token (the Sender strips it).
+func writeUpstreamError(w http.ResponseWriter, what string, err error) {
+	writeDiscordFailure(w, what, "Failed to post to Discord: "+err.Error(), err)
+}
+
+// writeDiscordFailure logs a failed Discord post and writes msg with the status
+// discord.HTTPStatus gives err, adding Retry-After to a 429.
+func writeDiscordFailure(w http.ResponseWriter, what, msg string, err error) {
+	status, wait := discord.HTTPStatus(err)
+	level := slog.LevelError
+	if status == http.StatusTooManyRequests || status == http.StatusServiceUnavailable {
+		level = slog.LevelWarn
+	}
+	slog.Log(context.Background(), level, "discord webhook post failed", "context", what, "status", status, "error", err)
+	if status == http.StatusTooManyRequests {
+		w.Header().Set("Retry-After", strconv.Itoa(max(int((wait+time.Second-1)/time.Second), 1)))
+	}
+	writeError(w, status, msg)
 }
 
 // readJSON decodes the request body into a typed struct T using generics.
@@ -998,7 +947,8 @@ func (s *Server) resourceChanged(resource string) {
 // ...) is covered. The public, sign-in and self-service paths and the operations
 // with events of their own (the game, cards, patterns, themes, settings) are
 // absent. The public raffle sign-up (.../enter) is left out here because its
-// handler tells "raffles" itself. A book club's paths tell that club's resource.
+// operation tells "raffles" itself, and the public entry search (.../lookup)
+// changes nothing. A book club's paths tell that club's resource.
 func adminMutationResource(path string) (string, bool) {
 	rest := strings.TrimPrefix(strings.TrimPrefix(path, "/api/"), "v1/")
 	seg, after, _ := strings.Cut(rest, "/")
@@ -1007,7 +957,7 @@ func adminMutationResource(path string) (string, bool) {
 		"ema-boards", "ema-requests":
 		return seg, true
 	case "raffles":
-		if strings.HasSuffix(path, "/enter") {
+		if strings.HasSuffix(path, "/enter") || strings.HasSuffix(path, "/lookup") {
 			return "", false
 		}
 		return "raffles", true

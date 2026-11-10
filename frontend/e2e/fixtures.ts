@@ -127,19 +127,24 @@ export const test = base.extend<
   },
 
   raffle: async ({ staff }, use) => {
-    const { raffle } = await body<{ raffle: Raffle }>(
-      staff.post('/api/raffles', {
+    const raffle = await body<Raffle>(
+      staff.post('/api/v1/raffles', {
         data: {
           title: 'Tea Set Raffle',
           description: 'A porcelain tea set for one lucky guest.',
-          entry_mode: 'single',
-          cost_per_entry: 50000,
-          max_entries: 3,
+          rules: '',
+          signupInstructions: '',
+          entryMode: 'single',
+          costPerEntry: 50000,
+          tierCosts: [],
+          maxEntries: 3,
+          prizeImage: '',
+          payImage: '',
         },
       }),
     )
     await use(raffle)
-    await ok(staff.delete(`/api/raffles/${String(raffle.id)}`))
+    await ok(staff.delete(`/api/v1/raffles/${String(raffle.id)}`))
   },
 })
 

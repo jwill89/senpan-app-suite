@@ -48,7 +48,7 @@ func (e *testEnv) createFestival(t *testing.T) festival {
 	link.Body.Close()
 
 	f.raffleID = e.assignRaffle(t, "Gaelicat Raffle", f.mapID, f.occupantID,
-		map[string]any{"entry_mode": "single", "cost_per_entry": 50000, "max_entries": 3})
+		map[string]any{"entryMode": "single", "costPerEntry": 50000, "maxEntries": 3})
 	return f
 }
 
@@ -76,9 +76,7 @@ func (e *testEnv) signUpForFestival(t *testing.T, f festival, name string) (card
 
 func (e *testEnv) enterRaffle(t *testing.T, raffleID int, name, world string, n int) {
 	t.Helper()
-	resp := e.postJSON(t, fmt.Sprintf("/api/raffles/%d/enter", raffleID), map[string]any{
-		"character_name": name, "world": world, "num_entries": n,
-	})
+	resp := e.postJSON(t, fmt.Sprintf("/api/v1/raffles/%d/enter", raffleID), enterBody(name, world, n))
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 		t.Fatalf("raffle enter status = %d; want 201/200", resp.StatusCode)
 	}
@@ -281,13 +279,11 @@ func TestFestivalDashboard_ClosedRaffleNamesItsWinner(t *testing.T) {
 	f := env.createFestival(t)
 	env.enterRaffle(t, f.raffleID, "Yao Ming", "Balmung", 1)
 
-	entry := getRaffleEntryByName(t, env.store, int64(f.raffleID), "Yao Ming", "Balmung")
-	if err := env.store.SetRaffleWinner(t.Context(), int64(f.raffleID), &entry.ID); err != nil {
-		t.Fatal(err)
-	}
-	if err := env.store.SetRaffleStatus(t.Context(), int64(f.raffleID), "closed"); err != nil {
-		t.Fatal(err)
-	}
+	entry := env.raffleEntryByName(t, f.raffleID, "Yao Ming", "Balmung")
+	env.settle(t, f.raffleID, entry, nil)
+	decodeInto(t, env.postJSON(t, fmt.Sprintf("/api/v1/raffles/%d/pick-winner", f.raffleID), nil), http.StatusOK, nil)
+	decodeInto(t, env.postJSON(t, fmt.Sprintf("/api/v1/raffles/%d/verify-winner", f.raffleID),
+		map[string]any{"winnerEntryId": entry["id"]}), http.StatusOK, nil)
 
 	d := env.dashboard(t, f.mapID, map[string]any{"name": "Yao Ming", "world": "Balmung"})
 	r := d["raffles"].([]any)[0].(map[string]any)

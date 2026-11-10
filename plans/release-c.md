@@ -129,13 +129,43 @@ numbers stay as they were, so the references to them hold.
    (see "Keeping every viewer in step" below). The half-time gap is closed: the prompt
    is game state, an answer tells every admin surface to close it, and a second answer
    is refused with 409.
-4. **Raffles and the tea house** (with 5): raffles; affiliates, tea rooms (the public
-   endpoint with the CORS allowlist and the caching baseline). The allowlist is a
-   setting (Settings), added here with the migration that seeds it.
+4. **Raffles and the tea house** (built 2026-11-10, with 5 and with 6): raffles,
+   affiliates and tea rooms on huma with sqlc (`raffles.sql`, `affiliates.sql`,
+   `tearooms.sql`), the rules in `internal/raffles`, `internal/affiliates` and
+   `internal/tearooms`. Payments are commands (`…/settle` with `{paidEntries?, waived}`,
+   `…/unsettle`); gil is whole numbers; a winner pick is 409 while one is pending, and
+   `pick-another` and `verify-winner` name the winner they mean (409 if another console
+   changed it). `get-raffle` sends `winnerName` and `paidTotal` null: only `list-raffles`
+   fills them, for the Raffles page. The public sign-up (`enter-raffle`) publishes
+   `resource_changed` `raffles` itself; the public entry search (`…/lookup`, a
+   case-insensitive substring) publishes nothing, where it used to broadcast by mistake.
+   Affiliate, tea-room and book-club webhooks are read and set through their page's
+   `/webhook` (`GET`/`PUT`, `{webhookUrl}`), so the book-club ones left the integrations,
+   which hold only the Google Fonts key (same setting keys, no migration). A tea-room
+   `PATCH` with `locked: true` sets the lock afresh (until `lockedUntil` if sent
+   beside it, otherwise until staff unlock it). The public tea-room API
+   (`GET /tea-rooms/public[/{number}]`) keeps every field in camelCase with `no-cache`
+   and an ETag (a repeat is 304), and its CORS is the `teaRoomOrigins` allowlist (`internal/origins`):
+   the origin echoed, never `*`, never with credentials, `Vary: Origin` always, the
+   preflight answered for allowed origins; migration 74 seeds `https://senpan.cafe` and
+   `https://*.senpan.cafe` (a `*.` entry covers subdomains, not the apex), and it is
+   edited on System -> Settings. Schema v74. The festival code keeps compiling on the
+   model types and store reads it still uses (`ListFestivalRaffles`, `GetAffiliate`).
 5. Merged into 4.
-6. **Announcements and book clubs** (with 7): types, roles, announcements, the
-   scheduler's Discord errors; book clubs' reading lists and their Discord posts. The
-   Discord transport moves to 503/500/429 once, for both.
+6. **Announcements and book clubs** (built 2026-11-10, with 4): types, roles and
+   announcements (`internal/announcements`, `internal/schedule`) and book clubs'
+   reading lists (`internal/bookclubs`, `internal/anilist`) on huma with sqlc
+   (`announcements.sql`, `bookclubs.sql`). The Discord transport moved to
+   `internal/discord` (the `Sender` with the dry-run/override policy, typed errors
+   `Ambiguous`, `Unreachable`, `RateLimited`, `Refused`, `discord.HTTPStatus`): 429 with
+   `Retry-After`, 503, 500, never 502, ema's posts included; AniList fails the same way
+   (never 424). The announcement scheduler stays in `server` on sqlc and sends
+   `resource_changed` `announcements` once after a sweep that wrote anything.
+   `AnnouncementSkip.count` is optional (1 when left out, 0-52); deleting a type or role
+   in use is a 409 with the count. The book-club guard answers 401, 404 for an unknown
+   club and 403 without `bookclub-<slug>`; publishing an empty list is a 409, a cancelled
+   request a 408, and a failure part-way says "Posted N of M, then: …". The cover upload
+   (`POST /api/bookclub/upload`) stays on its old handler until the media phase.
 7. Merged into 6.
 8. **Festival**: garapons, stamp rallies, sign-up, festival maps and dashboard, ema.
 9. **Media**: images and categories, Carrd, fonts (the public font paths unchanged).
@@ -224,8 +254,11 @@ below; the plugin's share is phase 10's.
   - Changes that sent nothing now send an event: the draw delay saved through the
     settings (`draw_delay`), `settings_changed`, every theme write (`theme_changed`),
     and every sign-up (`resource_changed`).
-- **Later phases**: a raffle pick is refused while a winner is pending (4); scheduled
-  announcements send `resource_changed` (6); the plugin handles the details, draw
+- **Raffles and announcements** (fixed in phases 4 and 6): a raffle pick is refused (409)
+  while a winner is pending, and picking another or confirming names the winner it
+  means; the public raffle sign-up and the announcement scheduler's sweeps send
+  `resource_changed`, and the public entry search no longer does.
+- **Later phases**: the plugin handles the details, draw
   delay, pattern and resource events, takes the draw delay from the game state, and
   closes its half-time and end-game windows when another surface answers them (10).
 
@@ -236,7 +269,9 @@ below; the plugin's share is phase 10's.
 2. On the droplet, point the `fonts.senpan.cafe` vhost's ProxyPass at
    `/api/v1/fonts/pub/` (deploy/README.md, Font host), and reload Apache.
 3. Update each Carrd page's tea-room script to the camelCase fields and the
-   `/api/v1/tea-rooms/public` address.
+   `/api/v1/tea-rooms/public` address. The pages must be served from an origin on the
+   `teaRoomOrigins` allowlist (seeded with `https://senpan.cafe` and
+   `https://*.senpan.cafe`), or the browser refuses the read.
 4. Staff update the plugin in Dalamud; until they do, its calls fail with a clear error.
 5. In the site's vhost, drop the `/api/ws` ProxyPass and give the `/api/` one
    `timeout=3600`, as Kindred's keeps its stream open, and reload Apache. The feed's

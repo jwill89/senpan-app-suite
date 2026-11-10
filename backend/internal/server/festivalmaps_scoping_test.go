@@ -57,7 +57,7 @@ func TestFestivalMap_AffiliateDeleteKeepsPitch(t *testing.T) {
 	}
 	id := int(decodeBody(t, resp)["map"].(map[string]any)["id"].(float64))
 
-	if r := env.del(t, fmt.Sprintf("/api/affiliates/%d", affID)); r.StatusCode != http.StatusNoContent {
+	if r := env.del(t, fmt.Sprintf("/api/v1/affiliates/%d", affID)); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("affiliate delete status = %d; want 204", r.StatusCode)
 	} else {
 		r.Body.Close()

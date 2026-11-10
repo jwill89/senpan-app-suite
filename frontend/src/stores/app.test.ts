@@ -200,7 +200,7 @@ describe('loadSettings', () => {
 })
 
 describe('saveSettings', () => {
-  const keys: Integrations = { googleFontsApiKey: 'key', bookClubWebhooks: {} }
+  const keys: Integrations = { googleFontsApiKey: 'key' }
 
   it('saves the settings alone and keeps what the server saved', async () => {
     const app = useAppStore()

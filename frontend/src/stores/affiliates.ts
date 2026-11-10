@@ -10,12 +10,34 @@
  */
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { endpoints } from '@/lib/endpoints'
+import { api, unwrap, type Affiliate, type AffiliateHour, type AffiliateInput } from '@/api/client'
 import { detectTimezone } from '@/lib/constants'
-import type { Affiliate, AffiliateForm, AffiliateHourForm, AffiliateOwnerForm } from '@/types/api'
 import { useUiStore } from './ui'
 import { nextUid } from '@/lib/uid'
 import { withLoading } from '@/lib/withLoading'
+
+/** An opening-hours row in the form. */
+export interface AffiliateHourForm extends AffiliateHour {
+  /** Client-only stable key for the hours repeater (see lib/uid.ts). */
+  _uid?: number
+}
+
+/**
+ * An owner row in the form. Owners are plain name strings on the wire, but the form
+ * wraps each in an object so the repeater can key on a stable `_uid` instead of the
+ * array index; a save sends the `value`s only.
+ */
+export interface AffiliateOwnerForm {
+  value: string
+  _uid?: number
+}
+
+/** The editable form model for an affiliate (id 0 = new). */
+export interface AffiliateForm extends Omit<AffiliateInput, 'owners' | 'hours'> {
+  id: number
+  owners: AffiliateOwnerForm[]
+  hours: AffiliateHourForm[]
+}
 
 /** Default embed accent (brand red) for a new affiliate, matching Tea Rooms. */
 const DEFAULT_EMBED_COLOR = '#ff3131'
@@ -58,9 +80,12 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
   // -- Load -------------------------------------------------------------------
   async function loadAffiliates(): Promise<void> {
     await withLoading(affiliatesLoading, async () => {
-      const data = await endpoints.affiliates.list()
-      affiliates.value = data.affiliates
-      webhookUrl.value = data.webhook_url
+      const [list, hook] = await Promise.all([
+        unwrap(api.GET('/affiliates')),
+        unwrap(api.GET('/affiliates/webhook')),
+      ])
+      affiliates.value = list.affiliates
+      webhookUrl.value = hook.webhookUrl
     })
   }
 
@@ -77,9 +102,9 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
       details: '',
       logo: '',
       screenshot: '',
-      embed_color: DEFAULT_EMBED_COLOR,
-      discord_link: '',
-      carrd_link: '',
+      embedColor: DEFAULT_EMBED_COLOR,
+      discordLink: '',
+      carrdLink: '',
     }
   }
 
@@ -97,9 +122,9 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
       details: a.details,
       logo: a.logo,
       screenshot: a.screenshot,
-      embed_color: a.embed_color || DEFAULT_EMBED_COLOR,
-      discord_link: a.discord_link,
-      carrd_link: a.carrd_link,
+      embedColor: a.embedColor || DEFAULT_EMBED_COLOR,
+      discordLink: a.discordLink,
+      carrdLink: a.carrdLink,
     }
   }
 
@@ -152,12 +177,13 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
 
     savingAffiliate.value = true
     try {
-      const payload = { ...f, owners, hours }
-      if (f.id) {
-        await endpoints.affiliates.update(f.id, payload)
+      const { id, ...rest } = f
+      const body: AffiliateInput = { ...rest, owners, hours }
+      if (id) {
+        await unwrap(api.PUT('/affiliates/{id}', { params: { path: { id } }, body }))
         ui.notify('Affiliate updated', 'success')
       } else {
-        await endpoints.affiliates.create(payload)
+        await unwrap(api.POST('/affiliates', { body }))
         ui.notify('Affiliate created', 'success')
       }
       affiliateForm.value = null
@@ -181,7 +207,7 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
       return
     }
     try {
-      await endpoints.affiliates.delete(id)
+      await unwrap(api.DELETE('/affiliates/{id}', { params: { path: { id } } }))
       affiliates.value = affiliates.value.filter((a) => a.id !== id)
       if (selectedAffiliate.value?.id === id) {
         selectedAffiliate.value = null
@@ -198,7 +224,7 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
    */
   async function reorder(orderedIds: number[]): Promise<void> {
     try {
-      await endpoints.affiliates.reorder(orderedIds)
+      await unwrap(api.POST('/affiliates/reorder', { body: { orderedIds } }))
     } catch (e) {
       ui.notify((e as Error).message, 'error')
       await loadAffiliates() // revert to the persisted order
@@ -221,7 +247,7 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
     }
     postingId.value = a.id
     try {
-      await endpoints.affiliates.post(a.id)
+      await unwrap(api.POST('/affiliates/{id}/post', { params: { path: { id: a.id } } }))
       ui.notify('Affiliate posted to Discord', 'success')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -234,8 +260,10 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
   async function saveWebhook(url: string): Promise<boolean> {
     savingWebhook.value = true
     try {
-      const data = await endpoints.affiliates.setWebhook(url.trim())
-      webhookUrl.value = data.webhook_url
+      const data = await unwrap(
+        api.PUT('/affiliates/webhook', { body: { webhookUrl: url.trim() } }),
+      )
+      webhookUrl.value = data.webhookUrl
       ui.notify('Discord webhook saved', 'success')
       return true
     } catch (e) {

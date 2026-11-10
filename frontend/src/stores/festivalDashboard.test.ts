@@ -12,9 +12,13 @@ vi.mock('@/lib/endpoints', () => ({
   endpoints: {
     festivalMaps: { publicDetail: ep.publicDetail },
     festivalDashboard: { get: ep.dashboard },
-    raffles: { enter: ep.enter },
     stampSignup: { lookup: ep.lookup },
   },
+}))
+// Entering a raffle goes through the API client; only its call is faked.
+vi.mock('@/api/client', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  api: { POST: ep.enter },
 }))
 
 import { festivalConnectState, useFestivalDashboardStore } from './festivalDashboard'
@@ -224,18 +228,19 @@ describe('entering a raffle', () => {
         ],
       }),
     )
-    ep.enter.mockResolvedValue({ message: 'Entered', amount_due: 50000 })
+    ep.enter.mockResolvedValue({
+      data: { message: 'Entered', amountDue: 50000 },
+      response: new Response(null, { status: 201 }),
+    })
     const store = useFestivalDashboardStore()
     await store.open('obon')
 
     expect(await store.enterRaffle(9, 2, 'ts')).toBe(true)
-    expect(ep.enter).toHaveBeenCalledWith(9, {
-      character_name: 'Aria',
-      world: 'Gilgamesh',
-      num_entries: 2,
-      turnstile_token: 'ts',
+    expect(ep.enter).toHaveBeenCalledWith('/raffles/{id}/enter', {
+      params: { path: { id: 9 } },
+      body: { characterName: 'Aria', world: 'Gilgamesh', numEntries: 2, turnstileToken: 'ts' },
     })
-    expect(store.entered[9]?.amount_due).toBe(50000)
+    expect(store.entered[9]?.amountDue).toBe(50000)
     expect(savedRaffleSignup(9)).toMatchObject({ name: 'Aria', world: 'Gilgamesh' })
   })
 })

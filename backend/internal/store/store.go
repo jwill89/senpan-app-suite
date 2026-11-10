@@ -17,7 +17,7 @@ import (
 	"app-suite/internal/random"
 )
 
-// randInt returns a random int in [0, n), for the raffle and garapon draws.
+// randInt returns a random int in [0, n), for the garapon draws.
 func randInt(n int) int { return random.IntN(n) }
 
 // connectPragmas are applied to EVERY pooled connection: the driver runs each

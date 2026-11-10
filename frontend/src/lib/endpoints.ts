@@ -19,20 +19,7 @@ import { apiGet, apiPost, apiPut, apiPatch, apiDelete, apiUpload } from '@/lib/a
 import type {
   OKResponse,
   NamedOKResponse,
-  RaffleDetailResponse,
-  RaffleEnterResponse,
-  RaffleLookupResponse,
-  RaffleEntryResponse,
-  RaffleWinnerResponse,
-  RaffleResponse,
-  RafflesResponse,
   StatusResponse,
-  AffiliatesResponse,
-  AffiliateResponse,
-  AffiliateWebhookResponse,
-  TeaRoomsResponse,
-  TeaRoomResponse,
-  TeaRoomWebhookResponse,
   StampRalliesResponse,
   StampRallyResponse,
   StampRallyDetailResponse,
@@ -61,22 +48,7 @@ import type {
   GaraponPlayerResponse,
   GaraponPublicResponse,
   GaraponDrawResponse,
-  ReadingListsResponse,
-  ReadingListDetailResponse,
-  ReadingListItemResponse,
-  ReadingListItem,
   BookclubUploadResponse,
-  BookclubLookupResponse,
-  PublishResponse,
-  Announcement,
-  AnnouncementTypesResponse,
-  AnnouncementTypeResponse,
-  AnnouncementTypeForm,
-  AnnouncementRolesResponse,
-  AnnouncementRoleResponse,
-  AnnouncementRoleForm,
-  AnnouncementsResponse,
-  AnnouncementResponse,
   ImageCategoriesResponse,
   ImageCategoryActionResponse,
   ImagesResponse,
@@ -92,77 +64,6 @@ import type {
 const enc = encodeURIComponent
 
 export const endpoints = {
-  // -- Raffles ------------------------------------------------------------------
-  raffles: {
-    list: () => apiGet<RafflesResponse>('raffles'),
-    detail: (id: number) => apiGet<RaffleDetailResponse>(`raffles/${id}`),
-    create: (raffle: Record<string, unknown>) => apiPost<RaffleResponse>('raffles', raffle),
-    update: (id: number, raffle: Record<string, unknown>) =>
-      apiPut<RaffleResponse>(`raffles/${id}`, raffle),
-    delete: (id: number) => apiDelete(`raffles/${id}`),
-    enter: (
-      id: number,
-      body: {
-        character_name: string
-        world: string
-        num_entries: number
-        turnstile_token?: string
-      },
-    ) => apiPost<RaffleEnterResponse>(`raffles/${id}/enter`, body),
-    /**
-     * POST /api/raffles/{id}/lookup - the public "have I already entered?" search.
-     * Matches a substring of the character name (at least 2 characters); the name
-     * travels in the body so it stays out of proxy and access logs.
-     */
-    lookup: (id: number, name: string) =>
-      apiPost<RaffleLookupResponse>(`raffles/${id}/lookup`, { name }),
-    addEntry: (
-      raffleId: number,
-      body: {
-        character_name: string
-        world: string
-        num_entries: number
-        paid: boolean
-        amount_waived?: number
-      },
-    ) => apiPost<RaffleEntryResponse>(`raffles/${raffleId}/entries`, body),
-    /**
-     * Record a settlement (`paid: true`) or clear one (`paid: false`, which resets
-     * both counters).
-     *
-     * `paidEntries` is how many of the entry's tickets the payment covers - 0 means
-     * all of them, a smaller number records a PART payment. The waiver is ADDITIVE
-     * server-side: send only what is being forgiven now, never a running total.
-     */
-    markEntryPaid: (
-      raffleId: number,
-      entryId: number,
-      paid: boolean,
-      amountWaived = 0,
-      paidEntries = 0,
-    ) =>
-      apiPatch<RaffleEntryResponse>(`raffles/${raffleId}/entries/${entryId}`, {
-        paid,
-        paid_entries: paidEntries,
-        amount_waived: amountWaived,
-      }),
-    deleteEntry: (raffleId: number, entryId: number) =>
-      apiDelete(`raffles/${raffleId}/entries/${entryId}`),
-    pickWinner: (raffleId: number) =>
-      apiPost<RaffleWinnerResponse>(`raffles/${raffleId}/pick-winner`, undefined),
-    pickAnotherWinner: (raffleId: number) =>
-      apiPost<RaffleWinnerResponse>(`raffles/${raffleId}/pick-another`, undefined),
-    verifyWinner: (raffleId: number) =>
-      apiPost<StatusResponse>(`raffles/${raffleId}/verify-winner`, undefined),
-    /**
-     * Close (POST /{id}/close) or reopen (POST /{id}/reopen) a raffle without
-     * touching its winner. verify-winner also closes, but only as the last step of
-     * confirming a winner - a raffle that drew nobody needs this instead.
-     */
-    setStatus: (raffleId: number, closed: boolean) =>
-      apiPost<StatusResponse>(`raffles/${raffleId}/${closed ? 'close' : 'reopen'}`, undefined),
-  },
-
   // -- Garapon (admin, hybrid REST) ---------------------------------------------
   garapons: {
     /** GET /api/garapons - all garapons (admin). */
@@ -195,63 +96,6 @@ export const endpoints = {
     get: (token: string) => apiGet<GaraponPublicResponse>(`garapon/${enc(token)}`),
     /** POST /api/garapon/{token}/draw - perform one authoritative draw. */
     draw: (token: string) => apiPost<GaraponDrawResponse>(`garapon/${enc(token)}/draw`, {}),
-  },
-
-  // -- Affiliates (admin) -------------------------------------------------------
-  affiliates: {
-    /** GET /api/affiliates - all affiliates + the shared Discord webhook (admin). */
-    list: () => apiGet<AffiliatesResponse>('affiliates'),
-    create: (affiliate: Record<string, unknown>) =>
-      apiPost<AffiliateResponse>('affiliates', affiliate),
-    update: (id: number, affiliate: Record<string, unknown>) =>
-      apiPut<OKResponse>(`affiliates/${id}`, affiliate),
-    delete: (id: number) => apiDelete(`affiliates/${id}`),
-    /** POST /api/affiliates/reorder - persist a new drag order (top-first ids). */
-    reorder: (orderedIds: number[]) =>
-      apiPost<OKResponse>('affiliates/reorder', { ordered_ids: orderedIds }),
-    /** POST /api/affiliates/{id}/post - post the affiliate's embed to the shared webhook now. */
-    post: (id: number) => apiPost<AffiliateResponse>(`affiliates/${id}/post`, undefined),
-    /** PUT /api/affiliates/webhook - set the single shared Discord webhook ('' clears). */
-    setWebhook: (webhookUrl: string) =>
-      apiPut<AffiliateWebhookResponse>('affiliates/webhook', { webhook_url: webhookUrl }),
-  },
-
-  // -- Tea Rooms (admin) --------------------------------------------------------
-  teaRooms: {
-    /** GET /api/tea-rooms - all rooms + the shared Discord webhook (admin/perm). */
-    list: () => apiGet<TeaRoomsResponse>('tea-rooms'),
-    /** POST /api/tea-rooms - create a room (201). */
-    create: (room: Record<string, unknown>) =>
-      apiPost<TeaRoomResponse>('tea-rooms', { tea_room: room }),
-    /** PUT /api/tea-rooms/{id} - full replace of the editable fields. */
-    update: (id: number, room: Record<string, unknown>) =>
-      apiPut<TeaRoomResponse>(`tea-rooms/${id}`, { tea_room: room }),
-    /**
-     * PATCH /api/tea-rooms/{id} - toggle the open/discounted flags or set the lock.
-     * `locked` and `locked_until` move independently: `locked` alone locks or
-     * unlocks, `locked_until` alone re-times a lock already in place. A UTC
-     * RFC-3339 `locked_until` expires the lock server-side; '' leaves it standing
-     * until someone unlocks the room.
-     */
-    patch: (
-      id: number,
-      fields: {
-        open?: boolean
-        discounted?: boolean
-        locked?: boolean
-        locked_until?: string
-      },
-    ) => apiPatch<TeaRoomResponse>(`tea-rooms/${id}`, fields),
-    /** DELETE /api/tea-rooms/{id} - delete a room (204). */
-    delete: (id: number) => apiDelete(`tea-rooms/${id}`),
-    /** POST /api/tea-rooms/reorder - persist a new drag order (top-first ids). */
-    reorder: (orderedIds: number[]) =>
-      apiPost<OKResponse>('tea-rooms/reorder', { ordered_ids: orderedIds }),
-    /** POST /api/tea-rooms/{id}/post - post a room's embed to the shared webhook now. */
-    post: (id: number) => apiPost<TeaRoomResponse>(`tea-rooms/${id}/post`, undefined),
-    /** PUT /api/tea-rooms/webhook - set the single shared Discord webhook ('' clears). */
-    setWebhook: (webhookUrl: string) =>
-      apiPut<TeaRoomWebhookResponse>('tea-rooms/webhook', { webhook_url: webhookUrl }),
   },
 
   // -- Festival Map (admin CRUD + the public read API) --------------------------
@@ -411,111 +255,13 @@ export const endpoints = {
       apiPost<StampLookupResponse>('stamp-lookup', { name, world }),
   },
 
-  // -- Book clubs / reading lists -----------------------------------------------
+  // -- Book clubs -----------------------------------------------------------------
   //
-  // Reading lists are nested under their owning club: every function takes the
-  // club slug as its first argument and targets /api/book-clubs/{club}/reading-
-  // lists.... The two club-agnostic utilities (uploadImage, lookup*) keep the flat
-  // /api/bookclub/* paths.
+  // Only the cover upload is here: the club's lists, webhook and AniList lookup are
+  // operations on huma (stores/bookclub.ts).
   bookclub: {
-    /** GET /api/book-clubs/{club}/reading-lists - reading lists for a club (no items). */
-    lists: (club: string) => apiGet<ReadingListsResponse>(`book-clubs/${enc(club)}/reading-lists`),
-    /** GET /api/book-clubs/{club}/reading-lists/{id} - a reading list with its items. */
-    listDetail: (club: string, id: number) =>
-      apiGet<ReadingListDetailResponse>(`book-clubs/${enc(club)}/reading-lists/${id}`),
-    /** POST /api/book-clubs/{club}/reading-lists - create a list (201; returns it with its items). */
-    createList: (club: string, title: string) =>
-      apiPost<ReadingListDetailResponse>(`book-clubs/${enc(club)}/reading-lists`, { title }),
-    /** PUT /api/book-clubs/{club}/reading-lists/{id} - rename a list. */
-    renameList: (club: string, id: number, title: string) =>
-      apiPut<OKResponse>(`book-clubs/${enc(club)}/reading-lists/${id}`, { title }),
-    /** DELETE /api/book-clubs/{club}/reading-lists/{id} - delete a list + its items (204). */
-    deleteList: (club: string, id: number) =>
-      apiDelete(`book-clubs/${enc(club)}/reading-lists/${id}`),
-    /**
-     * Create (POST) or update (PUT /{itemId}) an item, chosen by whether the item
-     * already has an id. Both wrap the item under `{item}`.
-     */
-    saveItem: (club: string, listId: number, item: Partial<ReadingListItem> & { id?: number }) =>
-      item.id
-        ? apiPut<ReadingListItemResponse>(
-            `book-clubs/${enc(club)}/reading-lists/${listId}/items/${item.id}`,
-            { item },
-          )
-        : apiPost<ReadingListItemResponse>(
-            `book-clubs/${enc(club)}/reading-lists/${listId}/items`,
-            { item },
-          ),
-    /** DELETE /api/book-clubs/{club}/reading-lists/{id}/items/{itemId} - delete an item (204). */
-    deleteItem: (club: string, listId: number, itemId: number) =>
-      apiDelete(`book-clubs/${enc(club)}/reading-lists/${listId}/items/${itemId}`),
-    publish: (club: string, listId: number) =>
-      apiPost<PublishResponse>(`book-clubs/${enc(club)}/reading-lists/${listId}/publish`, {}),
     uploadImage: (form: FormData, onProgress?: (percent: number) => void) =>
       apiUpload<BookclubUploadResponse>('bookclub/upload', form, { onProgress }),
-    /** GET /api/bookclub/lookup?q=... - AniList suggestions shaped like items. */
-    lookup: (query: string) => apiGet<BookclubLookupResponse>(`bookclub/lookup?q=${enc(query)}`),
-    /** GET /api/bookclub/lookup?id=... - a single AniList title by numeric id. */
-    lookupById: (id: number) => apiGet<BookclubLookupResponse>(`bookclub/lookup?id=${id}`),
-  },
-
-  // -- Announcement management --------------------------------------------------
-  announcements: {
-    /** GET /api/announcement-types - Discord destinations. */
-    types: () => apiGet<AnnouncementTypesResponse>('announcement-types'),
-    /** POST /api/announcement-types - create a type. */
-    createType: (form: AnnouncementTypeForm) =>
-      apiPost<AnnouncementTypeResponse>('announcement-types', {
-        name: form.name,
-        webhook_url: form.webhook_url,
-      }),
-    /** PUT /api/announcement-types/{id} - replace a type. */
-    updateType: (id: number, form: AnnouncementTypeForm) =>
-      apiPut<AnnouncementTypeResponse>(`announcement-types/${id}`, {
-        name: form.name,
-        webhook_url: form.webhook_url,
-      }),
-    deleteType: (id: number) => apiDelete(`announcement-types/${id}`),
-
-    /** GET /api/announcement-roles - taggable Discord roles. */
-    roles: () => apiGet<AnnouncementRolesResponse>('announcement-roles'),
-    /** POST /api/announcement-roles - create a taggable role. */
-    createRole: (form: AnnouncementRoleForm) =>
-      apiPost<AnnouncementRoleResponse>('announcement-roles', {
-        name: form.name,
-        role_id: form.role_id,
-      }),
-    /** PUT /api/announcement-roles/{id} - replace a taggable role. */
-    updateRole: (id: number, form: AnnouncementRoleForm) =>
-      apiPut<AnnouncementRoleResponse>(`announcement-roles/${id}`, {
-        name: form.name,
-        role_id: form.role_id,
-      }),
-    deleteRole: (id: number) => apiDelete(`announcement-roles/${id}`),
-
-    /** GET /api/announcements - all announcements (filtering is client-side). */
-    list: () => apiGet<AnnouncementsResponse>('announcements'),
-    /**
-     * Create (POST) or update (PUT /{id}) an announcement, chosen by whether an id
-     * is supplied. The store builds `payload` from the form, having already
-     * converted local times -> the stored UTC instants / UTC recurrence fields.
-     * Both wrap the payload under `{announcement}`.
-     */
-    save: (id: number, payload: Partial<Announcement>) =>
-      id
-        ? apiPut<AnnouncementResponse>(`announcements/${id}`, { announcement: payload })
-        : apiPost<AnnouncementResponse>('announcements', { announcement: payload }),
-    /** DELETE /api/announcements/{id} - delete an announcement (204). */
-    delete: (id: number) => apiDelete(`announcements/${id}`),
-    /** POST /api/announcements/reorder - persist a new drag order (top-first ids). */
-    reorder: (orderedIds: number[]) =>
-      apiPost<OKResponse>('announcements/reorder', { ordered_ids: orderedIds }),
-    /** POST /api/announcements/{id}/send - post an announcement's embed to Discord now. */
-    sendNow: (id: number) => apiPost<AnnouncementResponse>(`announcements/${id}/send`, undefined),
-    /** POST /api/announcements/{id}/skip - set how many upcoming scheduled
-     *  occurrences to pass over (0 clears a pending skip). */
-    setSkip: (id: number, count: number) =>
-      apiPost<AnnouncementResponse>(`announcements/${id}/skip`, { count }),
   },
 
   // -- Central image hosting (System -> Images) ----------------------------------

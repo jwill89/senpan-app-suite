@@ -2,13 +2,13 @@ package bingo
 
 import (
 	"errors"
-	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
 	"app-suite/internal/model"
 	"app-suite/internal/store"
+	"app-suite/internal/store/storetest"
 )
 
 // -- MatchesPattern ----------------------------------------------------------
@@ -293,7 +293,7 @@ func TestParseWinnersCache_Null(t *testing.T) {
 
 func testStore(t *testing.T) *store.Store {
 	t.Helper()
-	s, err := store.New(t.Context(), filepath.Join(t.TempDir(), "test.db"))
+	s, err := store.New(t.Context(), storetest.Path(t))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -6,7 +6,6 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"regexp"
 	"sync"
 	"sync/atomic"
@@ -22,7 +21,7 @@ import (
 
 func openDriverTestStore(t *testing.T) (*Store, string) {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "test.db")
+	path := migratedPath(t)
 	s, err := New(t.Context(), path)
 	if err != nil {
 		t.Fatal(err)

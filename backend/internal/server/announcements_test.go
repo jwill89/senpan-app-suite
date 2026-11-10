@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -13,6 +12,7 @@ import (
 
 	"app-suite/internal/model"
 	"app-suite/internal/store"
+	"app-suite/internal/store/storetest"
 )
 
 // mustParse parses a UTC RFC-3339 instant or fails the test.
@@ -183,7 +183,7 @@ func TestAdvanceCursor(t *testing.T) {
 // Returns the server, the announcement id, and its starting next_post_at.
 func newSchedulerEnv(t *testing.T, webhook string) (*Server, int64, string) {
 	t.Helper()
-	st, err := store.New(t.Context(), filepath.Join(t.TempDir(), "test.db"))
+	st, err := store.New(t.Context(), storetest.Path(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -644,7 +644,7 @@ func TestAnnouncementComponents(t *testing.T) {
 }
 
 func TestAnnouncementMention(t *testing.T) {
-	st, err := store.New(t.Context(), filepath.Join(t.TempDir(), "test.db"))
+	st, err := store.New(t.Context(), storetest.Path(t))
 	if err != nil {
 		t.Fatal(err)
 	}

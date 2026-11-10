@@ -7,11 +7,12 @@ import (
 
 	"app-suite/internal/model"
 	"app-suite/internal/store"
+	"app-suite/internal/store/storetest"
 )
 
 func newTestStore(t *testing.T) *store.Store {
 	t.Helper()
-	s, err := store.New(t.Context(), filepath.Join(t.TempDir(), "test.db"))
+	s, err := store.New(t.Context(), storetest.Path(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1355,7 +1356,7 @@ func TestWinnersLogPagePastEndReportsTotal(t *testing.T) {
 // routinely pointed at a copy of production, and its dump/check commands used the
 // migrating opener - so merely INSPECTING a file irreversibly upgraded its schema.
 func TestOpenNoMigrateLeavesTheSchemaAlone(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "readonly.db")
+	path := storetest.Path(t)
 
 	// A database one version behind: created normally, then stamped backwards.
 	s, err := store.New(t.Context(), path)

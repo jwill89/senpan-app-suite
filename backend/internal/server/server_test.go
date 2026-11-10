@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -17,6 +16,7 @@ import (
 	"app-suite/internal/model"
 	"app-suite/internal/server"
 	"app-suite/internal/store"
+	"app-suite/internal/store/storetest"
 	"app-suite/internal/ws"
 )
 
@@ -64,7 +64,7 @@ type testEnv struct {
 
 func newTestEnv(t *testing.T) *testEnv {
 	t.Helper()
-	st, err := store.New(t.Context(), filepath.Join(t.TempDir(), "test.db"))
+	st, err := store.New(t.Context(), storetest.Path(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -251,7 +251,7 @@ func TestCORS_UnlistedOriginGetsNoHeaders(t *testing.T) {
 // TestCORS_AllowlistedOriginReflected verifies an explicitly allow-listed origin
 // is echoed back with credentials enabled.
 func TestCORS_AllowlistedOriginReflected(t *testing.T) {
-	st, err := store.New(t.Context(), filepath.Join(t.TempDir(), "test.db"))
+	st, err := store.New(t.Context(), storetest.Path(t))
 	if err != nil {
 		t.Fatal(err)
 	}

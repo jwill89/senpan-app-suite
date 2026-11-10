@@ -7,18 +7,18 @@ import (
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
-	"path/filepath"
 	"testing"
 
 	"app-suite/internal/server"
 	"app-suite/internal/store"
+	"app-suite/internal/store/storetest"
 	"app-suite/internal/ws"
 )
 
 // A sign-in outlives a restart, since sessions live in the database, and the
 // database holds only a hash of the session's token, never the cookie's value.
 func TestSessionsOutliveARestartAndAreStoredHashed(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "test.db")
+	path := storetest.Path(t)
 	start := func() *testEnv {
 		st, err := store.New(t.Context(), path)
 		if err != nil {

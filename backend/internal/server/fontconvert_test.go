@@ -18,6 +18,7 @@ import (
 	"app-suite/internal/model"
 	"app-suite/internal/server"
 	"app-suite/internal/store"
+	"app-suite/internal/store/storetest"
 	"app-suite/internal/ws"
 )
 
@@ -322,7 +323,7 @@ func TestFontConvert_StartupBackfillAndMetaMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	st, err := store.New(t.Context(), filepath.Join(t.TempDir(), "test.db"))
+	st, err := store.New(t.Context(), storetest.Path(t))
 	if err != nil {
 		t.Fatal(err)
 	}

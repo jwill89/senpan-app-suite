@@ -13,6 +13,7 @@ import (
 
 	"app-suite/internal/server"
 	"app-suite/internal/store"
+	"app-suite/internal/store/storetest"
 	"app-suite/internal/ws"
 )
 
@@ -501,7 +502,7 @@ func TestImages_ReservedCategoryDir(t *testing.T) {
 // a test can pre-seed files before the server (and its startup migration) run.
 func newTestEnvWithWebRoot(t *testing.T, webRoot string) *testEnv {
 	t.Helper()
-	st, err := store.New(t.Context(), filepath.Join(t.TempDir(), "test.db"))
+	st, err := store.New(t.Context(), storetest.Path(t))
 	if err != nil {
 		t.Fatal(err)
 	}

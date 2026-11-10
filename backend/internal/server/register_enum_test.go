@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"app-suite/internal/store"
+	"app-suite/internal/store/storetest"
 )
 
 // TestRegisterNoEnumeration verifies POST /api/register returns an IDENTICAL
@@ -18,7 +18,7 @@ import (
 // taken, or the reserved bootstrap "admin" - so the endpoint can't be used to
 // enumerate which accounts exist. The eligible account is still created.
 func TestRegisterNoEnumeration(t *testing.T) {
-	st, err := store.New(t.Context(), filepath.Join(t.TempDir(), "test.db"))
+	st, err := store.New(t.Context(), storetest.Path(t))
 	if err != nil {
 		t.Fatal(err)
 	}

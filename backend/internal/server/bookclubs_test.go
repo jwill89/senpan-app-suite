@@ -244,20 +244,22 @@ func TestDiscordWebhookSettingRedactedForPublic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Public (no login): webhook must be blanked.
-	resp := e.get(t, "/api/settings")
-	body := decodeBody(t, resp)
-	settings, _ := body["settings"].(map[string]any)
-	if v, _ := settings["discord_webhook_url_yaoi"].(string); v != "" {
-		t.Fatalf("public webhook = %q; want blank", v)
+	// Public (no login): the site's settings carry no webhook at all.
+	resp := e.get(t, "/api/v1/settings")
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if strings.Contains(string(body), "discord.test") {
+		t.Fatalf("the public settings carry the webhook: %s", body)
+	}
+	if resp := e.get(t, "/api/v1/settings/integrations"); resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("integrations signed out: %d; want 401", resp.StatusCode)
 	}
 
-	// Admin: webhook is visible.
+	// Admin: the integrations show it.
 	e.loginAdmin(t)
-	resp = e.get(t, "/api/settings")
-	body = decodeBody(t, resp)
-	settings, _ = body["settings"].(map[string]any)
-	if v, _ := settings["discord_webhook_url_yaoi"].(string); v != "https://discord.test/secret" {
+	integrations := decodeBody(t, e.get(t, "/api/v1/settings/integrations"))
+	webhooks, _ := integrations["bookClubWebhooks"].(map[string]any)
+	if v, _ := webhooks["yaoi"].(string); v != "https://discord.test/secret" {
 		t.Fatalf("admin webhook = %q; want the real value", v)
 	}
 }

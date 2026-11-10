@@ -11,7 +11,7 @@ func TestRedactSensitivePath(t *testing.T) {
 		"/api/garapons/5",            // plural admin route, integer id
 		"/api/garapons/5/players",    // plural admin sub-route
 		"/api/stamp-rallies/12/logs", // plural admin route
-		"/api/settings",              // ordinary route
+		"/api/v1/settings",           // ordinary route
 		"/api/fonts/pub/kit.css",     // font kit (not a token file)
 		"/",                          // root
 	}

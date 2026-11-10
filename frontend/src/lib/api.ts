@@ -57,6 +57,29 @@ export function setUnauthorizedHandler(handler: UnauthorizedHandler): void {
   onUnauthorized = handler
 }
 
+/** Calls the registered 401 callback: the session has gone. The huma client (api/client.ts) reports through it too. */
+export function handleUnauthorized(): void {
+  onUnauthorized?.()
+}
+
+/**
+ * The message an error body carries: a problem details body's `detail` (the routes on
+ * huma, and every 404, 405 and 500 under /api), else the hand-registered routes'
+ * `{ "error": "..." }`, else null.
+ */
+export function errorMessage(data: unknown): string | null {
+  if (!data || typeof data !== 'object') {
+    return null
+  }
+  if ('detail' in data && typeof data.detail === 'string' && data.detail) {
+    return data.detail
+  }
+  if ('error' in data && typeof data.error === 'string') {
+    return data.error
+  }
+  return null
+}
+
 /**
  * Performs an API request and returns the parsed JSON.
  * @throws {ApiError} with the server's error message if the response is not OK.
@@ -127,14 +150,11 @@ export async function api<T = unknown>(endpoint: string, options: ApiOptions = {
     if (res.status === 401 && !options.skipAuthRedirect) {
       onUnauthorized?.()
     }
-    // Prefer the server's `{ "error": "..." }` message. When the body isn't our
-    // JSON (an empty/HTML gateway error from Cloudflare/Apache, e.g. a 502 when
-    // the origin is unreachable), fall back to a message that still names the
-    // HTTP status so the failure is distinguishable from a generic one.
-    const serverMsg =
-      data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
-        ? data.error
-        : null
+    // Prefer the server's own message (errorMessage). When the body isn't our JSON
+    // (an empty/HTML gateway error from Cloudflare/Apache, e.g. a 502 when the
+    // origin is unreachable), fall back to a message that still names the HTTP
+    // status so the failure is distinguishable from a generic one.
+    const serverMsg = errorMessage(data)
     const msg = serverMsg || (res.status ? `Request failed (HTTP ${res.status})` : 'Request failed')
     throw new ApiError(msg, res.status, data)
   }
@@ -247,10 +267,7 @@ export function apiUpload<T = unknown>(
       if (xhr.status === 401 && !options.skipAuthRedirect) {
         onUnauthorized?.()
       }
-      const serverMsg =
-        data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
-          ? data.error
-          : null
+      const serverMsg = errorMessage(data)
       fail(
         serverMsg || (xhr.status ? `Upload failed (HTTP ${xhr.status})` : 'Upload failed'),
         xhr.status,

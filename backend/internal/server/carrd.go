@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"app-suite/internal/model"
+	"app-suite/internal/permissions"
 )
 
 // -- Carrd image hosting (System -> Carrd Upload admin tab) --------------------
@@ -249,7 +250,7 @@ func (s *Server) listCarrdProjects() ([]model.CarrdProject, error) {
 //	Response:  {"projects": [{title, folder, file_count, subfolder_count,
 //	            total_size, modified}]}
 func (s *Server) handleCarrdProjectsList(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permAtelierCarrd) {
+	if !s.requirePermission(w, r, permissions.AtelierCarrd) {
 		return
 	}
 
@@ -287,7 +288,7 @@ type carrdProjectRenameRequest struct {
 //	Request:   {"title": "...", "folder": "..."(optional)}
 //	Response:  201 {"ok": true, "project": {...}}
 func (s *Server) handleCarrdProjectCreate(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permAtelierCarrd) {
+	if !s.requirePermission(w, r, permissions.AtelierCarrd) {
 		return
 	}
 
@@ -313,7 +314,7 @@ func (s *Server) handleCarrdProjectCreate(w http.ResponseWriter, r *http.Request
 //	Request:   {"title": "...", "new_folder": "..."(optional)}
 //	Response:  200 {"ok": true, "project": {...}}
 func (s *Server) handleCarrdProjectRename(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permAtelierCarrd) {
+	if !s.requirePermission(w, r, permissions.AtelierCarrd) {
 		return
 	}
 
@@ -337,7 +338,7 @@ func (s *Server) handleCarrdProjectRename(w http.ResponseWriter, r *http.Request
 //	Auth:      admin, or a user granted this page's permission
 //	Response:  204 No Content
 func (s *Server) handleCarrdProjectDelete(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permAtelierCarrd) {
+	if !s.requirePermission(w, r, permissions.AtelierCarrd) {
 		return
 	}
 
@@ -526,7 +527,7 @@ func (s *Server) renameCarrdProject(w http.ResponseWriter, root, reqFolder, reqT
 //	Response:  {"folder": "...", "path": "...", "dirs": ["..."],
 //	            "images": [{name, size, modified}]}
 func (s *Server) handleCarrdImagesList(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permAtelierCarrd) {
+	if !s.requirePermission(w, r, permissions.AtelierCarrd) {
 		return
 	}
 
@@ -603,7 +604,7 @@ type carrdCreateDirRequest struct {
 //	Auth:      admin, or a user granted this page's permission
 //	Response:  204 No Content
 func (s *Server) handleCarrdImageDelete(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permAtelierCarrd) {
+	if !s.requirePermission(w, r, permissions.AtelierCarrd) {
 		return
 	}
 
@@ -636,7 +637,7 @@ func (s *Server) handleCarrdImageDelete(w http.ResponseWriter, r *http.Request) 
 //	Request:   {"folder":"...","path":"...","name":"..."}
 //	Response:  201 {"ok": true, "name": newDir}
 func (s *Server) handleCarrdDirCreate(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permAtelierCarrd) {
+	if !s.requirePermission(w, r, permissions.AtelierCarrd) {
 		return
 	}
 
@@ -681,7 +682,7 @@ func (s *Server) handleCarrdDirCreate(w http.ResponseWriter, r *http.Request) {
 //	Auth:      admin, or a user granted this page's permission
 //	Response:  204 No Content
 func (s *Server) handleCarrdDirDelete(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permAtelierCarrd) {
+	if !s.requirePermission(w, r, permissions.AtelierCarrd) {
 		return
 	}
 
@@ -715,7 +716,7 @@ func (s *Server) handleCarrdDirDelete(w http.ResponseWriter, r *http.Request) {
 //	           more "files" fields
 //	Response:  {"uploaded": ["a.png"], "skipped": [{"name":"b.txt","reason":"..."}]}
 func (s *Server) handleCarrdUpload(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permAtelierCarrd) {
+	if !s.requirePermission(w, r, permissions.AtelierCarrd) {
 		return
 	}
 	uploaded, skipped, ok := s.handleMultipartUploads(w, r,

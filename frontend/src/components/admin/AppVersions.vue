@@ -10,7 +10,7 @@
  * button that opens its changelog (the plugin's also carries install steps).
  */
 import { computed, onMounted, ref } from 'vue'
-import { endpoints } from '@/lib/endpoints'
+import { api } from '@/api/client'
 import { APP_VERSION, serverDiffers } from '@/lib/version'
 import { changelog, fetchLivePluginVersion, type ChangelogComponent } from '@/lib/changelog'
 import ChangelogModal from '@/components/admin/ChangelogModal.vue'
@@ -26,10 +26,14 @@ const openComponent = ref<ChangelogComponent | null>(null)
 // .then/.catch (not async/await) so the rejection handler is attached
 // synchronously - no unhandled-rejection window if the probe fails.
 onMounted(() => {
-  endpoints.system
-    .version()
-    .then((r) => {
-      server.value = r.backend
+  api
+    .GET('/version')
+    .then(({ data }) => {
+      if (data) {
+        server.value = data.version
+      } else {
+        failed.value = true
+      }
     })
     .catch(() => {
       failed.value = true

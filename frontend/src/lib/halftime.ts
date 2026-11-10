@@ -8,7 +8,7 @@
  * of 75 calls; this scales that same ratio to the game's real callable pool, so a
  * three-column game (45 callable) prompts at ~21 instead of never reaching 35.
  */
-import type { BingoGamePattern } from '@/types/api'
+import type { GamePattern } from '@/api/client'
 
 /** Numbers per bingo column (B 1-15, I 16-30, ...). */
 export const NUMBERS_PER_COLUMN = 15
@@ -22,10 +22,10 @@ export const HALFTIME_RATIO = 35 / 75
  * draw). With no marked cells (or no patterns) all five columns are active, so
  * the game can still draw. Mirrors the backend `bingo.PatternColumns`.
  */
-export function activeColumnCount(patterns: BingoGamePattern[] | undefined | null): number {
+export function activeColumnCount(patterns: GamePattern[] | undefined | null): number {
   const cols = [false, false, false, false, false]
   for (const p of patterns ?? []) {
-    const grid = p.pattern_data
+    const grid = p.patternData
     for (let r = 0; r < 5 && r < grid.length; r++) {
       const row = grid[r] ?? []
       for (let c = 0; c < 5 && c < row.length; c++) {
@@ -40,7 +40,7 @@ export function activeColumnCount(patterns: BingoGamePattern[] | undefined | nul
 }
 
 /** How many balls this game can actually call (`activeColumns x 15`). */
-export function maxCallableNumbers(patterns: BingoGamePattern[] | undefined | null): number {
+export function maxCallableNumbers(patterns: GamePattern[] | undefined | null): number {
   return activeColumnCount(patterns) * NUMBERS_PER_COLUMN
 }
 
@@ -50,6 +50,6 @@ export function maxCallableNumbers(patterns: BingoGamePattern[] | undefined | nu
  * least 1. A full five-column game yields 35 (unchanged); a three-column game
  * (45 callable) yields 21.
  */
-export function halftimeCallThreshold(patterns: BingoGamePattern[] | undefined | null): number {
+export function halftimeCallThreshold(patterns: GamePattern[] | undefined | null): number {
   return Math.max(1, Math.round(HALFTIME_RATIO * maxCallableNumbers(patterns)))
 }

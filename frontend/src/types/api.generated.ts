@@ -229,25 +229,6 @@ export interface AnnouncementResponse {
 }
 
 //////////
-// source: board.go
-
-/**
- * BoardResponse is the full body of GET /api/board: the card plus the current
- * game state and game details. (game/game_details are always written.)
- */
-export interface BoardResponse {
-  card: Card;
-  game?: BingoGameState;
-  game_details: string;
-}
-/**
- * CardResponse is the preview body of GET /api/board?preview=1: only the card.
- */
-export interface CardResponse {
-  card: Card;
-}
-
-//////////
 // source: bookclubs.go
 
 /**
@@ -337,94 +318,6 @@ export interface PublishResponse {
 }
 
 //////////
-// source: cards.go
-
-/**
- * Card represents a bingo card stored in the database.
- * BoardData is a 5x5 grid where board[row][col] holds the number;
- * col 0=B(1-15), col 1=I(16-30), col 2=N(31-45), col 3=G(46-60), col 4=O(61-75).
- * The centre cell [2][2] is always 0, representing the FREE space.
- */
-export interface Card {
-  id: string; // 6-char alphanumeric unique identifier
-  board_data: number /* int */[][]; // 5x5 grid of numbers (0 = FREE)
-  player_name: string; // optional player name assigned by admin / custom-card character name
-  details: string; // optional extra info about the cardholder
-  created_at: string; // ISO timestamp the card was generated ("" if pre-dates tracking)
-  /**
-   * Protected cards are spared by the admin "Delete All" action (they can still be
-   * deleted individually). Approved custom cards are automatically Protected.
-   */
-  protected: boolean;
-  /**
-   * CustomStatus is the custom-card lifecycle: "" (a normal generated card),
-   * "pending" (a Personal Card Request awaiting staff approval - not yet playable),
-   * or "approved" (an approved, live custom card).
-   */
-  custom_status: string;
-  /**
-   * World is the requester's home world for a custom-card request ("" otherwise).
-   */
-  world: string;
-}
-/**
- * CardListEntry is the lightweight card shape from GET /api/cards (no board_data).
- */
-export interface CardListEntry {
-  id: string;
-  player_name: string;
-  details: string;
-  created_at: string;
-  protected: boolean;
-  custom_status: string;
-  world: string;
-}
-/**
- * CardRequestResponse is the body of a successful POST /api/cards/request: the
- * custom card was accepted and stored as pending, awaiting staff approval.
- */
-export interface CardRequestResponse {
-  id: string;
-  status: string; // always "pending" on success
-}
-/**
- * CardsListResponse is the body of GET /api/cards.
- */
-export interface CardsListResponse {
-  cards: CardListEntry[];
-}
-/**
- * GeneratedCard is one freshly generated card (id + board) from a bulk generate.
- */
-export interface GeneratedCard {
-  id: string;
-  board_data: number /* int */[][];
-}
-/**
- * GenerateCardsResponse is the body of POST /api/cards/generate.
- */
-export interface GenerateCardsResponse {
-  cards: GeneratedCard[];
-  count: number /* int */;
-}
-/**
- * GeneratedNamedCard is the single card created by POST /api/cards (carrying the
- * optionally-assigned player name).
- */
-export interface GeneratedNamedCard {
-  id: string;
-  player_name: string;
-  board_data: number /* int */[][];
-}
-/**
- * GenerateSingleCardResponse is the body of POST /api/cards.
- */
-export interface GenerateSingleCardResponse {
-  card: GeneratedNamedCard;
-  count: number /* int */;
-}
-
-//////////
 // source: common.go
 
 /**
@@ -439,12 +332,6 @@ export interface OKResponse {
  */
 export interface DeletedResponse {
   deleted: boolean;
-}
-/**
- * DeletedCountResponse reports how many rows a bulk delete removed - {"deleted": N}.
- */
-export interface DeletedCountResponse {
-  deleted: number /* int64 */;
 }
 /**
  * StatusResponse is the success envelope for actions that flip a status flag -
@@ -1281,109 +1168,6 @@ export interface ImagesUploadResponse {
 }
 
 //////////
-// source: game.go
-
-/**
- * BingoGame is the internal database representation of a bingo game row.
- * It is not directly exposed to clients; use BingoGameState for the public view.
- */
-export interface BingoGame {
-  ID: number /* int64 */; // auto-increment primary key
-  Status: string; // "active" or "ended"
-  CreatedAt: string; // ISO 8601 timestamp
-  WinnersCache: string; // raw JSON array of winning card IDs, computed on each draw
-}
-/**
- * BingoGameState is the public view of an active bingo game returned to clients.
- * It contains everything a player or admin needs to render the current game.
- */
-export interface BingoGameState {
-  id: number /* int64 */;
-  created_at: string; // ISO 8601 timestamp the game started (UTC)
-  called_numbers: number /* int */[]; // numbers drawn so far, in call order
-  patterns: BingoGamePattern[]; // active win patterns for this game
-  total_called: number /* int */; // len(CalledNumbers), for convenience
-  /**
-   * YoeverEnabled reports whether the "It's Yoever" player reaction is currently
-   * allowed. It is a per-game control an admin can toggle live (defaults on at
-   * the start of each game); when false, players' trigger button is hidden.
-   */
-  yoever_enabled: boolean;
-  /**
-   * YoeverCount is how many times "It's Yoever" has been triggered this game
-   * (reset when a new game starts). Shown to admins as "Yoevers: N".
-   */
-  yoever_count: number /* int */;
-  /**
-   * AutoEnabled reports whether the automatic draw loop is currently running for
-   * this game. It is a per-game control an admin can toggle live; the server
-   * draws a number every AutoInterval seconds (plus the player draw delay) while
-   * it is on. Auto is switched off automatically at half-time and as soon as a
-   * winner is recognized. Resets to off when a new game starts (unless started
-   * with Auto on) and after a server restart.
-   */
-  auto_enabled: boolean;
-  /**
-   * AutoInterval is the seconds between automatic draws (the "Time Between Calls"
-   * setting). The gap a player perceives between numbers is AutoInterval + the
-   * draw delay, since each auto draw still respects the delay before reaching
-   * players. Adjustable live without affecting any preset the game was started from.
-   */
-  auto_interval: number /* int */;
-}
-/**
- * BingoGamePattern is a point-in-time snapshot of a pattern attached to a bingo game.
- * Snapshots are stored so that deleting or renaming a pattern does not
- * affect games that were started with it.
- */
-export interface BingoGamePattern {
-  id: number /* int */; // original pattern ID at time of snapshot
-  name: string; // pattern name at time of snapshot
-  pattern_data: boolean[][]; // 5x5 boolean grid
-}
-/**
- * BingoDrawnNumber holds details of a single drawn bingo number, returned after each draw action.
- */
-export interface BingoDrawnNumber {
-  number: number /* int */; // the bingo number (1-75)
-  letter: string; // column letter: B, I, N, G, or O
-  call_order: number /* int */; // 1-based position in the draw sequence
-}
-/**
- * GameStateResponse is the body of GET /api/game and POST /api/game/start.
- */
-export interface GameStateResponse {
-  game?: BingoGameState;
-  winners: string[];
-  game_details: string;
-}
-/**
- * DrawResult is the body of POST /api/game/draw: the number just drawn,
- * the updated game state, and the current winning card IDs.
- */
-export interface DrawResult {
-  drawn: BingoDrawnNumber;
-  game: BingoGameState;
-  winners: string[];
-}
-/**
- * EndGameResponse is the body of POST /api/game/end.
- */
-export interface EndGameResponse {
-  ended: boolean;
-}
-/**
- * YoeverResponse is the body of a successful POST /api/game/yoever: the running
- * per-game trigger count and the cooldown (in seconds) the triggering board must
- * wait before it may trigger the reaction again.
- */
-export interface YoeverResponse {
-  ok: boolean;
-  count: number /* int */;
-  cooldown_seconds: number /* int */;
-}
-
-//////////
 // source: garapons.go
 
 /**
@@ -1586,154 +1370,10 @@ export interface LogEntry {
   message: string;
   fields?: { [key: string]: any};
 }
-/**
- * LogsResponse is the tail of the server log returned by GET /api/logs, after
- * level/text filtering and ordered newest-first. Truncated is true when the read
- * cap dropped older lines (their history lives in the rotated/compressed files).
- * Level is the current process-wide minimum level (so the viewer can reflect
- * whether live DEBUG is on).
- */
-export interface LogsResponse {
-  entries: LogEntry[];
-  file: string;
-  truncated: boolean;
-  level: string;
-}
-/**
- * LogLevelResponse reports the process-wide minimum log level after a change
- * (POST /api/logs/level) - one of "debug", "info", "warn", "error".
- */
-export interface LogLevelResponse {
-  level: string;
-}
 
 //////////
 // source: participant.go
 
-
-//////////
-// source: passkeys.go
-
-/**
- * Passkey is the public metadata for a stored WebAuthn credential. The key
- * material (public key, signature counter, etc.) stays in the store and is never
- * exposed through the API.
- */
-export interface Passkey {
-  id: number /* int64 */;
-  name: string;
-  created_at: string;
-  last_used_at: string;
-}
-/**
- * PasskeysResponse is the body of GET /api/account/passkeys.
- */
-export interface PasskeysResponse {
-  passkeys: Passkey[];
-}
-
-//////////
-// source: patterns.go
-
-/**
- * Pattern represents a reusable win pattern template.
- * PatternData is a 5x5 boolean grid where true means the cell must be
- * called (matched) for a card to win with this pattern.
- */
-export interface Pattern {
-  id: number /* int64 */;
-  name: string;
-  pattern_data: boolean[][]; // 5x5 grid; true = required cell
-  sort_order: number /* int */; // display order within category
-  category_id: number /* int64 */; // FK to pattern_categories
-  category_name: string; // denormalized for display
-}
-/**
- * PatternCategory groups win patterns into named, ordered categories
- * for organizational display in the admin UI.
- */
-export interface PatternCategory {
-  id: number /* int64 */;
-  name: string;
-  sort_order: number /* int */; // lower values appear first
-}
-/**
- * PatternsResponse is the body of GET /api/patterns (and the reorder/bulk_reorder
- * action replies): all patterns plus all categories.
- */
-export interface PatternsResponse {
-  patterns: Pattern[];
-  categories: PatternCategory[];
-}
-/**
- * CreatedPattern is the freshly-created pattern echoed back by
- * POST /api/patterns {action:"create"}. It is a subset of Pattern (no sort_order
- * or category_name), so it is its own shape rather than the full domain type.
- */
-export interface CreatedPattern {
-  id: number /* int64 */;
-  name: string;
-  pattern_data: boolean[][];
-  category_id: number /* int64 */;
-}
-/**
- * PatternCreateResponse wraps the created pattern: {"pattern": {...}}.
- */
-export interface PatternCreateResponse {
-  pattern: CreatedPattern;
-}
-/**
- * CategoriesResponse is the body of GET /api/pattern-categories (and the
- * reorder/bulk_reorder action replies): all categories.
- */
-export interface CategoriesResponse {
-  categories: PatternCategory[];
-}
-/**
- * CategoryCreateResponse is the body of POST /api/pattern-categories
- * {action:"create"}: the new category's id and name.
- */
-export interface CategoryCreateResponse {
-  id: number /* int64 */;
-  name: string;
-}
-
-//////////
-// source: presets.go
-
-/**
- * GamePreset is a reusable bingo-game template: a named set of win pattern IDs
- * plus pre-written game details (markdown). Admins select a preset when
- * starting a new game to auto-apply its patterns and details.
- */
-export interface GamePreset {
-  id: number /* int64 */;
-  name: string;
-  pattern_ids: number /* int64 */[]; // win pattern IDs to pre-select
-  game_details: string; // markdown game details to apply
-  /**
-   * Auto pre-selects the automatic-draw toggle when the preset is applied, and
-   * AutoInterval fills the "Time Between Calls" selector (seconds). A game
-   * started from the preset begins auto-drawing when Auto is set; adjusting the
-   * live game's auto controls never writes back to the preset.
-   */
-  auto: boolean;
-  auto_interval: number /* int */;
-  created_at: string;
-}
-/**
- * PresetsResponse is the body of GET /api/presets: all saved game presets.
- */
-export interface PresetsResponse {
-  presets: GamePreset[];
-}
-/**
- * PresetCreateResponse is the body of POST /api/presets {action:"create"}: the
- * new preset's id.
- */
-export interface PresetCreateResponse {
-  id: number /* int64 */;
-}
 
 //////////
 // source: raffles.go
@@ -1925,26 +1565,16 @@ export interface RaffleWinnerResponse {
 // source: settings.go
 
 /**
- * UploadedFont is one uploaded font (group) in the public settings payload:
- * its base name, its effective CSS family name (admin-customizable; defaults
- * to the base name), and the current serving token of its publicly-served
- * variant, which the frontend uses to build the @font-face URL
- * (/api/fonts/pub/f/{token}). Tokens rotate on a schedule - always use the
- * freshly served value.
+ * UploadedFont is one uploaded font (group) as the settings list it: its base
+ * name, its effective CSS family name (admin-customizable; defaults to the base
+ * name), and the current serving token of its publicly-served variant, which the
+ * frontend builds the @font-face URL from. Tokens rotate on a schedule - always
+ * use the freshly served value.
  */
 export interface UploadedFont {
   name: string;
   family: string;
   token: string;
-}
-/**
- * SettingsResponse is the body of GET /api/settings. The settings map is keyed by
- * setting name (a genuinely dynamic string->string map); uploaded_fonts lists the
- * fonts available for the header/board font picker with their serving tokens.
- */
-export interface SettingsResponse {
-  settings: { [key: string]: string};
-  uploaded_fonts: UploadedFont[];
 }
 
 //////////
@@ -2336,98 +1966,6 @@ export interface StampLookupResponse {
 }
 
 //////////
-// source: styles.go
-
-/**
- * Style represents a custom CSS theme stored in the database.
- * Admins can create, edit, and activate styles to customize the player UI.
- */
-export interface Style {
-  id: number /* int64 */;
-  name: string;
-  /**
-   * Tokens is the theme's design-token overrides: a map of token name (without
-   * the leading "--", e.g. "page-bg") to its CSS value. This is the source of
-   * truth for a theme - the applied stylesheet is generated from it (see
-   * store.TokensToCSS). Only known token names are stored; arbitrary CSS is not
-   * supported, which keeps themes safe and lets the base stylesheet be
-   * refactored freely. Populated on detail/active reads.
-   */
-  tokens?: { [key: string]: string};
-  /**
-   * CSSContent is the generated ":root{...}" stylesheet for this theme, derived
-   * from Tokens. It is never stored - it's filled in on read for the active-CSS
-   * endpoint and the live style broadcast - so it's omitted when empty.
-   */
-  css_content?: string;
-  /**
-   * Optional per-theme decorative flourishes (root-relative paths into
-   * images/flourishes, "" = use the app's built-in art). BoardFlourish is the
-   * SVG drawn at the player board corners; NumberFlourish flanks the last-called
-   * number (player + admin Game tab).
-   */
-  board_flourish: string;
-  number_flourish: string;
-  /**
-   * IsPublic marks a theme as selectable by end users in the client-side theme
-   * picker. Private (false, the default) themes are admin-only. Public themes
-   * expose their name + generated CSS through the unauthenticated /api/styles/public
-   * endpoints.
-   */
-  is_public: boolean;
-  created_at: string;
-}
-/**
- * PublicStyle is the slim shape returned by the public theme picker: just enough
- * to label an option and fetch its CSS by id. Deliberately excludes tokens/CSS
- * and any admin-only fields.
- */
-export interface PublicStyle {
-  id: number /* int64 */;
-  name: string;
-}
-/**
- * PublicStylesResponse is the body of GET /api/styles/public: the themes an end
- * user may pick for themselves (the admin's active theme is offered separately as
- * a name-hiding "Default" option, resolved via GET /api/styles/active).
- */
-export interface PublicStylesResponse {
-  styles: PublicStyle[];
-}
-/**
- * StylesResponse is the body of GET /api/styles: all styles (without CSS) and
- * the active style id (a stringified id, or "").
- */
-export interface StylesResponse {
-  styles: Style[];
-  active_style_id: string;
-}
-/**
- * StyleGetResponse is the body of POST /api/styles {action:"get"}: one style.
- */
-export interface StyleGetResponse {
-  style: Style;
-}
-/**
- * StyleCreateResponse is the body of POST /api/styles {action:"create"}: the new
- * style's id and name. (api.ts's StyleCreateResponse lists only `id`; the handler
- * also returns `name`, which is authoritative and kept here.)
- */
-export interface StyleCreateResponse {
-  id: number /* int64 */;
-  name: string;
-}
-/**
- * ActiveCSSResponse is the body of GET /api/styles/active: the active theme's raw
- * CSS and decorative flourish paths.
- */
-export interface ActiveCSSResponse {
-  css: string;
-  board_flourish: string;
-  number_flourish: string;
-}
-
-//////////
 // source: tearooms.go
 
 /**
@@ -2548,115 +2086,4 @@ export interface User {
   permissions: string[]; // page-permission keys (ignored when IsAdmin)
   created_at: string;
   last_login_at: string; // ISO timestamp of last successful login ("" if never)
-}
-/**
- * TokenInfo is the non-secret metadata about an account's personal access token
- * (used by external API clients such as the FFXIV plugin). The token plaintext
- * is never stored or re-shown, so only its prefix and timestamps are exposed.
- * HasToken is false (and the other fields empty) when the account has no token.
- */
-export interface TokenInfo {
-  has_token: boolean;
-  prefix: string; // leading visible chars, e.g. "pat_Ab12Cd34"
-  created_at: string; // ISO timestamp ("" when none)
-  last_used_at: string; // ISO timestamp ("" when never used)
-}
-/**
- * AuthCheckResponse is the body of GET /api/auth: whether a session is logged in
- * and, if so, the active user. User is null when not authenticated, so it is NOT
- * omitempty - the key is always present (null when logged out).
- */
-export interface AuthCheckResponse {
-  authenticated: boolean;
-  user?: User;
-}
-/**
- * LoginResponse is the body of POST /api/auth {action:"login"} on success. The
- * success key is always the literal true here, and the logged-in user is always
- * present, so neither field is omitempty.
- */
-export interface LoginResponse {
-  success: boolean;
-  user: User;
-}
-/**
- * LogoutResponse is the body of POST /api/auth {action:"logout"}: just the
- * success flag. Kept separate from LoginResponse so logout never emits a
- * user:null key (which would be a wire change from today's {"success":true}).
- */
-export interface LogoutResponse {
-  success: boolean;
-}
-/**
- * RegisterResponse is the body of POST /api/register: the success flag plus a
- * human-readable message (the account is created pending admin activation).
- */
-export interface RegisterResponse {
-  success: boolean;
-  message: string;
-}
-/**
- * UsersResponse is the body of GET /api/users - all accounts (admin only).
- */
-export interface UsersResponse {
-  users: User[];
-}
-/**
- * AccountTokenGenerateResponse is the body of POST /api/account/token
- * {action:"generate"}: the freshly minted token plaintext (returned EXACTLY
- * once), its visible prefix, and the creation timestamp.
- */
-export interface AccountTokenGenerateResponse {
-  token: string;
-  prefix: string;
-  created_at: string;
-}
-/**
- * TokenRevokeResponse is the body of POST /api/account/token {action:"revoke"}:
- * the {"ok": true, "deleted": bool} shape reporting whether a token row was
- * actually removed. (Distinct from the bare OKResponse - it carries deleted.)
- */
-export interface TokenRevokeResponse {
-  ok: boolean;
-  deleted: boolean;
-}
-
-//////////
-// source: winners.go
-
-/**
- * WinnersLogEntry represents a confirmed winner stored in the winners log.
- * Created when an admin ends a game and selects valid winners.
- */
-export interface WinnersLogEntry {
-  id: number /* int64 */;
-  logged_at: string; // ISO 8601 timestamp of when the win was logged
-  card_id: string; // winning card ID
-  player_name: string; // player name from the card at time of win
-  game_details: string; // game details setting at time of win
-  winning_patterns: string; // JSON array of pattern names active during the game
-}
-/**
- * FrequentWinner represents a player who has won multiple times within
- * a recent time window. Used to alert admins of potential repeat winners.
- */
-export interface FrequentWinner {
-  player_name: string;
-  win_count: number /* int */; // number of wins in the lookback period
-}
-/**
- * WinnersLogResponse is the body of GET /api/winners-log: a page of entries
- * plus the pagination metadata.
- */
-export interface WinnersLogResponse {
-  entries: WinnersLogEntry[];
-  total: number /* int */;
-  page: number /* int */;
-  per_page: number /* int */;
-}
-/**
- * FrequentWinnersResponse is the body of GET /api/winners-log/frequent.
- */
-export interface FrequentWinnersResponse {
-  winners: FrequentWinner[];
 }

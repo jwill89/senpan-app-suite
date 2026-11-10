@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
-
-	"app-suite/internal/auth"
 )
 
 // -- Affiliates admin CRUD ---------------------------------------------------
@@ -136,25 +134,9 @@ func TestAffiliates_UpdateValidation(t *testing.T) {
 func TestAffiliates_PermissionGating(t *testing.T) {
 	env := newTestEnv(t)
 
-	hash, err := auth.Hash("password123")
-	if err != nil {
-		t.Fatal(err)
-	}
-	staff, err := env.store.CreateUser(t.Context(), "staff", hash)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := env.store.SetUserActive(t.Context(), staff.ID, true); err != nil {
-		t.Fatal(err)
-	}
 	// Grant an unrelated permission first -> still forbidden on affiliates.
-	if err := env.store.SetUserPermissions(t.Context(), staff.ID, []string{"bingo-cards"}); err != nil {
-		t.Fatal(err)
-	}
-
-	env.postJSON(t, "/api/auth", map[string]string{
-		"action": "login", "username": "staff", "password": "password123",
-	}).Body.Close()
+	staff := addAccount(t, env, "staff", "password123", []string{"bingo-cards"})
+	env.signIn(t, "staff", "password123")
 
 	if resp := env.get(t, "/api/affiliates"); resp.StatusCode != http.StatusForbidden {
 		t.Errorf("wrong-permission status = %d; want 403", resp.StatusCode)
@@ -162,9 +144,7 @@ func TestAffiliates_PermissionGating(t *testing.T) {
 	}
 
 	// Grant teahouse-affiliates -> the next request reloads perms and is allowed.
-	if err := env.store.SetUserPermissions(t.Context(), staff.ID, []string{"teahouse-affiliates"}); err != nil {
-		t.Fatal(err)
-	}
+	setAccess(t, env, staff, []string{"teahouse-affiliates"})
 	if resp := env.get(t, "/api/affiliates"); resp.StatusCode != http.StatusOK {
 		t.Errorf("granted status = %d; want 200", resp.StatusCode)
 		resp.Body.Close()

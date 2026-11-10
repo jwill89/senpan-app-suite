@@ -235,7 +235,7 @@ const frontendVersion = JSON.parse(
 // https://vite.dev/config/
 //
 // During development the Vite dev server serves the SPA and proxies `/api/*`
-// (REST + WebSocket) to the Go server (default :8080), so the SPA talks to it
+// (REST + the live event streams) to the Go server (default :8080), so the SPA talks to it
 // without CORS friction. In production the Go binary serves both: the build is
 // embedded in it (outDir above), and Apache proxies everything but the web root's
 // upload folders to it.
@@ -253,8 +253,8 @@ export default defineConfig({
     // the PWA plugin's manifest transform reads later, at `closeBundle`.
     markAdminOnlyOutput(),
     // Installable PWA + offline app-shell. The service worker auto-updates on
-    // each deploy (new precache manifest). API/WebSocket and the persistent
-    // root images/ are explicitly excluded from the SPA navigation fallback so
+    // each deploy (new precache manifest). The API (its event streams included) and
+    // the persistent root images/ are explicitly excluded from the SPA navigation fallback so
     // they always hit the network (and Apache's proxy/static handling).
     VitePWA({
       registerType: 'autoUpdate',
@@ -349,20 +349,9 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // WebSocket upgrade for /api/ws - MUST come before the '/api' entry so it
-      // matches first. `changeOrigin` is left false here on purpose: the Go hub
-      // (coder/websocket) enforces a same-origin check (the request's Origin host
-      // must equal its Host header). Rewriting Host to the target (:8080) - as the
-      // REST proxy below does - would leave Origin as the browser's :5173 and fail
-      // that check (403 -> the socket drops -> "Connection lost. Reconnecting").
-      // Preserving Host keeps it equal to Origin, mirroring production's Apache
-      // `ProxyPreserveHost On`, so the check passes without weakening it.
-      '/api/ws': {
-        target: process.env.VITE_API_TARGET || 'http://localhost:8080',
-        ws: true,
-        changeOrigin: false,
-      },
-      // REST API -> Go backend
+      // The API -> Go backend, the live event streams included: the proxy pipes
+      // each answer through as it comes, so an event reaches the page the moment
+      // the server flushes it, and it sets no timeout that would cut a long stream.
       '/api': {
         target: process.env.VITE_API_TARGET || 'http://localhost:8080',
         changeOrigin: true,

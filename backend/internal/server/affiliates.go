@@ -7,7 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"app-suite/internal/discord"
 	"app-suite/internal/model"
+	"app-suite/internal/permissions"
 )
 
 // -- Affiliates admin (list + CRUD + drag order + post to Discord) ------------
@@ -17,7 +19,7 @@ import (
 // opening hours edited as repeatable rows and persisted as JSON. The logo +
 // screenshot are picked from the shared image library (System -> Images). A single
 // shared Discord webhook (kept out of public settings) lets each affiliate be
-// posted as an embed. All of this is admin-only, gated by permTeahouseAffiliates.
+// posted as an embed. All of this is admin-only, gated by permissions.TeahouseAffiliates.
 
 // affiliateWebhookSettingKey stores the single shared Discord webhook every
 // affiliate posts to. Deliberately NOT in settingsKeys (server/settings.go), so it
@@ -38,7 +40,7 @@ func (s *Server) handleAffiliatesList(w http.ResponseWriter, r *http.Request) {
 	// finish the form. They get the names only: the shared Discord webhook this
 	// response also carries belongs to the affiliates page, and a caller who cannot
 	// edit affiliates has no business holding it.
-	u := s.requireAnyPermission(w, r, permTeahouseAffiliates, permFestivalMap, permFestivalStampRally)
+	u := s.requireAnyPermission(w, r, permissions.TeahouseAffiliates, permissions.FestivalMap, permissions.FestivalStampRally)
 	if u == nil {
 		return
 	}
@@ -48,7 +50,7 @@ func (s *Server) handleAffiliatesList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var webhook string
-	if u.IsAdmin || userHasPermission(u, permTeahouseAffiliates) {
+	if u.IsAdmin || userHasPermission(u, permissions.TeahouseAffiliates) {
 		webhook, _ = s.store.GetSetting(r.Context(), affiliateWebhookSettingKey)
 	}
 	writeJSON(w, http.StatusOK, model.AffiliatesResponse{Affiliates: affiliates, WebhookURL: webhook})
@@ -130,7 +132,7 @@ func affiliateFromRequest(req affiliateWriteRequest, name string) *model.Affilia
 //	Auth:      admin, or a user granted teahouse-affiliates
 //	Response:  201 {"affiliate": Affiliate}
 func (s *Server) handleAffiliateCreate(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseAffiliates) {
+	if !s.requirePermission(w, r, permissions.TeahouseAffiliates) {
 		return
 	}
 	req, err := readJSON[affiliateWriteRequest](w, r)
@@ -159,7 +161,7 @@ func (s *Server) handleAffiliateCreate(w http.ResponseWriter, r *http.Request) {
 //	Auth:      admin, or a user granted teahouse-affiliates
 //	Response:  200 {"ok": true}
 func (s *Server) handleAffiliateUpdate(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseAffiliates) {
+	if !s.requirePermission(w, r, permissions.TeahouseAffiliates) {
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "affiliate")
@@ -191,7 +193,7 @@ func (s *Server) handleAffiliateUpdate(w http.ResponseWriter, r *http.Request) {
 //	Auth:      admin, or a user granted teahouse-affiliates
 //	Response:  204 No Content
 func (s *Server) handleAffiliateDelete(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseAffiliates) {
+	if !s.requirePermission(w, r, permissions.TeahouseAffiliates) {
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "affiliate")
@@ -216,7 +218,7 @@ type affiliateReorderRequest struct {
 //	Auth:      admin, or a user granted teahouse-affiliates
 //	Response:  200 {"ok": true}
 func (s *Server) handleAffiliatesReorder(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseAffiliates) {
+	if !s.requirePermission(w, r, permissions.TeahouseAffiliates) {
 		return
 	}
 	req, err := readJSON[affiliateReorderRequest](w, r)
@@ -243,7 +245,7 @@ type affiliateWebhookRequest struct {
 //	Request:   {"webhook_url": "https://discord.com/api/webhooks/..."}  ('' clears)
 //	Response:  200 {"webhook_url": "..."}
 func (s *Server) handleAffiliateWebhookSet(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseAffiliates) {
+	if !s.requirePermission(w, r, permissions.TeahouseAffiliates) {
 		return
 	}
 	req, err := readJSON[affiliateWebhookRequest](w, r)
@@ -252,7 +254,7 @@ func (s *Server) handleAffiliateWebhookSet(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	webhook := strings.TrimSpace(req.WebhookURL)
-	if webhook != "" && !isDiscordWebhookURL(webhook) {
+	if webhook != "" && !discord.IsWebhookURL(webhook) {
 		writeError(w, http.StatusBadRequest, "Discord webhook URLs must look like https://discord.com/api/webhooks/...")
 		return
 	}
@@ -270,7 +272,7 @@ func (s *Server) handleAffiliateWebhookSet(w http.ResponseWriter, r *http.Reques
 //	Response:  200 {"affiliate": Affiliate}
 //	           400 no webhook, 404 not found, 502 Discord post failed
 func (s *Server) handleAffiliatePost(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseAffiliates) {
+	if !s.requirePermission(w, r, permissions.TeahouseAffiliates) {
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "affiliate")

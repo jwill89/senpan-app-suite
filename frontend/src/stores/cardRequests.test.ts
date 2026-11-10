@@ -1,9 +1,12 @@
 import { setActivePinia, createPinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { req } = vi.hoisted(() => ({ req: vi.fn() }))
-vi.mock('@/lib/endpoints', () => ({
-  endpoints: { cards: { request: req } },
+// The store calls the API client; only its calls are faked (unwrap is the real one).
+const ok = (data: unknown, status = 202) => ({ data, response: new Response(null, { status }) })
+const api = vi.hoisted(() => ({ POST: vi.fn() }))
+vi.mock('@/api/client', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  api,
 }))
 
 import { useCardRequestsStore } from '@/stores/cardRequests'
@@ -13,7 +16,7 @@ import { randomBoard } from '@/lib/constants'
 describe('cardRequests store', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    req.mockReset()
+    api.POST.mockReset()
   })
 
   it('validate() flags missing fields, a bad id, then an incomplete board', () => {
@@ -33,22 +36,45 @@ describe('cardRequests store', () => {
     const s = useCardRequestsStore()
     const notify = vi.spyOn(useUiStore(), 'notify').mockImplementation(() => undefined)
     await s.submit()
-    expect(req).not.toHaveBeenCalled()
+    expect(api.POST).not.toHaveBeenCalled()
     expect(notify).toHaveBeenCalled()
   })
 
   it('submit() posts the request (uppercasing the id) and records the pending result', async () => {
     const s = useCardRequestsStore()
     vi.spyOn(useUiStore(), 'notify').mockImplementation(() => undefined)
-    req.mockResolvedValue({ id: 'ABC123', status: 'pending' })
+    api.POST.mockResolvedValue(ok({ id: 'ABC123', status: 'pending' }))
     s.characterName = 'Aria'
     s.world = 'Gilgamesh'
     s.cardId = 'abc123'
     s.board = randomBoard()
+    s.turnstileToken = 'token'
     await s.submit()
-    expect(req).toHaveBeenCalledWith(
-      expect.objectContaining({ character_name: 'Aria', world: 'Gilgamesh', card_id: 'ABC123' }),
-    )
+    expect(api.POST).toHaveBeenCalledWith('/cards/request', {
+      body: expect.objectContaining({
+        characterName: 'Aria',
+        world: 'Gilgamesh',
+        cardId: 'ABC123',
+        turnstileToken: 'token',
+      }),
+    })
     expect(s.result).toEqual({ id: 'ABC123', status: 'pending' })
+    expect(s.turnstileToken).toBe('')
+  })
+
+  it("submit() shows the server's reason when it refuses the request", async () => {
+    const s = useCardRequestsStore()
+    const notify = vi.spyOn(useUiStore(), 'notify').mockImplementation(() => undefined)
+    api.POST.mockResolvedValue({
+      error: { status: 409, detail: 'That card ID is taken. Choose another.' },
+      response: new Response(null, { status: 409 }),
+    })
+    s.characterName = 'Aria'
+    s.world = 'Gilgamesh'
+    s.cardId = 'ABC123'
+    s.board = randomBoard()
+    await s.submit()
+    expect(notify).toHaveBeenCalledWith('That card ID is taken. Choose another.', 'error')
+    expect(s.result).toBeNull()
   })
 })

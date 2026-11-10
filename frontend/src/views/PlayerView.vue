@@ -6,8 +6,8 @@
  * Receives the board id via the `cardId` route param. On mount (and when the
  * param changes) it loads the board if it isn't already loaded - this makes the
  * URL directly linkable and survive a refresh. If the board can't be loaded
- * (e.g. bad/expired id) it redirects home. The WebSocket connect/disconnect is
- * driven by App.vue off the active route + loaded card.
+ * (e.g. bad/expired id) it redirects home. The board's live stream is opened and
+ * closed by App.vue off the active route + loaded card.
  */
 import { computed, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -68,9 +68,9 @@ async function exportCard(): Promise<void> {
     await exportCardImage({
       element: el,
       fileName: `bingo-card-${player.playerCard?.id ?? 'card'}`,
-      title: app.settings.app_title || 'Bingo',
+      title: app.settings.appTitle || 'Bingo',
       cardId: player.playerCard?.id ?? '',
-      playerName: player.playerCard?.player_name ?? '',
+      playerName: player.playerCard?.playerName ?? '',
       link: window.location.host,
       gameDetails: player.cardExportDetails,
     })
@@ -105,14 +105,13 @@ watch(
 )
 
 // -- Live connection badge ----------------------------------------------------
-// On the player view the socket is always meant to be connected, so the brief
-// pre-connect `closed` state (before App.vue opens the connection) is shown as
+// On the player view the live stream is always meant to be open, so the brief
+// pre-connect `closed` state (before App.vue opens the stream) is shown as
 // "Connecting..." rather than an alarming red "Offline" - the player should never
-// think something is broken just because the link hasn't opened yet. A genuine
-// give-up after max reconnect attempts still raises its own "please refresh"
-// error toast (see WsClient), so no information is lost.
+// think something is broken just because the stream hasn't opened yet. The stream
+// keeps trying to reopen, and says so in a toast when it stays down.
 const connLabel = computed(() => {
-  switch (ui.wsStatus) {
+  switch (ui.feedStatus) {
     case 'open':
       return 'Live'
     case 'reconnecting':
@@ -121,7 +120,9 @@ const connLabel = computed(() => {
       return 'Connecting...'
   }
 })
-const connClass = computed(() => (ui.wsStatus === 'closed' ? 'is-connecting' : `is-${ui.wsStatus}`))
+const connClass = computed(() =>
+  ui.feedStatus === 'closed' ? 'is-connecting' : `is-${ui.feedStatus}`,
+)
 
 // Which BINGO columns this game can draw from (undefined when there's no game -> no
 // dimming). Columns no active pattern uses get a dim overlay in the Called Numbers
@@ -179,8 +180,8 @@ function onYoeverSoundToggle(): void {
         <h2>
           Board <span class="code-highlight">{{ player.playerCard?.id }}</span>
         </h2>
-        <span v-if="player.playerCard?.player_name" class="topbar-player">
-          {{ player.playerCard.player_name }}
+        <span v-if="player.playerCard?.playerName" class="topbar-player">
+          {{ player.playerCard.playerName }}
         </span>
       </div>
       <span
@@ -200,7 +201,7 @@ function onYoeverSoundToggle(): void {
         <BingoBoard
           v-if="player.playerCard"
           ref="boardRef"
-          :board="player.playerCard.board_data"
+          :board="player.playerCard.boardData"
           mode="player"
           :is-stamped="player.isStamped"
           :cell-class="player.boardCellClass"
@@ -328,7 +329,7 @@ function onYoeverSoundToggle(): void {
               <span class="last-called-label">Last Called</span>
               <div class="last-called-row">
                 <span class="last-called-flourish" aria-hidden="true"></span>
-                <div :key="player.lastDrawn.call_order" class="last-drawn last-drawn--pop">
+                <div :key="player.lastDrawn.callOrder" class="last-drawn last-drawn--pop">
                   <span class="letter">{{ player.lastDrawn.letter }}</span>
                   <span class="number">{{ player.lastDrawn.number }}</span>
                 </div>
@@ -342,7 +343,7 @@ function onYoeverSoundToggle(): void {
           </template>
 
           <CalledNumbers
-            :count="player.playerGame ? player.playerGame.called_numbers.length : 0"
+            :count="player.playerGame ? player.playerGame.calledNumbers.length : 0"
             :is-called="player.isCalledPlayer"
             :active-columns="calledActiveColumns"
           />

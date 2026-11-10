@@ -5,8 +5,8 @@
  * triggering player's name) and the per-client opt-out. It is deliberately
  * view-agnostic - the overlay lives in the app shell so the effect shows on both
  * the player and admin views - and knows nothing about the trigger button or the
- * server toggle (those live in the player/game stores). The WebSocket dispatch
- * calls `show()` when a `yoever` message arrives; `muted` (persisted locally)
+ * server toggle (those live in the player/game stores). The live events' dispatch
+ * calls `show()` when a `yoever` event arrives; `muted` (persisted locally)
  * lets a user suppress the sound + animation on their own screen without
  * affecting anyone else.
  */

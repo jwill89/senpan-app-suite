@@ -15,7 +15,7 @@ import (
 //
 // `go run ./cmd/schema-gen` writes it; TestSchemaIsCurrent fails when the
 // committed copy is not what the migrations build now, so every schema change
-// shows in review (database.md).
+// shows in review.
 func Schema(ctx context.Context) (string, error) {
 	dir, err := os.MkdirTemp("", "senpan-schema-")
 	if err != nil {

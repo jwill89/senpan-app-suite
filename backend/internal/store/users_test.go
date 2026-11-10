@@ -1,156 +1,30 @@
 package store_test
 
 import (
-	"errors"
 	"testing"
 
-	"app-suite/internal/store"
+	"app-suite/internal/auth"
+	"app-suite/internal/db"
 )
 
+// The migrations seed the bootstrap admin: active, an admin, password "admin" (to be
+// changed at once).
 func TestUsersSeedAdmin(t *testing.T) {
 	s := newTestStore(t)
+	q := db.New(s.ReadDB())
 
-	admin, hash, err := s.GetUserByUsername(t.Context(), "admin")
+	admin, err := q.GetUserByUsername(t.Context(), auth.ReservedUsername)
+	if err != nil {
+		t.Fatalf("expected the migrations to seed the %q account: %v", auth.ReservedUsername, err)
+	}
+	if admin.IsAdmin != 1 || admin.IsActive != 1 {
+		t.Fatalf("the seeded admin should be an active admin, got admin=%d active=%d", admin.IsAdmin, admin.IsActive)
+	}
+	hash, err := q.GetPasswordHash(t.Context(), admin.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if admin == nil {
-		t.Fatal("expected migration to seed an 'admin' user")
-	}
-	if !admin.IsAdmin || !admin.IsActive {
-		t.Fatalf("seeded admin should be admin+active, got admin=%v active=%v", admin.IsAdmin, admin.IsActive)
-	}
-	if hash == "" {
-		t.Fatal("seeded admin should have a password hash")
-	}
-}
-
-func TestUsersPasswordEpochBumps(t *testing.T) {
-	s := newTestStore(t)
-
-	u, err := s.CreateUser(t.Context(), "epoch-user", "hash-1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if u.PasswordEpoch != 0 {
-		t.Fatalf("a new user should start at epoch 0, got %d", u.PasswordEpoch)
-	}
-
-	// Each password change must advance the epoch so prior sessions go stale.
-	for want := int64(1); want <= 2; want++ {
-		if err := s.SetUserPassword(t.Context(), u.ID, "hash-new"); err != nil {
-			t.Fatal(err)
-		}
-		got, err := s.GetUserByID(t.Context(), u.ID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got.PasswordEpoch != want {
-			t.Fatalf("after %d password change(s), epoch = %d, want %d", want, got.PasswordEpoch, want)
-		}
-	}
-
-	// The epoch is also readable via the login path (GetUserByUsername).
-	byName, _, err := s.GetUserByUsername(t.Context(), "epoch-user")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if byName.PasswordEpoch != 2 {
-		t.Fatalf("GetUserByUsername epoch = %d, want 2", byName.PasswordEpoch)
-	}
-}
-
-func TestUsersUpdateLastLogin(t *testing.T) {
-	s := newTestStore(t)
-
-	u, err := s.CreateUser(t.Context(), "tester", "hash-1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if u.LastLoginAt != "" {
-		t.Fatalf("a new user should have no last-login time, got %q", u.LastLoginAt)
-	}
-
-	if err := s.UpdateLastLogin(t.Context(), u.ID); err != nil {
-		t.Fatal(err)
-	}
-
-	got, err := s.GetUserByID(t.Context(), u.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got == nil || got.LastLoginAt == "" {
-		t.Fatalf("last_login_at should be set after UpdateLastLogin, got %q", got.LastLoginAt)
-	}
-}
-
-func TestUsersCreateInactiveAndMutate(t *testing.T) {
-	s := newTestStore(t)
-
-	u, err := s.CreateUser(t.Context(), "tester", "hash-1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if u.IsActive || u.IsAdmin {
-		t.Fatal("new users must start inactive and non-admin")
-	}
-	if len(u.Permissions) != 0 {
-		t.Fatalf("new users start with no permissions, got %v", u.Permissions)
-	}
-
-	if err := s.SetUserActive(t.Context(), u.ID, true); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.SetUserPermissions(t.Context(), u.ID, []string{"bingo-game", "bingo-cards"}); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.SetUserPassword(t.Context(), u.ID, "hash-2"); err != nil {
-		t.Fatal(err)
-	}
-
-	got, hash, err := s.GetUserByUsername(t.Context(), "tester")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !got.IsActive {
-		t.Fatal("expected user to be active after SetUserActive")
-	}
-	if hash != "hash-2" {
-		t.Fatalf("expected updated hash, got %q", hash)
-	}
-	if len(got.Permissions) != 2 || got.Permissions[0] != "bingo-game" {
-		t.Fatalf("unexpected permissions: %v", got.Permissions)
-	}
-}
-
-func TestUsersDuplicateUsername(t *testing.T) {
-	s := newTestStore(t)
-
-	if _, err := s.CreateUser(t.Context(), "dup", "h"); err != nil {
-		t.Fatal(err)
-	}
-	_, err := s.CreateUser(t.Context(), "dup", "h2")
-	if !errors.Is(err, store.ErrUsernameTaken) {
-		t.Fatalf("expected ErrUsernameTaken, got %v", err)
-	}
-}
-
-func TestUsersDelete(t *testing.T) {
-	s := newTestStore(t)
-
-	u, err := s.CreateUser(t.Context(), "temp", "h")
-	if err != nil {
-		t.Fatal(err)
-	}
-	deleted, err := s.DeleteUser(t.Context(), u.ID)
-	if err != nil || !deleted {
-		t.Fatalf("expected delete to succeed, got deleted=%v err=%v", deleted, err)
-	}
-	got, _, err := s.GetUserByUsername(t.Context(), "temp")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != nil {
-		t.Fatal("expected user to be gone after delete")
+	if ok, err := auth.Verify("admin", hash); err != nil || !ok {
+		t.Fatalf("the seeded admin's password should be %q (ok=%v, err=%v)", "admin", ok, err)
 	}
 }

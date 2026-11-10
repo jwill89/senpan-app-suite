@@ -2,7 +2,7 @@
  * Shared constants and small pure helpers mirrored from the original app.js.
  * Keeping these identical preserves the exact look and behavior.
  */
-import type { AppSettings } from '@/types/api'
+import type { SettingsInput } from '@/api/client'
 
 export interface StampShape {
   id: string
@@ -167,10 +167,10 @@ export function emptyGrid(): boolean[][] {
  * active. The Called Numbers panel darkens the inactive columns to show they won't
  * be used that game.
  */
-export function patternColumns(patterns: { pattern_data: boolean[][] }[]): boolean[] {
+export function patternColumns(patterns: { patternData: boolean[][] }[]): boolean[] {
   const cols = [false, false, false, false, false]
   for (const p of patterns) {
-    const grid = p.pattern_data
+    const grid = p.patternData
     for (const [r, row] of grid.slice(0, 5).entries()) {
       for (const [c, cell] of row.slice(0, 5).entries()) {
         if (cell && !(r === 2 && c === 2)) {
@@ -326,11 +326,6 @@ export const BOOK_CLUBS = [
   },
 ] as const
 
-/** Per-club reading-list Discord webhook setting key (matches webhookSettingKey on the backend). */
-export function clubWebhookKey(slug: string): `discord_webhook_url_${string}` {
-  return `discord_webhook_url_${slug}`
-}
-
 /**
  * Canonical list of grantable admin page permissions. Each `key` matches both a
  * frontend AdminTab id and the backend permission constant (see permissions.go),
@@ -376,23 +371,22 @@ export const ADMIN_PERMISSIONS: AdminPermission[] = [
   { key: 'system-images', label: 'Images', section: 'System' },
 ]
 
-/** Default app settings - matches the original app.js defaults. */
-export const DEFAULT_APP_SETTINGS: AppSettings = {
-  app_title: 'Senpan App Suite',
-  default_draw_delay: '0',
-  frequent_winner_threshold: '3',
-  frequent_winner_hours: '12',
-  header_font: 'Arapey',
-  google_fonts_api_key: '',
-  anilist_api_url: 'https://graphql.anilist.co',
-  bingo_join_prompt: 'Enter your unique bingo board ID to play',
-  yoever_cooldown_seconds: '180',
-  custom_card_cost: '0',
-  hide_bingo: '0',
-  hide_custom_cards: '0',
-  // One blank reading-list webhook default per known club so the settings form
-  // binds cleanly before the server response loads.
-  ...Object.fromEntries(BOOK_CLUBS.map((c) => [clubWebhookKey(c.slug), ''])),
+/**
+ * The site's settings before the server's have loaded: the server's own defaults
+ * (internal/settings), so a page can render while it waits.
+ */
+export const DEFAULT_SETTINGS: SettingsInput = {
+  appTitle: 'Senpan App Suite',
+  defaultDrawDelay: 0,
+  frequentWinnerThreshold: 3,
+  frequentWinnerHours: 12,
+  headerFont: 'Arapey',
+  aniListApiUrl: 'https://graphql.anilist.co',
+  bingoJoinPrompt: 'Enter your unique bingo board ID to play',
+  yoeverCooldownSeconds: 180,
+  customCardCost: 0,
+  hideBingo: false,
+  hideCustomCards: false,
 }
 
 /** The browser's current IANA timezone (e.g. "America/New_York"); 'UTC' fallback. */

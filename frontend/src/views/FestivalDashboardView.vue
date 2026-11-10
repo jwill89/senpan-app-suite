@@ -27,7 +27,7 @@ import StampCardPanel from '@/components/player/StampCardPanel.vue'
 import { useFestivalDashboardStore } from '@/stores/festivalDashboard'
 import { useGaraponsStore } from '@/stores/garapons'
 import { useStampRalliesStore } from '@/stores/stampRallies'
-import { endpoints } from '@/lib/endpoints'
+import { api, unwrap } from '@/api/client'
 import { formatEventTime } from '@/lib/festivalmap'
 import { participantLabel } from '@/lib/participant'
 
@@ -49,7 +49,7 @@ const current = ref<Section>('map')
 onMounted(async () => {
   void store.open(props.id)
   try {
-    turnstileSiteKey.value = (await endpoints.system.config()).turnstile_site_key
+    turnstileSiteKey.value = (await unwrap(api.GET('/config'))).turnstileSiteKey
   } catch {
     turnstileSiteKey.value = '' // config probe failed -> behave as if disabled
   }

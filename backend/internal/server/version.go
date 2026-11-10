@@ -6,15 +6,6 @@ import (
 	"app-suite/internal/version"
 )
 
-// handleVersion reports the app's semantic version. Public (no auth): the value
-// isn't sensitive - the SPA pairs it with its own build version in the admin
-// dashboard, which tells an open tab it is older than the server.
-func (s *Server) handleVersion(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, struct {
-		Backend string `json:"backend"`
-	}{Backend: version.Version})
-}
-
 // handleHealth is GET /healthz: whether the app and its database answer, with the
 // version running and the schema's. Public, and outside the session, CSRF and
 // access-log layers, so the deploy's checks and an uptime monitor can poll it

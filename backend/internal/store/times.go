@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// Timestamps are stored in one form, as the standards have it (database.md): RFC
+// Timestamps are stored in one form: RFC
 // 3339 in UTC to the second, 2026-11-09T21:30:00Z, which every DATETIME column's
 // CHECK holds them to, and NULL where there is none. SQL takes "now" as
 // strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), never CURRENT_TIMESTAMP or datetime(),

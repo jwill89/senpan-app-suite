@@ -1,14 +1,14 @@
 import { describe, it, expect } from 'vitest'
 import { activeColumnCount, maxCallableNumbers, halftimeCallThreshold } from './halftime'
-import type { BingoGamePattern } from '@/types/api'
+import type { GamePattern } from '@/api/client'
 
 /** Builds a pattern whose required cells are in the given [row,col] positions. */
-function pattern(cells: [number, number][]): BingoGamePattern {
+function pattern(cells: [number, number][]): GamePattern {
   const grid = Array.from({ length: 5 }, () => Array.from({ length: 5 }, () => false))
   for (const [r, c] of cells) {
     grid[r]![c] = true
   }
-  return { id: 1, name: 'p', pattern_data: grid }
+  return { id: 1, name: 'p', patternData: grid }
 }
 
 describe('activeColumnCount', () => {

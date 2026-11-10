@@ -3,7 +3,7 @@
  * Root application shell.
  *
  * With Vue Router in place, this is a thin shell: it renders the matched route
- * via <router-view>, shows the global toast, owns the shared WebSocket lifecycle
+ * via <router-view>, shows the global toast, keeps the tab's one live stream
  * (driven by the current route), and performs the one-time global loads
  * (active theme CSS, app settings, open-raffle preload) on mount.
  *
@@ -17,17 +17,19 @@ import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import RouteProgressBar from '@/components/common/RouteProgressBar.vue'
 import AppFooter from '@/components/common/AppFooter.vue'
 import YoeverOverlay from '@/components/common/YoeverOverlay.vue'
-import { useWebSocket } from '@/composables/useWebSocket'
+import { useLiveEvents, type LiveTarget } from '@/composables/useLiveEvents'
 import { useAppStore } from '@/stores/app'
+import { useAuthStore } from '@/stores/auth'
 import { usePlayerStore } from '@/stores/player'
 import { useRafflesStore } from '@/stores/raffles'
 
 const route = useRoute()
 const app = useAppStore()
+const auth = useAuthStore()
 const player = usePlayerStore()
 const raffles = useRafflesStore()
 
-const { client: ws } = useWebSocket()
+const live = useLiveEvents()
 
 /**
  * Footer shows only on the public (non-admin) pages, not the admin
@@ -38,47 +40,47 @@ const showFooter = computed(
   () => !String(route.name ?? '').startsWith('admin') && !route.meta.embed,
 )
 
-// Drive the shared WebSocket from the active route via a *stable connection key*
-// rather than the raw route name, so the socket is (re)connected only when the
-// intended target actually changes - not on every admin sub-route navigation
-// (which previously tore the socket down and reconnected without the reconnect
-// catch-up, dropping missed draws/winners/logs). Keys:
-//   `player:<cardId>` - a loaded player board
-//   `admin`           - any live admin page
-//   null              - no socket (home, auth pages, and the hidden
-//                       /admin/register page, which has no session yet)
+// The tab's live stream follows the route through a *stable key* rather than the
+// raw route name, so the stream is opened again only when what it follows changes,
+// not on every admin sub-route navigation:
+//   `board:<cardId>` - a loaded player board: that board's stream
+//   `staff`          - any live admin page, for an account with a page to follow
+//   null             - no stream (home, the sign-in pages, an account with no
+//                      page granted yet)
 // Watching the player's card id too ensures that on a direct link / refresh to
-// /play/:cardId we connect once the board has finished loading (the card id is
-// null at the moment the route first changes).
-const wsKey = computed<string | null>(() => {
+// /play/:cardId the stream opens once the board has finished loading (the card id
+// is null at the moment the route first changes).
+const liveKey = computed<string | null>(() => {
   const name = route.name
   if (name === 'player') {
-    return player.playerCard?.id ? `player:${player.playerCard.id}` : null
+    return player.playerCard?.id ? `board:${player.playerCard.id}` : null
   }
   if (
     typeof name === 'string' &&
     name.startsWith('admin') &&
     name !== 'admin-login' &&
-    name !== 'admin-register'
+    name !== 'admin-register' &&
+    auth.user &&
+    (auth.user.isAdmin || auth.user.permissions.length > 0)
   ) {
-    return 'admin'
+    return 'staff'
   }
   return null
 })
 
 // A Vue watch on a primitive computed fires only when the value changes, so
-// navigating between admin sub-routes (key stays `admin`) is a no-op and the
-// live socket - plus its internal reconnect/catch-up - is left untouched.
+// navigating between admin sub-routes (key stays `staff`) leaves the stream, and
+// its own reopening and catching up, untouched.
 watch(
-  wsKey,
+  liveKey,
   (key) => {
-    if (key === null) {
-      ws.disconnect()
-    } else if (key.startsWith('player:')) {
-      ws.connect(key.slice('player:'.length))
-    } else {
-      ws.connect(null)
+    let target: LiveTarget = null
+    if (key === 'staff') {
+      target = { kind: 'staff' }
+    } else if (key?.startsWith('board:')) {
+      target = { kind: 'board', cardId: key.slice('board:'.length) }
     }
+    live.follow(target)
   },
   { immediate: true },
 )
@@ -93,7 +95,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  ws.disconnect()
+  live.stop()
 })
 </script>
 
@@ -108,7 +110,7 @@ onBeforeUnmount(() => {
          that heading instead. -->
     <main>
       <h1 v-if="route.name !== 'home'" class="sr-only">
-        {{ app.settings.app_title || 'Senpan App Suite' }}
+        {{ app.settings.appTitle || 'Senpan App Suite' }}
       </h1>
       <router-view />
     </main>

@@ -182,11 +182,11 @@ func (s *Server) handleStampSignup(w http.ResponseWriter, r *http.Request) {
 		"participant", card.ParticipantName, "garapon", garaponTitle, "garapon_draws", garaponDraws)
 
 	// Public path, so it is excluded from the adminMutationResource middleware.
-	// Broadcast explicitly so an admin watching the rally (or the garapon) sees the
-	// new card and drawing link appear live.
-	s.broadcastResourceChanged("stamp-rallies")
+	// Told here so an admin watching the rally (or the garapon) sees the new card
+	// and drawing link appear live.
+	s.resourceChanged("stamp-rallies")
 	if garaponID != nil {
-		s.broadcastResourceChanged("garapons")
+		s.resourceChanged("garapons")
 	}
 }
 

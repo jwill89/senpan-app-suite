@@ -3,23 +3,26 @@
  * overrides (see lib/theme-tokens), edited via the structured ThemeTokenEditor
  * in the component - this store manages the theme list, the currently-edited
  * theme, and persistence. The applied stylesheet is generated from the tokens
- * (server-side; and locally via tokensToCss for the live activation).
+ * server-side, and activating a theme answers with it.
  */
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { endpoints } from '@/lib/endpoints'
+import { api, unwrap, type StyleInput, type StyleSummary, type ThemeCSS } from '@/api/client'
 import { applyCustomCSS } from '@/lib/theme'
-import { defaultTokens, tokensToCss, withDefaults } from '@/lib/theme-tokens'
-import type { Style } from '@/types/api'
+import { defaultTokens, withDefaults } from '@/lib/theme-tokens'
 import { useUiStore } from './ui'
 import { useAppStore } from './app'
+
+/** The theme in the editor: what a save sends, and its id (0 until it is created). */
+export type EditingStyle = StyleInput & { id: number }
 
 export const useStylesStore = defineStore('styles', () => {
   const ui = useUiStore()
 
-  const styles = ref<Style[]>([])
-  const editingStyle = ref<Style | null>(null)
-  const activeStyleId = ref('')
+  const styles = ref<StyleSummary[]>([])
+  const editingStyle = ref<EditingStyle | null>(null)
+  /** The theme the site wears; null for the default look. */
+  const activeStyleId = ref<number | null>(null)
   /** True while the theme list is loading (drives the list spinner). */
   const stylesLoading = ref(false)
   /** True while the current theme is being saved (drives the Save button). */
@@ -29,9 +32,9 @@ export const useStylesStore = defineStore('styles', () => {
     editingStyle.value = null
     stylesLoading.value = true
     try {
-      const data = await endpoints.styles.list()
+      const data = await unwrap(api.GET('/styles'))
       styles.value = data.styles
-      activeStyleId.value = data.active_style_id || ''
+      activeStyleId.value = data.activeStyleId
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     } finally {
@@ -41,10 +44,17 @@ export const useStylesStore = defineStore('styles', () => {
 
   async function loadStyle(id: number): Promise<void> {
     try {
-      const data = await endpoints.styles.get(id)
+      const data = await unwrap(api.GET('/styles/{id}', { params: { path: { id } } }))
       // Merge saved tokens over the defaults so every token has a value for the
       // editor (a theme may have been saved before a token existed).
-      editingStyle.value = { ...data.style, tokens: withDefaults(data.style.tokens) }
+      editingStyle.value = {
+        id: data.id,
+        name: data.name,
+        tokens: withDefaults(data.tokens),
+        boardFlourish: data.boardFlourish,
+        numberFlourish: data.numberFlourish,
+        isPublic: data.isPublic,
+      }
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     }
@@ -55,10 +65,9 @@ export const useStylesStore = defineStore('styles', () => {
       id: 0,
       name: '',
       tokens: defaultTokens(),
-      board_flourish: '',
-      number_flourish: '',
-      is_public: false,
-      created_at: '',
+      boardFlourish: '',
+      numberFlourish: '',
+      isPublic: false,
     }
   }
 
@@ -66,23 +75,21 @@ export const useStylesStore = defineStore('styles', () => {
     if (!editingStyle.value) {
       return
     }
-    const name = editingStyle.value.name.trim()
+    const { id, ...style } = editingStyle.value
+    const name = style.name.trim()
     if (!name) {
       ui.notify('Theme name is required', 'error')
       return
     }
     savingStyle.value = true
-    const tokens = editingStyle.value.tokens ?? {}
-    const board = editingStyle.value.board_flourish
-    const number = editingStyle.value.number_flourish
-    const isPublic = editingStyle.value.is_public
+    const body: StyleInput = { ...style, name }
     try {
-      if (editingStyle.value.id) {
-        await endpoints.styles.update(editingStyle.value.id, name, tokens, board, number, isPublic)
+      if (id) {
+        await unwrap(api.PUT('/styles/{id}', { params: { path: { id } }, body }))
         ui.notify('Theme saved', 'success')
       } else {
-        const data = await endpoints.styles.create(name, tokens, board, number, isPublic)
-        editingStyle.value.id = data.id
+        const made = await unwrap(api.POST('/styles', { body }))
+        editingStyle.value.id = made.id
         ui.notify('Theme created', 'success')
       }
       await loadStyles()
@@ -100,7 +107,7 @@ export const useStylesStore = defineStore('styles', () => {
       return
     }
     try {
-      await endpoints.styles.delete(id)
+      await unwrap(api.DELETE('/styles/{id}', { params: { path: { id } } }))
       if (editingStyle.value?.id === id) {
         editingStyle.value = null
       }
@@ -111,25 +118,20 @@ export const useStylesStore = defineStore('styles', () => {
     }
   }
 
-  async function setActiveStyle(id: number): Promise<void> {
+  /** Makes a theme the site's, or with null goes back to the default look. */
+  async function setActiveStyle(id: number | null): Promise<void> {
     const app = useAppStore()
     try {
-      await endpoints.styles.setActive(id)
-      activeStyleId.value = id > 0 ? String(id) : ''
-      // Apply CSS + flourishes locally immediately (the server also broadcasts).
-      if (id > 0 && editingStyle.value?.id === id) {
-        applyCustomCSS(tokensToCss(editingStyle.value.tokens ?? {}))
-        app.applyFlourishes(
-          editingStyle.value.board_flourish || '',
-          editingStyle.value.number_flourish || '',
-        )
-      } else if (id > 0) {
-        await app.loadActiveCSS()
-      } else {
-        applyCustomCSS('')
-        app.applyFlourishes('', '')
-      }
-      ui.notify(id > 0 ? 'Theme activated' : 'Theme cleared', 'success')
+      const theme: ThemeCSS = await unwrap(
+        id === null
+          ? api.POST('/styles/deactivate')
+          : api.POST('/styles/{id}/activate', { params: { path: { id } } }),
+      )
+      activeStyleId.value = id
+      // Apply what the server answered with now (it also broadcasts it).
+      applyCustomCSS(theme.css)
+      app.applyFlourishes(theme.boardFlourish, theme.numberFlourish)
+      ui.notify(id === null ? 'Theme cleared' : 'Theme activated', 'success')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     }

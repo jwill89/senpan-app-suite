@@ -7,7 +7,7 @@
  */
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { endpoints } from '@/lib/endpoints'
+import { api, unwrap } from '@/api/client'
 import { emptyNumberBoard, validateBoard } from '@/lib/constants'
 import { useUiStore } from './ui'
 
@@ -51,13 +51,17 @@ export const useCardRequestsStore = defineStore('cardRequests', () => {
     }
     submitting.value = true
     try {
-      const data = await endpoints.cards.request({
-        character_name: characterName.value.trim(),
-        world: world.value.trim(),
-        card_id: cardId.value.trim().toUpperCase(),
-        board_data: board.value,
-        turnstile_token: turnstileToken.value || undefined,
-      })
+      const data = await unwrap(
+        api.POST('/cards/request', {
+          body: {
+            characterName: characterName.value.trim(),
+            world: world.value.trim(),
+            cardId: cardId.value.trim().toUpperCase(),
+            boardData: board.value,
+            turnstileToken: turnstileToken.value || undefined,
+          },
+        }),
+      )
       result.value = { id: data.id, status: data.status }
       ui.notify(`Card ${data.id} submitted for staff approval!`, 'success')
     } catch (e) {

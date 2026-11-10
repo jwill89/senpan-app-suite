@@ -42,14 +42,14 @@ func Dist() fs.FS {
 // doesn't have.
 var webRootFolders = []string{"/images/", "/fonts/", "/carrd/", "/plugin/"}
 
-// contentSecurityPolicy is the policy deploy/.htaccess set before 4.0.0, unchanged:
-// Google Fonts and cross-origin images over https:, the themes' inline CSS, data:
-// exports, the wss: game socket, Turnstile (script and frame) and Cloudflare's Web
-// Analytics beacon.
+// contentSecurityPolicy lets in Google Fonts and cross-origin images over https:, the
+// themes' inline CSS, data: exports, Turnstile (script and frame) and Cloudflare's Web
+// Analytics beacon. The live event streams are same-origin ('self'), so no socket
+// scheme is allowed.
 const contentSecurityPolicy = "default-src 'self'; img-src 'self' data: https:; " +
 	"style-src 'self' 'unsafe-inline' https:; font-src 'self' https: data:; " +
 	"script-src 'self' https://challenges.cloudflare.com https://static.cloudflareinsights.com; " +
-	"frame-src https://challenges.cloudflare.com; connect-src 'self' https: wss:; " +
+	"frame-src https://challenges.cloudflare.com; connect-src 'self' https:; " +
 	"frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
 
 // contentTypes names the build's types Go's own table doesn't (it knows .css, .html,

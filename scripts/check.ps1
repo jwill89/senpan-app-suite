@@ -6,7 +6,7 @@
 .DESCRIPTION
     First (for either half): the SPA's build, `task build:web`, which the backend embeds
     Backend (backend/):   golangci-lint - go build - go vet - go test - govulncheck
-    Frontend (frontend/): gen:check - lint:check (ESLint + Stylelint) - format:check - lint:conventions - typecheck - test:coverage - npm audit - test:e2e
+    Frontend (frontend/): generated code (task gen) - lint:check (ESLint + Stylelint) - format:check - lint:conventions - typecheck - test:coverage - npm audit - test:e2e
     Plugin (plugins/SenpanCompanion/): dotnet build (warnings=errors) - dotnet format
     Scripts and repo: PSScriptAnalyzer on every tracked script, markdownlint, the shared
     .editorconfig/.gitattributes and the shared-tooling version (shared-tooling's own checks)
@@ -120,9 +120,13 @@ if ($run.backend) {
 if ($run.frontend) {
     Push-Location "$root\frontend"
     try {
-        # api.generated.ts is committed; this regenerates it from the Go models and fails
-        # if the committed copy is stale (CI's generated job does the same).
-        Invoke-Step "frontend: gen:check" { npm run gen:check }
+        # The API's document and the types built from it (and tygo's, until every domain
+        # is on huma) are committed; this regenerates them (task gen) and fails if a
+        # committed copy is stale, as CI's generated job does.
+        Invoke-Step "frontend: generated code" {
+            task gen
+            if ($LASTEXITCODE -eq 0) { git -C $root diff --exit-code -- backend/internal/db frontend/src/api frontend/src/types/api.generated.ts }
+        }
         # ESLint (eslint.config.js) for the scripts and templates, Stylelint
         # (stylelint.config.mjs) for the stylesheets and <style> blocks.
         Invoke-Step "frontend: lint" { npm run lint:check }

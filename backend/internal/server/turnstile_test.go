@@ -1,16 +1,11 @@
 package server
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
-
-	"app-suite/internal/store"
-	"app-suite/internal/store/storetest"
 )
 
 func TestTurnstileEnabled(t *testing.T) {
@@ -66,30 +61,21 @@ func TestVerifyTurnstileFailsClosed(t *testing.T) {
 // a missing/invalid token is rejected with 403; a valid token lets the request
 // reach the credential check (401 for an unknown user).
 func TestLoginGatedByTurnstile(t *testing.T) {
-	st, err := store.New(t.Context(), storetest.Path(t))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer st.Close()
+	s, _, ts := newInternalServer(t)
 	stubSiteverify(t)
-
-	s := &Server{store: st, limiter: newRateLimiter(5, time.Minute), turnstileSecret: "sekret"}
+	s.turnstileSecret = "sekret"
 
 	post := func(body map[string]string) int {
-		b, _ := json.Marshal(body)
-		req := httptest.NewRequest(http.MethodPost, "/api/auth", bytes.NewReader(b))
-		rec := httptest.NewRecorder()
-		s.handleAuthAction(rec, req)
-		return rec.Code
+		code, _ := postFrom(t, ts, "/api/v1/auth/login", body)
+		return code
 	}
-
-	if code := post(map[string]string{"action": "login", "username": "admin", "password": "x"}); code != http.StatusForbidden {
+	if code := post(map[string]string{"username": "admin", "password": "x"}); code != http.StatusForbidden {
 		t.Errorf("missing token: got %d, want 403", code)
 	}
-	if code := post(map[string]string{"action": "login", "username": "admin", "password": "x", "turnstile_token": "bad"}); code != http.StatusForbidden {
+	if code := post(map[string]string{"username": "admin", "password": "x", "turnstileToken": "bad"}); code != http.StatusForbidden {
 		t.Errorf("bad token: got %d, want 403", code)
 	}
-	if code := post(map[string]string{"action": "login", "username": "ghost", "password": "x", "turnstile_token": "good"}); code != http.StatusUnauthorized {
+	if code := post(map[string]string{"username": "ghost", "password": "x", "turnstileToken": "good"}); code != http.StatusUnauthorized {
 		t.Errorf("good token should pass the gate and 401 on bad creds: got %d, want 401", code)
 	}
 }
@@ -97,63 +83,60 @@ func TestLoginGatedByTurnstile(t *testing.T) {
 // TestLoginUngatedWhenDisabled confirms that with no secret the bot check is
 // skipped entirely (a login with no token reaches the credential check).
 func TestLoginUngatedWhenDisabled(t *testing.T) {
-	st, err := store.New(t.Context(), storetest.Path(t))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer st.Close()
-
-	s := &Server{store: st, limiter: newRateLimiter(5, time.Minute)} // no turnstileSecret
-	b, _ := json.Marshal(map[string]string{"action": "login", "username": "ghost", "password": "x"})
-	req := httptest.NewRequest(http.MethodPost, "/api/auth", bytes.NewReader(b))
-	rec := httptest.NewRecorder()
-	s.handleAuthAction(rec, req)
-	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("disabled gate: got %d, want 401 (reached credential check)", rec.Code)
+	_, _, ts := newInternalServer(t)
+	if code, _ := postFrom(t, ts, "/api/v1/auth/login", map[string]string{"username": "ghost", "password": "x"}); code != http.StatusUnauthorized {
+		t.Errorf("disabled gate: got %d, want 401 (reached credential check)", code)
 	}
 }
 
 // TestRegisterGatedByTurnstile checks the bot gate also guards account creation:
-// no token -> 403; a valid token lets a valid signup through (200).
+// no token -> 403; a valid token lets a valid signup through (202).
 func TestRegisterGatedByTurnstile(t *testing.T) {
-	st, err := store.New(t.Context(), storetest.Path(t))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer st.Close()
+	s, _, ts := newInternalServer(t)
 	stubSiteverify(t)
-
-	s := &Server{store: st, regLimiter: newRateLimiter(10, time.Hour), turnstileSecret: "sekret"}
+	s.turnstileSecret = "sekret"
 
 	post := func(body map[string]string) int {
-		b, _ := json.Marshal(body)
-		req := httptest.NewRequest(http.MethodPost, "/api/register", bytes.NewReader(b))
-		rec := httptest.NewRecorder()
-		s.handleRegister(rec, req)
-		return rec.Code
+		code, _ := postFrom(t, ts, "/api/v1/auth/register", body)
+		return code
 	}
-
 	if code := post(map[string]string{"username": "newuser", "password": "password123"}); code != http.StatusForbidden {
 		t.Errorf("missing token: got %d, want 403", code)
 	}
-	if code := post(map[string]string{"username": "newuser", "password": "password123", "turnstile_token": "good"}); code != http.StatusOK {
-		t.Errorf("good token should create the account: got %d, want 200", code)
+	if code := post(map[string]string{"username": "newuser", "password": "password123", "turnstileToken": "good"}); code != http.StatusAccepted {
+		t.Errorf("good token should create the account: got %d, want 202", code)
 	}
 }
 
-func TestHandleConfigServesSiteKey(t *testing.T) {
-	s := &Server{turnstileSiteKey: "site-abc"}
-	req := httptest.NewRequest(http.MethodGet, "/api/config", nil)
-	rec := httptest.NewRecorder()
-	s.handleConfig(rec, req)
+// TestCardRequestGatedByTurnstile checks the bot gate guards the public personal
+// card request: no token or a bad one -> 403 and nothing kept; a valid token lets
+// the request through (202).
+func TestCardRequestGatedByTurnstile(t *testing.T) {
+	s, st, ts := newInternalServer(t)
+	stubSiteverify(t)
+	s.turnstileSecret = "sekret"
 
-	var out struct {
-		TurnstileSiteKey string `json:"turnstile_site_key"`
+	post := func(token string) int {
+		body := map[string]any{
+			"characterName": "Aria", "world": "Gilgamesh", "cardId": "BOT001",
+			"boardData": [][]int{{1, 16, 31, 46, 61}, {2, 17, 32, 47, 62}, {3, 18, 0, 48, 63}, {4, 19, 34, 49, 64}, {5, 20, 35, 50, 65}},
+		}
+		if token != "" {
+			body["turnstileToken"] = token
+		}
+		code, _ := postFrom(t, ts, "/api/v1/cards/request", body)
+		return code
 	}
-	if err := json.NewDecoder(rec.Body).Decode(&out); err != nil {
-		t.Fatal(err)
+	if code := post(""); code != http.StatusForbidden {
+		t.Errorf("missing token: got %d, want 403", code)
 	}
-	if out.TurnstileSiteKey != "site-abc" {
-		t.Errorf("site key: got %q, want site-abc", out.TurnstileSiteKey)
+	if code := post("bad"); code != http.StatusForbidden {
+		t.Errorf("bad token: got %d, want 403", code)
+	}
+	if kept, _ := st.CardExists(t.Context(), "BOT001"); kept {
+		t.Fatal("a request that failed the bot check was kept")
+	}
+	if code := post("good"); code != http.StatusAccepted {
+		t.Errorf("good token should take the request in: got %d, want 202", code)
 	}
 }

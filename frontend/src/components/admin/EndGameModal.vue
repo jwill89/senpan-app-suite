@@ -12,7 +12,7 @@ const game = useGameStore()
 const cards = useCardsStore()
 
 function playerNameFor(id: string): string | undefined {
-  return cards.cards.find((c) => c.id === id)?.player_name
+  return cards.cards.find((c) => c.id === id)?.playerName
 }
 </script>
 

@@ -1,11 +1,11 @@
-// Package bingo implements the core game logic: card/board generation,
-// pattern matching, winner computation, and game lifecycle management.
+// Package bingo holds the rules of 75-ball bingo, as pure code: making and checking
+// cards, matching a card against a win pattern, the columns a game draws from, the
+// half-time mark, and the automatic-draw interval. The game that is played (its
+// state, its draws and the database) is internal/game.
 package bingo
 
 import (
 	"fmt"
-	"regexp"
-	"strings"
 
 	"app-suite/internal/random"
 )
@@ -63,22 +63,31 @@ func GenerateID(exists func(string) (bool, error)) (string, error) {
 	}
 }
 
+// BoardError is a board's first problem and where it is: Row and Col count from 0,
+// and are -1 when the problem is the whole board's (Row) or a whole row's (Col).
+type BoardError struct {
+	Row, Col int
+	Reason   string
+}
+
+func (e *BoardError) Error() string { return e.Reason }
+
 // ValidateBoard checks that board is a structurally valid 75-ball bingo card: a 5x5
 // grid, the FREE (0) space at centre [2][2], and every other cell within its
-// column's range (B 1-15 ... O 61-75) with no repeats inside a column. It returns a
-// human-readable error describing the first problem found, or nil when the card is
-// valid. Used to validate hand-built custom-card requests before they are stored.
-func ValidateBoard(board [][]int) error {
+// column's range (B 1-15 ... O 61-75) with no repeats inside a column. It returns the
+// first problem found, or nil when the card is valid. Used to check hand-built
+// personal cards before they are stored.
+func ValidateBoard(board [][]int) *BoardError {
 	if len(board) != 5 {
-		return fmt.Errorf("card must have exactly 5 rows")
+		return &BoardError{Row: -1, Col: -1, Reason: "A card has exactly 5 rows."}
 	}
 	for r := range board {
 		if len(board[r]) != 5 {
-			return fmt.Errorf("row %d must have exactly 5 columns", r+1)
+			return &BoardError{Row: r, Col: -1, Reason: fmt.Sprintf("Row %d must have exactly 5 numbers.", r+1)}
 		}
 	}
 	if board[2][2] != 0 {
-		return fmt.Errorf("the centre cell must be left as the FREE space")
+		return &BoardError{Row: 2, Col: 2, Reason: "The centre cell is the FREE space: leave it as 0."}
 	}
 	for col := range 5 {
 		lo, hi := columnRanges[col][0], columnRanges[col][1]
@@ -89,31 +98,17 @@ func ValidateBoard(board [][]int) error {
 			}
 			n := board[row][col]
 			if n < lo || n > hi {
-				return fmt.Errorf("column %s must only contain numbers %d-%d (found %d)", columnLetters[col], lo, hi, n)
+				return &BoardError{Row: row, Col: col, Reason: fmt.Sprintf(
+					"Column %s holds only the numbers %d-%d, not %d.", columnLetters[col], lo, hi, n)}
 			}
 			if seen[n] {
-				return fmt.Errorf("column %s has the number %d more than once", columnLetters[col], n)
+				return &BoardError{Row: row, Col: col, Reason: fmt.Sprintf(
+					"Column %s has the number %d more than once.", columnLetters[col], n)}
 			}
 			seen[n] = true
 		}
 	}
 	return nil
-}
-
-// customIDRe matches a normalised (upper-cased) custom card ID: exactly 6
-// alphanumeric characters. Unlike GenerateID's alphabet this permits the ambiguous
-// characters (0/O/1/I) because the user typed them deliberately; uniqueness is still
-// enforced separately via CardExists.
-var customIDRe = regexp.MustCompile(`^[A-Z0-9]{6}$`)
-
-// ValidateCustomID upper-cases and validates a user-chosen card ID, returning the
-// normalised ID or an error when it isn't exactly 6 alphanumeric characters.
-func ValidateCustomID(raw string) (string, error) {
-	id := strings.ToUpper(strings.TrimSpace(raw))
-	if !customIDRe.MatchString(id) {
-		return "", fmt.Errorf("card ID must be exactly 6 letters or numbers")
-	}
-	return id, nil
 }
 
 // LetterForNumber returns the bingo column letter for a number (1-75).

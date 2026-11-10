@@ -1,0 +1,26 @@
+# sqlc compiles the SQL in internal/db/queries against the committed schema
+# (schema.sql, which the migrations build) into the db package. `task gen` runs it;
+# CI's generated job fails when the output is stale.
+#
+# A timestamp is read and written as the text it is stored as, RFC 3339 in UTC to
+# the second: a DATETIME is a string, and a nullable one a *string,
+# never a time.Time, which modernc would write in a form the columns' CHECK refuses.
+version: "2"
+sql:
+  - engine: "sqlite"
+    schema: "schema.sql"
+    queries: "internal/db/queries"
+    gen:
+      go:
+        package: "db"
+        out: "internal/db"
+        emit_empty_slices: true
+        emit_result_struct_pointers: true
+        overrides:
+          - db_type: "DATETIME"
+            go_type: "string"
+          - db_type: "DATETIME"
+            nullable: true
+            go_type:
+              type: "string"
+              pointer: true

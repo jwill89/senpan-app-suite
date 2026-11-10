@@ -104,9 +104,9 @@ function toggleSelectAll(): void {
       >
         <input v-model="model" type="checkbox" :value="p.id" />
         <span class="dot"></span>
-        <PatternMini :pattern-data="p.pattern_data" size="pattern-mini-sm" />
+        <PatternMini :pattern-data="p.patternData" size="pattern-mini-sm" />
         <span class="pattern-check-name">{{ p.name }}</span>
-        <span class="pattern-check-cat">{{ p.category_name }}</span>
+        <span class="pattern-check-cat">{{ p.categoryName }}</span>
       </label>
     </div>
 
@@ -144,7 +144,7 @@ function toggleSelectAll(): void {
           >
             <input v-model="model" type="checkbox" :value="p.id" />
             <span class="dot"></span>
-            <PatternMini :pattern-data="p.pattern_data" size="pattern-mini-sm" />
+            <PatternMini :pattern-data="p.patternData" size="pattern-mini-sm" />
             <span class="pattern-check-name">{{ p.name }}</span>
           </label>
         </div>

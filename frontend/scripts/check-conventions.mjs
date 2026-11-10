@@ -150,10 +150,10 @@ const sources = {
     join(SRC, 'lib/theme-tokens.ts'),
     (s) => (s.match(/^\s*name: '([a-z0-9-]+)'/gm) || []).map((x) => x.split("'")[1]),
   ],
-  'backend/internal/store/styles.go': [
-    join(REPO, 'backend/internal/store/styles.go'),
+  'backend/internal/themes/themes.go': [
+    join(REPO, 'backend/internal/themes/themes.go'),
     (s) => {
-      const block = s.match(/themeTokenOrder\s*=\s*\[\]string\{([\s\S]*?)\}/)
+      const block = s.match(/TokenOrder\s*=\s*\[\]string\{([\s\S]*?)\}/)
       return block ? [...block[1].matchAll(/"([a-z0-9-]+)"/g)].map((m) => m[1]) : null
     },
   ],

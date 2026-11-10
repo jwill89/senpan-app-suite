@@ -32,7 +32,7 @@
 /* Home page logo. No drop-shadow: the artwork already carries a soft shadow of
    its own, so the CSS one was doubling it, and elevation is out generally. The
    logo includes the wordmark, so it IS the page title: the <h1> holds it and
-   nothing else, so it adds no type of its own. `app_title` is its alt text, and
+   nothing else, so it adds no type of its own. `appTitle` is its alt text, and
    still drives the browser tab + player topbar. */
 .home-logo {
   display: block;

@@ -1,16 +1,15 @@
 /**
  * Passkey (WebAuthn) client.
  *
- * Registration and login each have a server "begin" step (returns the credential
- * options and stashes a one-time challenge in the session) and a "finish" step
- * (verifies the browser's response). The browser's credential API sits between
- * them. We use the standard JSON helpers (`parseCreationOptionsFromJSON` /
- * `parseRequestOptionsFromJSON` / `credential.toJSON()`) so there's no hand-rolled
- * base64url <-> ArrayBuffer conversion - at the cost of requiring a reasonably
- * modern browser (feature-detected via `passkeysSupported`).
+ * Adding a passkey and signing in with one each take two steps on the server: a
+ * "begin" that answers the browser's options (and keeps a one-time challenge in the
+ * session, for ten minutes at most) and a finish that verifies what the browser
+ * made or offered. The browser's credential API sits between them. The standard JSON
+ * helpers (`parseCreationOptionsFromJSON` / `parseRequestOptionsFromJSON` /
+ * `credential.toJSON()`) do the base64url <-> ArrayBuffer work, at the cost of
+ * needing a reasonably modern browser (feature-detected by `passkeysSupported`).
  */
-import { apiDelete, apiGet, apiPost } from './api'
-import type { LoginResponse, PasskeysResponse } from '@/types/api'
+import { api, unwrap, type Account, type Passkey } from '@/api/client'
 
 /** Whether this browser supports the passkey ceremonies we use. */
 export function passkeysSupported(): boolean {
@@ -22,53 +21,52 @@ export function passkeysSupported(): boolean {
   )
 }
 
-/** Registers a new passkey for the logged-in account under `name`. */
-export async function registerPasskey(name: string): Promise<PasskeysResponse> {
-  const options = await apiPost<{ publicKey: PublicKeyCredentialCreationOptionsJSON }>(
-    'account/passkeys/register/begin',
-    {},
+/**
+ * Adds a passkey to the signed-in account under `name`, and answers it. Adding a
+ * way to sign in asks for the account's password.
+ */
+export async function addPasskey(name: string, password: string): Promise<Passkey> {
+  const options = await unwrap(api.POST('/me/passkeys/begin', { body: { password } }))
+  const publicKey = PublicKeyCredential.parseCreationOptionsFromJSON(
+    options.publicKey as PublicKeyCredentialCreationOptionsJSON,
   )
-  const publicKey = PublicKeyCredential.parseCreationOptionsFromJSON(options.publicKey)
   const credential = (await navigator.credentials.create({
     publicKey,
   })) as PublicKeyCredential | null
   if (!credential) {
     throw new Error('Passkey creation was cancelled.')
   }
-  return await apiPost<PasskeysResponse>(
-    `account/passkeys/register/finish?name=${encodeURIComponent(name)}`,
-    credential.toJSON(),
-  )
+  return await unwrap(api.POST('/me/passkeys', { body: { name, credential: credential.toJSON() } }))
 }
 
 /**
- * Logs in via a discoverable passkey (usernameless). On success the server
- * establishes the session and returns the account, as a password login does.
+ * Signs in with a discoverable passkey (no username): the browser offers one of its
+ * own. Answers the signed-in account, as a password sign-in does.
  */
-export async function loginWithPasskey(): Promise<LoginResponse> {
-  const options = await apiPost<{ publicKey: PublicKeyCredentialRequestOptionsJSON }>(
-    'auth/passkey/begin',
-    {},
-    // The user isn't authenticated yet - a failed assertion legitimately 401s and
-    // must not trigger the global "session expired" redirect.
-    { skipAuthRedirect: true },
+export async function signInWithPasskey(): Promise<Account> {
+  const options = await unwrap(api.POST('/auth/passkey/begin'))
+  const publicKey = PublicKeyCredential.parseRequestOptionsFromJSON(
+    options.publicKey as PublicKeyCredentialRequestOptionsJSON,
   )
-  const publicKey = PublicKeyCredential.parseRequestOptionsFromJSON(options.publicKey)
   const assertion = (await navigator.credentials.get({ publicKey })) as PublicKeyCredential | null
   if (!assertion) {
-    throw new Error('Passkey login was cancelled.')
+    throw new Error('Passkey sign-in was cancelled.')
   }
-  return await apiPost<LoginResponse>('auth/passkey/finish', assertion.toJSON(), {
-    skipAuthRedirect: true,
-  })
+  const me = await unwrap(
+    api.POST('/auth/passkey/finish', { body: { credential: assertion.toJSON() } }),
+  )
+  if (!me.account) {
+    throw new Error('That passkey did not sign you in.')
+  }
+  return me.account
 }
 
-/** Lists the logged-in account's passkeys (metadata only). */
-export function listPasskeys(): Promise<PasskeysResponse> {
-  return apiGet<PasskeysResponse>('account/passkeys')
+/** The signed-in account's passkeys (metadata only). */
+export async function listPasskeys(): Promise<Passkey[]> {
+  return (await unwrap(api.GET('/me/passkeys'))).passkeys
 }
 
-/** Deletes one of the logged-in account's passkeys by id. */
-export function deletePasskey(id: number): Promise<PasskeysResponse> {
-  return apiDelete<PasskeysResponse>(`account/passkeys/${id}`)
+/** Removes one of the signed-in account's passkeys. */
+export async function deletePasskey(id: number): Promise<void> {
+  await unwrap(api.DELETE('/me/passkeys/{id}', { params: { path: { id } } }))
 }

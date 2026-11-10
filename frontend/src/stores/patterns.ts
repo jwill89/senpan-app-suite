@@ -1,15 +1,13 @@
 /**
  * Patterns store: win patterns + categories CRUD, the new-pattern editor,
- * collapse state, and reordering. Drag-and-drop reordering is now handled by
- * vue-draggable-plus in the components; this store exposes `persistPatternOrder` and
- * `persistCategoryOrder` (and a cross-category move) that the components call
- * after a drag, plus `setPatternCategory` - replacing the old manual HTML5 DnD.
+ * collapse state, and reordering. Drag-and-drop reordering is handled by
+ * vue-draggable-plus in the components, which call `applyGroupedOrder` after a
+ * drag (one reorder per category, which also carries a pattern across).
  */
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
-import { endpoints } from '@/lib/endpoints'
+import { api, unwrap, type Pattern, type PatternCategory, type PatternList } from '@/api/client'
 import { emptyGrid } from '@/lib/constants'
-import type { Pattern, PatternCategory } from '@/types/api'
 import { useUiStore } from './ui'
 
 export interface PatternGroup {
@@ -62,13 +60,13 @@ export const usePatternsStore = defineStore('patterns', () => {
       map.set(cat.id, { category: cat, patterns: [] })
     }
     for (const p of patterns.value) {
-      let group = map.get(p.category_id)
+      let group = map.get(p.categoryId)
       if (!group) {
         group = {
-          category: { id: p.category_id, name: p.category_name || 'Unknown', sort_order: 0 },
+          category: { id: p.categoryId, name: p.categoryName || 'Unknown', sortOrder: 0 },
           patterns: [],
         }
-        map.set(p.category_id, group)
+        map.set(p.categoryId, group)
       }
       group.patterns.push(p)
     }
@@ -79,7 +77,7 @@ export const usePatternsStore = defineStore('patterns', () => {
   const gameFilteredPatterns = computed(() => {
     let list = patterns.value
     if (patternCategoryFilter.value) {
-      list = list.filter((p) => p.category_id === patternCategoryFilter.value)
+      list = list.filter((p) => p.categoryId === patternCategoryFilter.value)
     }
     const q = (patternSearchQuery.value || '').trim().toLowerCase()
     if (q) {
@@ -106,13 +104,17 @@ export const usePatternsStore = defineStore('patterns', () => {
 
   // -- Load -----------------------------------------------------------------
 
+  /** Takes in the server's patterns and categories, as a list or a reorder answers them. */
+  function setList(list: PatternList): void {
+    patterns.value = list.patterns
+    categories.value = list.categories
+    rebuildEditableGroups()
+  }
+
   async function loadPatterns(): Promise<void> {
     patternsLoading.value = true
     try {
-      const data = await endpoints.patterns.list()
-      patterns.value = data.patterns
-      categories.value = data.categories
-      rebuildEditableGroups()
+      setList(await unwrap(api.GET('/patterns')))
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     } finally {
@@ -147,12 +149,12 @@ export const usePatternsStore = defineStore('patterns', () => {
     }
     // Client-side duplicate check.
     const dup = patterns.value.find((p) => {
-      if (p.pattern_data.length !== 5) {
+      if (p.patternData.length !== 5) {
         return false
       }
       for (let r = 0; r < 5; r++) {
         for (let c = 0; c < 5; c++) {
-          if (p.pattern_data[r]?.[c] !== newPatternGrid.value[r]?.[c]) {
+          if (p.patternData[r]?.[c] !== newPatternGrid.value[r]?.[c]) {
             return false
           }
         }
@@ -160,14 +162,16 @@ export const usePatternsStore = defineStore('patterns', () => {
       return true
     })
     if (dup) {
-      const catName = dup.category_name || 'Unknown'
+      const catName = dup.categoryName || 'Unknown'
       ui.notify(`Duplicate pattern! Matches "${dup.name}" in category "${catName}"`, 'error')
       return false
     }
     savingPattern.value = true
     try {
-      const catId = newPatternCategoryId.value ?? categories.value[0]?.id ?? 1
-      await endpoints.patterns.create(name, newPatternGrid.value, catId)
+      const categoryId = newPatternCategoryId.value ?? categories.value[0]?.id ?? 1
+      await unwrap(
+        api.POST('/patterns', { body: { name, patternData: newPatternGrid.value, categoryId } }),
+      )
       ui.notify('Pattern saved', 'success')
       clearPatternEditor()
       await loadPatterns()
@@ -206,7 +210,7 @@ export const usePatternsStore = defineStore('patterns', () => {
 
   async function deletePattern(id: number): Promise<void> {
     try {
-      await endpoints.patterns.delete(id)
+      await unwrap(api.DELETE('/patterns/{id}', { params: { path: { id } } }))
       patterns.value = patterns.value.filter((p) => p.id !== id)
       ui.notify('Pattern deleted', 'info')
     } catch (e) {
@@ -242,7 +246,9 @@ export const usePatternsStore = defineStore('patterns', () => {
       return
     }
     try {
-      await endpoints.patterns.rename(id, newName)
+      await unwrap(
+        api.PATCH('/patterns/{id}', { params: { path: { id } }, body: { name: newName } }),
+      )
       pat.name = newName
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -269,7 +275,8 @@ export const usePatternsStore = defineStore('patterns', () => {
   /**
    * Reorders the categories so `targetId` lands at the chosen position token -
    * 'start' (first) or 'after:<id>' (right after that category) - and persists
-   * the new order via the bulk-reorder endpoint. ('keep' is handled by callers.)
+   * the new order via the bulk-reorder endpoint, taking in the list it answers.
+   * ('keep' is handled by callers.)
    */
   async function applyCategoryPosition(targetId: number, position: string): Promise<void> {
     const ids = categories.value.map((c) => c.id).filter((id) => id !== targetId)
@@ -282,7 +289,7 @@ export const usePatternsStore = defineStore('patterns', () => {
       insertAt = idx === -1 ? ids.length : idx + 1
     }
     ids.splice(insertAt, 0, targetId)
-    await endpoints.patternCategories.bulkReorder(ids)
+    setList(await unwrap(api.POST('/pattern-categories/reorder', { body: { orderedIds: ids } })))
   }
 
   /**
@@ -300,25 +307,26 @@ export const usePatternsStore = defineStore('patterns', () => {
     try {
       const { id, position } = categoryForm.value
       if (id === 0) {
-        // create() appends; find the new id by diffing, then position it.
-        const before = new Set(categories.value.map((c) => c.id))
-        await endpoints.patternCategories.create(name)
-        await loadPatterns()
-        const created = categories.value.find((c) => !before.has(c.id))
-        if (created && position !== 'keep') {
+        // A new category goes last; position it from there.
+        const created = await unwrap(api.POST('/pattern-categories', { body: { name } }))
+        if (position !== 'keep') {
           await applyCategoryPosition(created.id, position)
+        } else {
           await loadPatterns()
         }
         ui.notify('Category created', 'success')
       } else {
         const cat = categories.value.find((c) => c.id === id)
         if (cat && cat.name !== name) {
-          await endpoints.patternCategories.rename(id, name)
+          await unwrap(
+            api.PATCH('/pattern-categories/{id}', { params: { path: { id } }, body: { name } }),
+          )
         }
         if (position !== 'keep') {
           await applyCategoryPosition(id, position)
+        } else {
+          await loadPatterns()
         }
-        await loadPatterns()
         ui.notify('Category updated', 'success')
       }
       return true
@@ -332,7 +340,7 @@ export const usePatternsStore = defineStore('patterns', () => {
 
   async function deleteCategory(id: number): Promise<void> {
     try {
-      await endpoints.patternCategories.delete(id)
+      await unwrap(api.DELETE('/pattern-categories/{id}', { params: { path: { id } } }))
       ui.notify('Category deleted', 'info')
       await loadPatterns()
     } catch (e) {
@@ -376,13 +384,13 @@ export const usePatternsStore = defineStore('patterns', () => {
       map.set(cat.id, { category: cat, patterns: [] })
     }
     for (const p of patterns.value) {
-      let group = map.get(p.category_id)
+      let group = map.get(p.categoryId)
       if (!group) {
         group = {
-          category: { id: p.category_id, name: p.category_name || 'Unknown', sort_order: 0 },
+          category: { id: p.categoryId, name: p.categoryName || 'Unknown', sortOrder: 0 },
           patterns: [],
         }
-        map.set(p.category_id, group)
+        map.set(p.categoryId, group)
       }
       group.patterns.push({ ...p })
     }
@@ -393,8 +401,8 @@ export const usePatternsStore = defineStore('patterns', () => {
    * Keep the drag view in step with server state. `editableGroups` holds shallow
    * COPIES so vue-draggable-plus can reorder them freely, which means it silently
    * goes stale the moment `patterns` changes underneath it - and it used to be
-   * rebuilt in only two places, so deleting a pattern, renaming one, or receiving a
-   * patterns_update broadcast all left the admin looking at a list that no longer
+   * rebuilt in only two places, so deleting a pattern, renaming one, or reading the
+   * list again after a live change all left the admin looking at a list that no longer
    * matched what would be saved. Watching the source instead of remembering to call
    * rebuild at each write site also covers whatever write path gets added next.
    *
@@ -426,8 +434,8 @@ export const usePatternsStore = defineStore('patterns', () => {
       for (const p of group.patterns) {
         flat.push({
           ...p,
-          category_id: group.category.id,
-          category_name: group.category.name,
+          categoryId: group.category.id,
+          categoryName: group.category.name,
         })
       }
     }
@@ -437,15 +445,16 @@ export const usePatternsStore = defineStore('patterns', () => {
     try {
       for (const group of editableGroups.value) {
         // Skip empty categories: the reorder endpoint requires a non-empty
-        // ordered_ids (and there's nothing to persist for a category with no
+        // orderedIds (and there's nothing to persist for a category with no
         // patterns). A pattern moved out of a category is reassigned via its
-        // destination group's call, which sets its new category_id.
+        // destination group's call, which sets its new categoryId.
         if (group.patterns.length === 0) {
           continue
         }
-        await endpoints.patterns.bulkReorder(
-          group.category.id,
-          group.patterns.map((p) => p.id),
+        await unwrap(
+          api.POST('/patterns/reorder', {
+            body: { categoryId: group.category.id, orderedIds: group.patterns.map((p) => p.id) },
+          }),
         )
       }
     } catch (e) {

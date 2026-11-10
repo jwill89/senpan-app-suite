@@ -7,7 +7,7 @@
 // two differ, so a release changes both, with its CHANGELOG.md section.
 //
 // Semver intent:
-//   - MAJOR: a breaking change to the JSON/WebSocket API, which the plugin, a
+//   - MAJOR: a breaking change to the JSON API or its live events, which the plugin, a
 //     client released on its own, relies on.
 //   - MINOR: a backward-compatible capability (new endpoint, field, event or page).
 //   - PATCH: a bug fix or internal change with no API-surface effect.

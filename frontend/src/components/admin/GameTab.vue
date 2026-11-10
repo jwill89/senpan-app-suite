@@ -58,19 +58,19 @@ function applyPreset(): void {
     return
   }
   const validIds = new Set(patterns.patterns.map((p) => p.id))
-  game.selectedPatternIds = preset.pattern_ids.filter((id) => validIds.has(id))
-  game.gameDetails = preset.game_details || ''
+  game.selectedPatternIds = preset.patternIds.filter((id) => validIds.has(id))
+  game.gameDetails = preset.gameDetails || ''
   // Pre-fill the auto-draw controls from the preset (the admin can still tweak
   // them before starting; adjusting here never writes back to the preset).
   game.newGameAuto = preset.auto
-  game.newGameAutoInterval = preset.auto_interval || DEFAULT_AUTO_INTERVAL
+  game.newGameAutoInterval = preset.autoInterval || DEFAULT_AUTO_INTERVAL
   void game.saveGameDetails()
 }
 
 /** Live "Time Between Calls" selector for the active game (writes through the
  *  optimistic setAutoInterval action). */
 const liveAutoInterval = computed({
-  get: () => game.currentGame?.auto_interval ?? DEFAULT_AUTO_INTERVAL,
+  get: () => game.currentGame?.autoInterval ?? DEFAULT_AUTO_INTERVAL,
   set: (v: number) => {
     void game.setAutoInterval(v)
   },
@@ -78,14 +78,14 @@ const liveAutoInterval = computed({
 
 // -- Elapsed-game clock (admin-only, Current Game view) ----------------------
 // Ticks once a second while this tab is mounted; the start time comes from the
-// game state's `created_at` (stored as UTC), so it stays accurate across
+// game state's `createdAt` (stored as UTC), so it stays accurate across
 // refreshes and for multiple admins.
 const now = ref(Date.now())
 let clockTimer: ReturnType<typeof setInterval> | null = null
 
 /** Live elapsed-time string (H:MM:SS / MM:SS) since the game started. */
 const elapsedTime = computed(() => {
-  const start = game.currentGame ? parseServerTimestamp(game.currentGame.created_at) : NaN
+  const start = game.currentGame?.createdAt ? parseServerTimestamp(game.currentGame.createdAt) : NaN
   if (!Number.isFinite(start)) {
     return ''
   }
@@ -100,7 +100,7 @@ const elapsedTime = computed(() => {
 
 /** Player name for a winning card id (shown under the winner chip). */
 function playerNameFor(id: string): string | undefined {
-  return cards.cards.find((c) => c.id === id)?.player_name
+  return cards.cards.find((c) => c.id === id)?.playerName
 }
 
 const delayLabel = (s: number): string => (s === 0 ? 'Instant' : `${s}s Delay`)
@@ -122,12 +122,12 @@ function goToPatterns(): void {
 
 /** Toggles the "It's Yoever" reaction on/off for all players (server-side). */
 function toggleYoever(): void {
-  void game.setYoeverEnabled(!game.currentGame?.yoever_enabled)
+  void game.setYoeverEnabled(!game.currentGame?.yoeverEnabled)
 }
 
 /** Toggles the server-side automatic-draw loop for the current game. */
 function toggleAuto(): void {
-  void game.setAutoEnabled(!game.currentGame?.auto_enabled)
+  void game.setAutoEnabled(!game.currentGame?.autoEnabled)
 }
 
 /**
@@ -390,21 +390,18 @@ onBeforeUnmount(() => {
                   <button
                     type="button"
                     class="btn-neutral btn-sm"
-                    :aria-pressed="game.currentGame.auto_enabled"
+                    :aria-pressed="game.currentGame.autoEnabled"
                     :title="
-                      game.currentGame.auto_enabled
+                      game.currentGame.autoEnabled
                         ? 'Auto-draw is ON - click to stop automatic draws'
                         : 'Auto-draw is OFF - click to draw numbers automatically'
                     "
                     @click="toggleAuto"
                   >
                     <font-awesome-icon
-                      :icon="[
-                        'fas',
-                        game.currentGame.auto_enabled ? 'circle-play' : 'circle-pause',
-                      ]"
+                      :icon="['fas', game.currentGame.autoEnabled ? 'circle-play' : 'circle-pause']"
                     />
-                    <span>Auto-Draw: {{ game.currentGame.auto_enabled ? 'On' : 'Off' }}</span>
+                    <span>Auto-Draw: {{ game.currentGame.autoEnabled ? 'On' : 'Off' }}</span>
                   </button>
 
                   <label
@@ -433,9 +430,9 @@ onBeforeUnmount(() => {
                   <button
                     type="button"
                     class="btn-neutral btn-sm"
-                    :aria-pressed="game.currentGame.yoever_enabled"
+                    :aria-pressed="game.currentGame.yoeverEnabled"
                     :title="
-                      game.currentGame.yoever_enabled
+                      game.currentGame.yoeverEnabled
                         ? `It's Yoever is ON - click to switch it off for all players`
                         : `It's Yoever is OFF - click to switch it on`
                     "
@@ -444,15 +441,15 @@ onBeforeUnmount(() => {
                     <font-awesome-icon
                       :icon="[
                         'fas',
-                        game.currentGame.yoever_enabled ? 'circle-check' : 'circle-xmark',
+                        game.currentGame.yoeverEnabled ? 'circle-check' : 'circle-xmark',
                       ]"
                     />
-                    <span>It's Yoever: {{ game.currentGame.yoever_enabled ? 'On' : 'Off' }}</span>
+                    <span>It's Yoever: {{ game.currentGame.yoeverEnabled ? 'On' : 'Off' }}</span>
                   </button>
 
                   <span class="yoever-count" title="Times It's Yoever has been triggered this game">
                     <font-awesome-icon :icon="['fad', 'megaphone']" /> Yoevers:
-                    {{ game.currentGame.yoever_count }}
+                    {{ game.currentGame.yoeverCount }}
                   </span>
 
                   <label
@@ -521,7 +518,7 @@ onBeforeUnmount(() => {
                   <span class="last-called-label">Last Called</span>
                   <div class="last-called-row">
                     <span class="last-called-flourish" aria-hidden="true"></span>
-                    <div :key="game.lastDrawn.call_order" class="last-drawn last-drawn--pop">
+                    <div :key="game.lastDrawn.callOrder" class="last-drawn last-drawn--pop">
                       <span class="letter">{{ game.lastDrawn.letter }}</span>
                       <span class="number">{{ game.lastDrawn.number }}</span>
                     </div>
@@ -535,7 +532,7 @@ onBeforeUnmount(() => {
               </template>
 
               <CalledNumbers
-                :count="game.currentGame.called_numbers.length"
+                :count="game.currentGame.calledNumbers.length"
                 :is-called="game.isCalledAdmin"
                 :active-columns="calledActiveColumns"
               />
@@ -575,8 +572,8 @@ onBeforeUnmount(() => {
                 in 12h)
               </h3>
               <div class="frequent-winner-chips">
-                <span v-for="fw in game.frequentWinners" :key="fw.player_name" class="winner-chip">
-                  {{ fw.player_name }} ({{ fw.win_count }})
+                <span v-for="fw in game.frequentWinners" :key="fw.playerName" class="winner-chip">
+                  {{ fw.playerName }} ({{ fw.winCount }})
                 </span>
               </div>
             </div>
@@ -587,7 +584,7 @@ onBeforeUnmount(() => {
               <h3>Active Win Patterns</h3>
               <div class="pattern-cards">
                 <div v-for="(p, i) in game.currentGame.patterns" :key="i" class="pattern-card">
-                  <PatternMini :pattern-data="p.pattern_data" />
+                  <PatternMini :pattern-data="p.patternData" />
                   <span :title="p.name">{{ p.name }}</span>
                 </div>
               </div>

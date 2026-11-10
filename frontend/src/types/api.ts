@@ -5,25 +5,18 @@
  * models AND the request/response envelopes, which now live as Go structs in the
  * backend `model` package (so the Go handlers are the single source of truth for
  * every wire shape). This file adds only the handful of types that are
- * intentionally frontend-only: the admin *form* models, the richer `AppSettings`
- * view, the WebSocket message union, and a couple of UI enums/constants.
+ * intentionally frontend-only: the admin *form* models and a couple of UI
+ * enums/constants. The domains already on huma, and the live events, take their
+ * types from the generated API schema instead (`@/api/client`, `@/lib/feed`).
  *
  * Regenerate the domain + envelope types with `npm run gen:types` after changing
  * any Go `model` struct.
  */
 import type {
-  // Domain types referenced by the form models and WsMessage below.
+  // Domain types referenced by the form models below.
   Placement,
   AnnouncementButton,
   ReadingListSource,
-  BingoDrawnNumber,
-  BingoGameState,
-  CardListEntry,
-  Pattern,
-  PatternCategory,
-  TokenInfo,
-  UploadedFont,
-  LogEntry,
 } from './api.generated'
 
 // -- Domain models (generated from the Go `model` package) --------------------
@@ -45,15 +38,6 @@ export type {
   AnnouncementButton,
   AnnouncementType,
   AnnouncementRole,
-  BingoDrawnNumber,
-  BingoGame,
-  BingoGamePattern,
-  BingoGameState,
-  Card,
-  FrequentWinner,
-  GamePreset,
-  Pattern,
-  PatternCategory,
   Raffle,
   RaffleEntry,
   Garapon,
@@ -64,11 +48,6 @@ export type {
   ReadingList,
   ReadingListItem,
   ReadingListSource,
-  Style,
-  PublicStyle,
-  User,
-  WinnersLogEntry,
-  TokenInfo,
   LogEntry,
 } from './api.generated'
 
@@ -77,50 +56,11 @@ export type {
   // Shared
   OKResponse,
   DeletedResponse,
-  DeletedCountResponse,
   StatusResponse,
   NamedOKResponse,
   RenamedResponse,
   PausedResponse,
   SkippedUpload,
-  LogsResponse,
-  LogLevelResponse,
-  // Auth / users / account
-  AuthCheckResponse,
-  LoginResponse,
-  LogoutResponse,
-  RegisterResponse,
-  UsersResponse,
-  AccountTokenGenerateResponse,
-  TokenRevokeResponse,
-  Passkey,
-  PasskeysResponse,
-  // Bingo: board / cards / game / patterns / presets / styles
-  ActiveCSSResponse,
-  CardListEntry,
-  CardsListResponse,
-  GeneratedCard,
-  GenerateCardsResponse,
-  GeneratedNamedCard,
-  GenerateSingleCardResponse,
-  CardRequestResponse,
-  CardResponse,
-  BoardResponse,
-  GameStateResponse,
-  DrawResult,
-  EndGameResponse,
-  YoeverResponse,
-  PatternsResponse,
-  CreatedPattern,
-  PatternCreateResponse,
-  CategoriesResponse,
-  CategoryCreateResponse,
-  PresetsResponse,
-  PresetCreateResponse,
-  StylesResponse,
-  StyleGetResponse,
-  StyleCreateResponse,
-  PublicStylesResponse,
   // Raffles
   RafflesResponse,
   RaffleResponse,
@@ -206,15 +146,11 @@ export type {
   AnnouncementRoleResponse,
   AnnouncementsResponse,
   AnnouncementResponse,
-  // Winners log
-  WinnersLogResponse,
-  FrequentWinnersResponse,
   // Fonts / Carrd / Images
   Font,
   FontVariant,
   FontsResponse,
   FontUploadResponse,
-  UploadedFont,
   CarrdProject,
   CarrdProjectsResponse,
   CarrdProjectCreateResponse,
@@ -228,65 +164,6 @@ export type {
   ImagesResponse,
   ImagesUploadResponse,
 } from './api.generated'
-
-// GET /api/account/token returns the account's token metadata, which IS the
-// domain `TokenInfo` shape (the handler writes it directly). Aliased for a
-// self-documenting name at call sites.
-export type AccountTokenInfoResponse = TokenInfo
-
-// -- Settings (kept hand-written) ---------------------------------------------
-// The backend response types `settings` as a dynamic string->string map; this
-// richer view enumerates the known keys (plus the per-club webhook index
-// signature) for better editor support on the Settings page. Kept in sync by
-// hand with the backend `settingsKeys`.
-export interface AppSettings {
-  app_title: string
-  default_draw_delay: string
-  frequent_winner_threshold: string
-  frequent_winner_hours: string
-  header_font: string
-  google_fonts_api_key: string
-  /** AniList GraphQL endpoint used for manga lookups. */
-  anilist_api_url: string
-  /** Markdown prompt shown on the home page above the board-ID join field. */
-  bingo_join_prompt: string
-  /** Seconds a board must wait between "It's Yoever" triggers (0-3600; 0 = no limit). */
-  yoever_cooldown_seconds: string
-  /** Gil cost of a custom bingo card, shown on the public Personal Card Requests page. */
-  custom_card_cost: string
-  /**
-   * `'1'` hides every Bingo entry point on the public home page - Join Bingo and
-   * the Custom Card request that goes with it - for a period when no game is
-   * running. `'0'` (the default) shows them. Stored as a string like every other
-   * setting; read through the app store's `hideBingo`, never compared by hand.
-   */
-  hide_bingo: string
-  /**
-   * `'1'` hides only the Custom Card request on the public home page, leaving Join
-   * Bingo and the rest of bingo up - for a period when staff aren't taking card
-   * requests but games are still running. `'0'` (the default) shows it. Read
-   * through the app store's `hideCustomCards`. `hide_bingo` still hides both.
-   */
-  hide_custom_cards: string
-  /**
-   * Per-club Discord webhook URLs, keyed `discord_webhook_url_<club_slug>`
-   * (e.g. `discord_webhook_url_yaoi`). Admin-only (redacted for public). Each
-   * book club publishes its reading lists to its own channel. See BOOK_CLUBS.
-   */
-  [key: `discord_webhook_url_${string}`]: string
-}
-
-// GET /api/settings - the richer settings view (named keys) + uploaded fonts.
-export interface SettingsResponse {
-  settings: AppSettings
-  /**
-   * Fonts uploaded via System -> Font Upload, each with its file name (family =
-   * name without the extension) and current serving token. The frontend
-   * registers an @font-face per font sourced same-origin from
-   * `/api/fonts/pub/f/<token>`; tokens rotate, so never persist them.
-   */
-  uploaded_fonts?: UploadedFont[]
-}
 
 // -- Form models (frontend-only) ----------------------------------------------
 
@@ -662,49 +539,6 @@ export interface FestivalMapForm {
   times: EventTimeForm[]
   stalls: FestivalStallForm[]
 }
-
-// -- WebSocket message types -------------------------------------------------
-export type WsMessage =
-  | { type: 'game_update'; game: BingoGameState | null; game_details?: string; winners?: string[] }
-  | { type: 'game_draw'; drawn: BingoDrawnNumber; winners?: string[]; game_id?: number }
-  | { type: 'cards_update'; cards: CardListEntry[] }
-  | { type: 'patterns_update'; patterns: Pattern[]; categories?: PatternCategory[] }
-  | { type: 'card_deleted' }
-  | { type: 'details_update'; game_details: string }
-  | { type: 'style_update'; css: string; board_flourish?: string; number_flourish?: string }
-  | {
-      type: 'settings_update'
-      app_title?: string
-      header_font?: string
-      uploaded_fonts?: UploadedFont[]
-    }
-  | { type: 'halftime_minigame'; game_id?: number }
-  // Server reached the half-time mark: admins show the mini-game prompt.
-  // `auto_paused` is true when the auto-draw loop was paused for the decision, so
-  // the modal can explain that declining will resume it.
-  | { type: 'halftime_prompt'; auto_paused: boolean }
-  // Auto-draw state changed (started, toggled, interval adjusted, or switched off
-  // by a winner/half-time): every admin surface syncs its toggle + interval.
-  | { type: 'auto_config'; enabled: boolean; interval: number }
-  // "It's Yoever" reaction fired by a player: play the sound + bounce the image
-  // labelled `player_name` on every client; `count` is the running per-game total.
-  | { type: 'yoever'; player_name: string; count: number }
-  // Admin flipped the reaction on/off for the current game (players' trigger
-  // button shows/hides, other admins' toggle syncs).
-  | { type: 'yoever_config'; enabled: boolean }
-  | { type: 'draw_delay_update'; delay: number }
-  // A tea room's lock ran out and the server lifted it. Admin channel only. It
-  // carries the room's name because its consumers ANNOUNCE it rather than render
-  // it - the in-game plugin alerts its operator by name the moment this lands.
-  // The SPA's own list refreshes off the `resource_changed` that follows.
-  | { type: 'tea_room_unlocked'; id: number; name: string; room_number: string }
-  // Thin "an admin resource changed" signal (no payload): an admin viewing that
-  // resource refetches it via REST. `resource` is a key like 'garapons',
-  // 'raffles', 'announcements', 'bookclub', 'presets', 'users', etc.
-  | { type: 'resource_changed'; resource: string }
-  // Live server-log tail: one message per log line, sent to admin connections
-  // only (best-effort - dropped rather than queued when a client can't keep up).
-  | { type: 'log'; entry: LogEntry }
 
 /**
  * One plaque window in the Ema board form. `start_at`/`end_at` hold the LOCAL

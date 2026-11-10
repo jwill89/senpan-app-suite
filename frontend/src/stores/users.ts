@@ -1,20 +1,30 @@
 /**
  * Users store: manages accounts for the System -> Users admin tab (admin only).
- * Lists accounts, activates/deactivates them, toggles admin, edits per-page
- * permissions, sets a user's password, and deletes accounts. All mutations
- * refresh the list so the table reflects server state.
+ * Lists accounts, changes one (active, admin, permissions, password) in a single
+ * PATCH, and deletes accounts. Every change reloads the list so the table reflects
+ * the server.
  *
- * The seeded "admin" account is protected server-side (it can't be modified
- * here); the UI also hides those actions for it (see UsersTab).
+ * The seeded "admin" account is protected server-side (it can't be deactivated,
+ * demoted, deleted or have its password set here); the UI also hides those actions
+ * for it (see UsersTab).
  */
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { endpoints } from '@/lib/endpoints'
-import type { User } from '@/types/api'
+import { api, unwrap, type User } from '@/api/client'
+import type { components } from '@/api/schema'
 import { useUiStore } from './ui'
 
 /** Username of the protected bootstrap admin account. */
 export const PROTECTED_ADMIN = 'admin'
+
+type UserChanges = components['schemas']['UserChanges']
+
+/** What the Edit User modal sets an account to. */
+export interface UserEdit {
+  isActive: boolean
+  isAdmin: boolean
+  permissions: string[]
+}
 
 export const useUsersStore = defineStore('users', () => {
   const ui = useUiStore()
@@ -26,8 +36,7 @@ export const useUsersStore = defineStore('users', () => {
   async function loadUsers(): Promise<void> {
     loading.value = true
     try {
-      const data = await endpoints.users.list()
-      users.value = data.users
+      users.value = (await unwrap(api.GET('/users'))).users
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     } finally {
@@ -35,93 +44,44 @@ export const useUsersStore = defineStore('users', () => {
     }
   }
 
-  async function setActive(id: number, active: boolean): Promise<void> {
-    try {
-      await endpoints.users.setActive(id, active)
-      ui.notify(active ? 'Account activated' : 'Account deactivated', 'success')
-      await loadUsers()
-    } catch (e) {
-      ui.notify((e as Error).message, 'error')
-    }
-  }
-
-  async function setAdmin(id: number, admin: boolean): Promise<void> {
-    try {
-      await endpoints.users.setAdmin(id, admin)
-      ui.notify(admin ? 'Granted admin' : 'Revoked admin', 'success')
-      await loadUsers()
-    } catch (e) {
-      ui.notify((e as Error).message, 'error')
-    }
-  }
-
-  /** Saves a user's page-permission set; returns true on success. */
-  async function setPermissions(id: number, permissions: string[]): Promise<boolean> {
-    try {
-      await endpoints.users.setPermissions(id, permissions)
-      ui.notify('Permissions saved', 'success')
-      await loadUsers()
-      return true
-    } catch (e) {
-      ui.notify((e as Error).message, 'error')
-      return false
-    }
-  }
-
-  /** Sets a user's password (admin action); returns true on success. */
-  async function setPassword(id: number, password: string): Promise<boolean> {
-    try {
-      await endpoints.users.setPassword(id, password)
-      ui.notify('Password updated', 'success')
-      return true
-    } catch (e) {
-      ui.notify((e as Error).message, 'error')
-      return false
-    }
-  }
-
   /**
-   * Applies all edits from the "Edit User" modal in one go: only the fields that
-   * actually changed are sent (active, admin, permissions), plus an optional new
-   * password. Reloads + notifies once at the end (instead of per-field), and
-   * reloads on failure too so the table reflects any partial change. Returns true
-   * on full success. Permissions are skipped when the account is (or becomes) an
-   * admin, since admins implicitly hold every permission.
+   * Applies the Edit User modal in one PATCH: only what changed (active, admin,
+   * permissions), plus a new password when one is given. Permissions are left alone
+   * when the account is (or becomes) an admin, who holds every one. Reloads and
+   * notifies once; returns true on success.
    */
-  async function updateUser(
-    id: number,
-    desired: { is_active: boolean; is_admin: boolean; permissions: string[] },
-    password?: string,
-  ): Promise<boolean> {
+  async function updateUser(id: number, desired: UserEdit, password?: string): Promise<boolean> {
     const orig = users.value.find((u) => u.id === id)
     if (!orig) {
       ui.notify('User not found', 'error')
       return false
     }
+    const changes: UserChanges = {}
+    if (desired.isActive !== orig.isActive) {
+      changes.isActive = desired.isActive
+    }
+    if (desired.isAdmin !== orig.isAdmin) {
+      changes.isAdmin = desired.isAdmin
+    }
+    if (!desired.isAdmin) {
+      const a = [...desired.permissions].sort().join('|')
+      const b = [...orig.permissions].sort().join('|')
+      if (a !== b) {
+        changes.permissions = desired.permissions
+      }
+    }
+    if (password) {
+      changes.password = password
+    }
     try {
-      if (desired.is_active !== orig.is_active) {
-        await endpoints.users.setActive(id, desired.is_active)
-      }
-      if (desired.is_admin !== orig.is_admin) {
-        await endpoints.users.setAdmin(id, desired.is_admin)
-      }
-      if (!desired.is_admin) {
-        const a = [...desired.permissions].sort().join('|')
-        const b = [...orig.permissions].sort().join('|')
-        if (a !== b) {
-          await endpoints.users.setPermissions(id, desired.permissions)
-        }
-      }
-      if (password) {
-        await endpoints.users.setPassword(id, password)
-      }
+      await unwrap(api.PATCH('/users/{id}', { params: { path: { id } }, body: changes }))
       ui.notify('User updated', 'success')
-      await loadUsers()
       return true
     } catch (e) {
       ui.notify((e as Error).message, 'error')
-      await loadUsers()
       return false
+    } finally {
+      await loadUsers()
     }
   }
 
@@ -135,7 +95,7 @@ export const useUsersStore = defineStore('users', () => {
       return
     }
     try {
-      await endpoints.users.delete(id)
+      await unwrap(api.DELETE('/users/{id}', { params: { path: { id } } }))
       ui.notify('Account deleted', 'info')
       await loadUsers()
     } catch (e) {
@@ -147,10 +107,6 @@ export const useUsersStore = defineStore('users', () => {
     users,
     loading,
     loadUsers,
-    setActive,
-    setAdmin,
-    setPermissions,
-    setPassword,
     updateUser,
     deleteUser,
   }

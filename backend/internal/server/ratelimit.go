@@ -134,6 +134,24 @@ func (rl *rateLimiter) resetFailures(ip string) {
 	delete(rl.attempts, ip)
 }
 
+// RetryAfter is how long until key may try again: 0 when it may now, else the
+// rest of the window it used up (api.Limiter).
+func (rl *rateLimiter) RetryAfter(key string) time.Duration {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	info, ok := rl.attempts[key]
+	if !ok || info.count < rl.maxFails {
+		return 0
+	}
+	return max(time.Until(info.windowStart.Add(rl.window)), 0)
+}
+
+// Fail counts an attempt against key (api.Limiter).
+func (rl *rateLimiter) Fail(key string) { rl.recordFailure(key) }
+
+// Reset forgets key's attempts (api.Limiter).
+func (rl *rateLimiter) Reset(key string) { rl.resetFailures(key) }
+
 // cleanup removes expired entries.
 func (rl *rateLimiter) cleanup() {
 	rl.mu.Lock()

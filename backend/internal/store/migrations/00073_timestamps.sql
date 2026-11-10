@@ -1,6 +1,6 @@
 -- +goose NO TRANSACTION
 -- +goose Up
--- Every timestamp moves to the standards' one form (database.md): RFC 3339 in UTC to
+-- Every timestamp moves to one form: RFC 3339 in UTC to
 -- the second, 2026-11-09T21:30:00Z, in a column declared DATETIME with a CHECK that
 -- refuses any other, NULL where there is none (it was '' in the TEXT columns), and
 -- strftime() in place of CURRENT_TIMESTAMP and datetime(), whose
@@ -10,7 +10,7 @@
 -- read as UTC, as the app always read it.
 --
 -- SQLite can't add a CHECK or change a type in place, so each table is rebuilt by
--- its documented procedure (database.md, Rebuilding a table): foreign keys off
+-- the procedure SQLite documents for it: foreign keys off
 -- outside the transaction, a new table, the rows copied, the old one dropped and the
 -- new one renamed, its indexes made again, AUTOINCREMENT's high-water mark kept so
 -- no deleted id comes back, then foreign_key_check. A copy that drops a row or a

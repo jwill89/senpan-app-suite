@@ -10,14 +10,6 @@ id = "GHSA-g3hv-75wg-m249"
 ignoreUntil = 2027-02-07
 reason = "Dev tooling only (ESLint through lint/web); the fix, minimatch 11.0.1, is outside ESLint's ^10.2 range."
 
-# glob 11 and 13: an aborted search can go on reading the file system. It comes with
-# @vue/test-utils (js-beautify) and Workbox's build (vite-plugin-pwa), which require glob 11
-# and 13, and the fix is 14.0.2. Neither passes an AbortSignal, and neither ships.
-[[IgnoredVulns]]
-id = "GHSA-3g3m-2fjr-6pw4"
-ignoreUntil = 2027-02-07
-reason = "Test and build tooling only (js-beautify, workbox-build); the fix, glob 14.0.2, is outside their ranges."
-
 # deepmerge 4.3.1: mergeObject() can pollute the merged object's prototype. It comes with
 # Workbox's build (@rollup/plugin-node-resolve), merging our own build options; no fixed
 # version exists yet.

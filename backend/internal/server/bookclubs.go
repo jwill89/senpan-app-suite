@@ -18,13 +18,10 @@ import (
 	"strings"
 	"time"
 
+	"app-suite/internal/bookclubs"
 	"app-suite/internal/model"
+	"app-suite/internal/permissions"
 )
-
-// defaultAniListURL is the fallback AniList GraphQL endpoint (used when the
-// anilist_api_url setting is unset). Configurable on the admin settings page.
-// AniList needs no API key for public read queries.
-const defaultAniListURL = "https://graphql.anilist.co"
 
 // anilistUserAgent identifies this app to AniList (and its Cloudflare front).
 // Sending a descriptive User-Agent instead of Go's default is good practice for
@@ -34,83 +31,6 @@ const anilistUserAgent = "SenpanAppSuite (+https://apps.senpan.cafe)"
 // defaultClubSlug is the book club used when a request omits one. The schema
 // supports more clubs via club_slug without changes.
 const defaultClubSlug = "yaoi"
-
-// bookClub identifies a book club for per-club configuration (notably its own
-// Discord webhook). Add an entry here to introduce a new club; its webhook
-// setting is then exposed/saved automatically (see init below).
-type bookClub struct {
-	Slug string
-	Name string
-	// CommentsLabel is the label used for the per-item curator comments field in
-	// the published Discord embed (e.g. "Yao's Comments", "Drani's Comments").
-	CommentsLabel string
-}
-
-// bookClubs is the registry of known book clubs.
-var bookClubs = []bookClub{
-	{Slug: "yaoi", Name: "Yaoi Book Club", CommentsLabel: "Yao's Comments"},
-	{Slug: "yuri", Name: "Yuri Book Club", CommentsLabel: "Drani's Comments"},
-}
-
-// commentsLabelForClub returns a club's curator-comments field label, falling
-// back to a generic "Comments" for unknown slugs.
-func commentsLabelForClub(slug string) string {
-	for _, c := range bookClubs {
-		if c.Slug == slug {
-			return c.CommentsLabel
-		}
-	}
-	return "Comments"
-}
-
-// webhookSettingKey returns the per-club reading-list Discord webhook setting
-// key for a slug (e.g. "discord_webhook_url_yaoi"). Must match clubWebhookKey
-// on the frontend.
-func webhookSettingKey(slug string) string {
-	return "discord_webhook_url_" + slug
-}
-
-// isDiscordWebhookURL reports whether raw is a valid Discord webhook URL: https
-// on an official Discord host with an /api/webhooks/ path. Admin-entered webhook
-// URLs (announcement types, per-club settings) are validated against this so a
-// saved value can't point the server's outbound POSTs at an arbitrary (e.g.
-// internal) host.
-func isDiscordWebhookURL(raw string) bool {
-	u, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || u.Scheme != "https" {
-		return false
-	}
-	switch strings.ToLower(u.Hostname()) {
-	case "discord.com", "discordapp.com", "ptb.discord.com", "canary.discord.com":
-		return strings.HasPrefix(u.Path, "/api/webhooks/")
-	}
-	return false
-}
-
-// isAllowedAniListURL reports whether raw is an acceptable AniList GraphQL
-// endpoint: https on a host under anilist.co. The anilist_api_url setting drives
-// the server's outbound lookup POST, so it is validated against this allowlist
-// (mirroring the Discord-webhook check) to stop an admin-entered value from
-// pointing those requests at an internal service or cloud metadata endpoint.
-func isAllowedAniListURL(raw string) bool {
-	u, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || u.Scheme != "https" || u.Host == "" {
-		return false
-	}
-	host := strings.ToLower(u.Hostname())
-	return host == "anilist.co" || strings.HasSuffix(host, ".anilist.co")
-}
-
-// init registers each club's reading-list Discord webhook as a secret app
-// setting so the settings API exposes it to admins and accepts saves, without
-// hard-coding a key per club in settings.go.
-func init() {
-	for _, c := range bookClubs {
-		key := webhookSettingKey(c.Slug)
-		settingsKeys = append(settingsKeys, key)
-		secretSettings[key] = true
-	}
-}
 
 // bookclubHTTPClient is used for outbound Discord webhook posts (validated
 // against isDiscordWebhookURL at save time) with a sane timeout so a slow
@@ -129,7 +49,7 @@ var anilistHTTPClient = &http.Client{
 		if len(via) >= 5 {
 			return fmt.Errorf("stopped after %d redirects", len(via))
 		}
-		if !isAllowedAniListURL(req.URL.String()) {
+		if !bookclubs.IsAllowedAniListURL(req.URL.String()) {
 			return fmt.Errorf("redirect to disallowed host %q blocked", req.URL.Host)
 		}
 		return nil
@@ -142,13 +62,13 @@ var anilistHTTPClient = &http.Client{
 // caller holds that club's page permission. Writes the 401/403 itself and
 // returns ok=false so the handler can return immediately. Because
 // requirePermission already implies auth (an unauthenticated caller gets a 401),
-// this single guard replaces the old requireAuth-then-load-then-check dance.
+// this single guard replaces a separate sign-in check before the permission one.
 func (s *Server) bookClubFromPath(w http.ResponseWriter, r *http.Request) (string, bool) {
 	club := strings.TrimSpace(r.PathValue("club"))
 	if club == "" {
 		club = defaultClubSlug
 	}
-	if !s.requirePermission(w, r, bookClubPerm(club)) {
+	if !s.requirePermission(w, r, permissions.BookClub(club)) {
 		return "", false
 	}
 	return club, true
@@ -674,8 +594,8 @@ func (s *Server) anilistURL(ctx context.Context) string {
 	// migration, a direct DB edit) must not send our outbound lookup POST to an
 	// internal service or cloud-metadata host. Re-check the stored value at read
 	// time and fall back to the default endpoint when it isn't an allowed AniList URL.
-	if base == "" || !isAllowedAniListURL(base) {
-		base = defaultAniListURL
+	if base == "" || !bookclubs.IsAllowedAniListURL(base) {
+		base = bookclubs.DefaultAniListURL
 	}
 	return strings.TrimRight(base, "/")
 }
@@ -909,7 +829,7 @@ func (s *Server) handlePublishReadingList(w http.ResponseWriter, r *http.Request
 	}
 
 	// Each book club publishes to its own Discord channel (per-club webhook).
-	webhook, _ := s.store.GetSetting(r.Context(), webhookSettingKey(list.ClubSlug))
+	webhook, _ := s.store.GetSetting(r.Context(), bookclubs.WebhookSettingKey(list.ClubSlug))
 	webhook = strings.TrimSpace(webhook)
 	if webhook == "" {
 		writeError(w, http.StatusBadRequest, "No Discord webhook configured for this book club. Set it under System -> Settings.")
@@ -921,7 +841,7 @@ func (s *Server) handlePublishReadingList(w http.ResponseWriter, r *http.Request
 	// disconnects - or a shutdown - stops the loop instead of hammering Discord
 	// with the remaining items.
 	ctx := r.Context()
-	commentsLabel := commentsLabelForClub(list.ClubSlug)
+	commentsLabel := bookclubs.CommentsLabel(list.ClubSlug)
 	published := 0
 	for i, it := range list.Items {
 		if err := ctx.Err(); err != nil {

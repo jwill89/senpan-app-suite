@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"app-suite/internal/model"
+	"app-suite/internal/permissions"
 	"app-suite/internal/store"
 )
 
@@ -216,7 +217,7 @@ func buildPublicCard(r *model.StampRally, card *model.StampRallyCard, stamps []m
 //	Endpoint:  GET /api/stamp-rallies
 //	Auth:      admin, or a user granted festival-stamp-rally
 func (s *Server) handleStampRalliesList(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permFestivalStampRally) {
+	if !s.requirePermission(w, r, permissions.FestivalStampRally) {
 		return
 	}
 	rallies, err := s.store.ListStampRallies(r.Context())
@@ -232,7 +233,7 @@ func (s *Server) handleStampRalliesList(w http.ResponseWriter, r *http.Request) 
 //	Endpoint:  GET /api/stamp-rallies/{id}
 //	Auth:      admin, or a user granted festival-stamp-rally
 func (s *Server) handleStampRallyDetail(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permFestivalStampRally) {
+	if !s.requirePermission(w, r, permissions.FestivalStampRally) {
 		return
 	}
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
@@ -263,7 +264,7 @@ func (s *Server) handleStampRallyDetail(w http.ResponseWriter, r *http.Request) 
 //	Endpoint:  GET /api/stamp-rallies/{id}/logs
 //	Auth:      admin, or a user granted festival-stamp-rally
 func (s *Server) handleStampRallyLogs(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permFestivalStampRally) {
+	if !s.requirePermission(w, r, permissions.FestivalStampRally) {
 		return
 	}
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
@@ -431,7 +432,7 @@ func (s *Server) resolveMapStalls(ctx context.Context, w http.ResponseWriter, ra
 //	Auth:      admin, or a user granted festival-stamp-rally
 //	Response:  201 {"stamp_rally": StampRally}
 func (s *Server) handleStampRallyCreate(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permFestivalStampRally) {
+	if !s.requirePermission(w, r, permissions.FestivalStampRally) {
 		return
 	}
 	req, err := readJSON[stampRallyWriteRequest](w, r)
@@ -473,7 +474,7 @@ func (s *Server) handleStampRallyCreate(w http.ResponseWriter, r *http.Request) 
 //	Auth:      admin, or a user granted festival-stamp-rally
 //	Response:  200 {"ok": true}
 func (s *Server) handleStampRallyUpdate(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permFestivalStampRally) {
+	if !s.requirePermission(w, r, permissions.FestivalStampRally) {
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "stamp rally")
@@ -522,7 +523,7 @@ func (s *Server) handleStampRallyUpdate(w http.ResponseWriter, r *http.Request) 
 //	Auth:      admin, or a user granted festival-stamp-rally
 //	Response:  204 No Content
 func (s *Server) handleStampRallyDelete(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permFestivalStampRally) {
+	if !s.requirePermission(w, r, permissions.FestivalStampRally) {
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "stamp rally")
@@ -539,7 +540,7 @@ func (s *Server) handleStampRallyDelete(w http.ResponseWriter, r *http.Request) 
 // setStampRallyStatus applies a status change and responds with {ok, status}.
 // Shared by the close and reopen verb handlers.
 func (s *Server) setStampRallyStatus(w http.ResponseWriter, r *http.Request, status string) {
-	if !s.requirePermission(w, r, permFestivalStampRally) {
+	if !s.requirePermission(w, r, permissions.FestivalStampRally) {
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "stamp rally")
@@ -583,7 +584,7 @@ type stampPausedRequest struct {
 //	Auth:      admin, or a user granted festival-stamp-rally
 //	Response:  200 {"ok": true, "paused": bool}
 func (s *Server) handleStampRallyStampPatch(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permFestivalStampRally) {
+	if !s.requirePermission(w, r, permissions.FestivalStampRally) {
 		return
 	}
 	rallyID, ok := pathInt64(w, r, "id", "stamp rally")
@@ -625,7 +626,7 @@ type stampRallyCardCreateRequest struct {
 //	Auth:      admin, or a user granted festival-stamp-rally
 //	Response:  201 {"card": StampRallyCard}
 func (s *Server) handleStampRallyCardCreate(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permFestivalStampRally) {
+	if !s.requirePermission(w, r, permissions.FestivalStampRally) {
 		return
 	}
 	rallyID, ok := pathInt64(w, r, "id", "stamp rally")
@@ -669,7 +670,7 @@ func (s *Server) handleStampRallyCardCreate(w http.ResponseWriter, r *http.Reque
 //	Auth:      admin, or a user granted festival-stamp-rally
 //	Response:  204 No Content
 func (s *Server) handleStampRallyCardDelete(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permFestivalStampRally) {
+	if !s.requirePermission(w, r, permissions.FestivalStampRally) {
 		return
 	}
 	rallyID, ok := pathInt64(w, r, "id", "stamp rally")
@@ -867,7 +868,7 @@ func (s *Server) handleStampCardStamp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.maybeComplete(r.Context(), card, rally, collected, now)
-	s.broadcastResourceChanged("stamp-rallies")
+	s.resourceChanged("stamp-rallies")
 
 	resp := buildPublicCard(rally, card, rally.Stamps, rally.Prizes, collected, now)
 	resp.Rally.FestivalLink = s.festivalLinkForRally(r.Context(), rally.ID)

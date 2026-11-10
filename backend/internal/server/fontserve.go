@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"app-suite/internal/fonts"
 	"app-suite/internal/model"
 )
 
@@ -360,7 +361,7 @@ func (s *Server) handleFontKitCSS(w http.ResponseWriter, r *http.Request) {
 			continue // this site isn't allowed to use this font
 		}
 		family := fontFamilyFor(g.Base, m)
-		if family == "" || cssNameUnsafe(family) {
+		if family == "" || fonts.NameUnsafe(family) {
 			// Skip a font whose family carries CSS-breaking characters rather than
 			// emit a rule that could inject CSS - mirrors the empty-family skip.
 			// New families are rejected at write time; this guards any value that

@@ -3,13 +3,15 @@ package server
 import (
 	"net/url"
 	"strings"
+
+	"app-suite/internal/auth"
 )
 
 // Capability tokens travel in the URL path (and, for the PAT fallback, the query
 // string): /api/garapon/{token}, /api/stamp-card/{token}, /api/fonts/pub/f/{token},
 // and the SPA referer forms /garapon/{token}, /stamp-card/{token}. Those tokens
 // are bearer credentials, so the request logger must not write them verbatim to
-// the rotating file, the /api/logs viewer, or the admin WebSocket tail. The
+// the rotating file, the /api/logs viewer, or the admins' live log events. The
 // trailing slash on each prefix keeps the plural admin routes (/api/garapons/{id},
 // integer ids) from ever matching.
 var tokenPathPrefixes = []string{
@@ -46,8 +48,8 @@ func redactSensitivePath(path string) string {
 			return path
 		}
 		// 8 hex chars (32 bits) of the token's SHA-256 - a stable, non-reversible
-		// correlation key (hashToken returns the full hex digest; see tokens.go).
-		return origPre + "tok_" + hashToken(tok)[:8] + tail
+		// correlation key (auth.HashToken returns the full hex digest).
+		return origPre + "tok_" + auth.HashToken(tok)[:8] + tail
 	}
 	return path
 }

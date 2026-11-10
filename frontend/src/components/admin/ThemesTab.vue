@@ -51,10 +51,8 @@ const tokens = computed<Record<string, string>>({
               @keydown.space.prevent="styles.loadStyle(st.id)"
             >
               <span class="style-name">{{ st.name }}</span>
-              <span v-if="st.is_public" class="style-public-badge">Public</span>
-              <span v-if="String(st.id) === styles.activeStyleId" class="style-active-badge">
-                Active
-              </span>
+              <span v-if="st.isPublic" class="style-public-badge">Public</span>
+              <span v-if="st.id === styles.activeStyleId" class="style-active-badge"> Active </span>
             </div>
             <LoadingSpinner
               v-if="styles.stylesLoading && styles.styles.length === 0"
@@ -76,7 +74,7 @@ const tokens = computed<Record<string, string>>({
             v-if="
               styles.editingStyle &&
               styles.editingStyle.id &&
-              String(styles.editingStyle.id) !== styles.activeStyleId
+              styles.editingStyle.id !== styles.activeStyleId
             "
             type="button"
             class="btn-action btn-sm mt w-full"
@@ -85,10 +83,10 @@ const tokens = computed<Record<string, string>>({
             Set Active
           </button>
           <button
-            v-if="styles.activeStyleId"
+            v-if="styles.activeStyleId !== null"
             type="button"
             class="btn-caution btn-sm mt w-full"
-            @click="styles.setActiveStyle(0)"
+            @click="styles.setActiveStyle(null)"
           >
             Clear Active Theme
           </button>
@@ -127,7 +125,7 @@ const tokens = computed<Record<string, string>>({
                  the client-side picker; the admin's active theme is always offered
                  separately as a name-hiding "Default". -->
             <label class="visibility-toggle mb">
-              <input v-model="styles.editingStyle.is_public" type="checkbox" />
+              <input v-model="styles.editingStyle.isPublic" type="checkbox" />
               <span>Public - players can pick this theme for themselves</span>
             </label>
             <p class="text-muted text-xs mb-8">
@@ -148,7 +146,7 @@ const tokens = computed<Record<string, string>>({
                   SVG drawn at the four corners of the player bingo board. Upload SVGs on the System
                   -> Images page. Leave unset to use the built-in flourish.
                 </p>
-                <ImagePicker v-model="styles.editingStyle.board_flourish" :extensions="['.svg']" />
+                <ImagePicker v-model="styles.editingStyle.boardFlourish" :extensions="['.svg']" />
               </div>
               <div class="flourish-option">
                 <span class="field-label">Number Flourish</span>
@@ -156,7 +154,7 @@ const tokens = computed<Record<string, string>>({
                   SVG shown either side of the “Last Called” number (player view + Game tab). Leave
                   unset to use the built-in flourish.
                 </p>
-                <ImagePicker v-model="styles.editingStyle.number_flourish" :extensions="['.svg']" />
+                <ImagePicker v-model="styles.editingStyle.numberFlourish" :extensions="['.svg']" />
               </div>
             </div>
           </div>

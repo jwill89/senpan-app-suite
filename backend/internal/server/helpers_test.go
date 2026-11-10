@@ -7,27 +7,28 @@ import (
 	"app-suite/internal/server"
 )
 
-// -- adminMutationResource (live-admin invalidation mapping) ------------------
+// -- adminMutationResource (the resource_changed mapping) ---------------------
 
-// TestAdminMutationResource is the unit-level guard for the live-admin
-// invalidation feature: admin CRUD POSTs map to a resource key, while public,
-// auth, self-service, and rich-realtime paths must NOT (they return ok=false).
-// The public ".../enter" and ".../draw" exclusions are why the raffle-enter and
-// garapon-draw handlers broadcast explicitly instead.
+// TestAdminMutationResource is the unit-level guard for resource_changed: admin
+// CRUD writes map to a resource key (a book club's to that club's), while public,
+// sign-in, self-service, and the paths with events of their own must NOT (they
+// return ok=false). The public ".../enter" and ".../draw" exclusions are why the
+// raffle-enter and garapon-draw handlers tell their page themselves.
 func TestAdminMutationResource(t *testing.T) {
 	mapped := map[string]string{
 		"/api/garapons":                              "garapons",
 		"/api/garapons/5/players":                    "garapons",
 		"/api/raffles":                               "raffles",
 		"/api/raffles/9/entries":                     "raffles",
-		"/api/presets":                               "presets",
+		"/api/v1/presets/4":                          "presets",
 		"/api/users":                                 "users",
+		"/api/v1/users/7":                            "users",
 		"/api/announcements":                         "announcements",
 		"/api/announcement-types":                    "announcements",
 		"/api/announcement-roles":                    "announcements",
-		"/api/book-clubs/yaoi/reading-lists":         "bookclub",
-		"/api/book-clubs/yaoi/reading-lists/3/items": "bookclub",
-		"/api/winners-log":                           "winners-log",
+		"/api/book-clubs/yaoi/reading-lists":         "bookclub-yaoi",
+		"/api/book-clubs/yuri/reading-lists/3/items": "bookclub-yuri",
+		"/api/v1/winners-log/all":                    "winners-log",
 		"/api/fonts":                                 "fonts",
 		"/api/fonts/upload":                          "fonts",
 		"/api/carrd/projects":                        "carrd",
@@ -43,19 +44,42 @@ func TestAdminMutationResource(t *testing.T) {
 	}
 
 	excluded := []string{
-		"/api/garapon/abc123/draw", // public draw - broadcasts explicitly
-		"/api/raffles/9/enter",     // public sign-up - broadcasts explicitly
+		"/api/garapon/abc123/draw", // public draw - its handler tells garapons
+		"/api/raffles/9/enter",     // public sign-up - its handler tells raffles
 		"/api/garapon/abc123",      // public token view
-		"/api/auth",                // auth
-		"/api/account",             // self-service
-		"/api/game",                // rich-realtime (own events)
-		"/api/cards",               // rich-realtime
-		"/api/styles",              // rich-realtime (style_update)
+		"/api/v1/auth/login",       // signing in
+		"/api/v1/me/token",         // self-service
+		"/api/v1/game/end",         // the game's own events
+		"/api/v1/cards/all",        // cards_changed
+		"/api/styles",              // theme_changed
+		"/api/v1/styles/3",         // theme_changed
+		"/api/v1/settings",         // settings_changed
+		"/api/v1/patterns/2/move",  // patterns_changed
+		"/api/v1/pattern-categories",
+		"/api/book-clubs",
 		"/api/unknown",
 	}
 	for _, path := range excluded {
 		if got, ok := server.AdminMutationResourceForTest(path); ok {
 			t.Errorf("adminMutationResource(%q) = (%q, true); want ok=false", path, got)
+		}
+	}
+}
+
+// TestAccountMutation names the writes after which every staff stream checks its
+// account again.
+func TestAccountMutation(t *testing.T) {
+	for path, want := range map[string]bool{
+		"/api/v1/users/7":       true,
+		"/api/v1/me/password":   true,
+		"/api/v1/me/token":      true,
+		"/api/v1/auth/logout":   true,
+		"/api/v1/auth/login":    false,
+		"/api/v1/auth/register": false,
+		"/api/v1/cards":         false,
+	} {
+		if got := server.AccountMutationForTest(path); got != want {
+			t.Errorf("accountMutation(%q) = %v; want %v", path, got, want)
 		}
 	}
 }

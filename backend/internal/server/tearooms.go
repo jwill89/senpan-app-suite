@@ -10,7 +10,10 @@ import (
 	"time"
 	"unicode"
 
+	"app-suite/internal/api"
+	"app-suite/internal/discord"
 	"app-suite/internal/model"
+	"app-suite/internal/permissions"
 )
 
 // -- Tea Rooms (Senpan Tea House -> Tea Rooms) --------------------------------
@@ -20,7 +23,7 @@ import (
 // shared webhook. The list is also exposed read-only through a public,
 // cross-origin API so an external Carrd site can render live availability/pricing.
 //
-// Admin CRUD + the toggle/post/reorder commands are gated by permTeahouseTeaRooms;
+// Admin CRUD + the toggle/post/reorder commands are gated by permissions.TeahouseTeaRooms;
 // the /public endpoints are unauthenticated and send `Access-Control-Allow-Origin:
 // *` so any site can fetch them.
 
@@ -42,7 +45,7 @@ const maxTeaRoomHashtags = 30
 //	Auth:      admin, or a user granted teahouse-tea-rooms
 //	Response:  {"tea_rooms": [...], "webhook_url": "..."}
 func (s *Server) handleTeaRoomsList(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseTeaRooms) {
+	if !s.requirePermission(w, r, permissions.TeahouseTeaRooms) {
 		return
 	}
 	rooms, err := s.store.ListTeaRooms(r.Context())
@@ -158,7 +161,7 @@ func (s *Server) checkTeaRoomNumberUnique(ctx context.Context, w http.ResponseWr
 //	Auth:      admin, or a user granted teahouse-tea-rooms
 //	Response:  201 {"tea_room": TeaRoom}
 func (s *Server) handleTeaRoomCreate(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseTeaRooms) {
+	if !s.requirePermission(w, r, permissions.TeahouseTeaRooms) {
 		return
 	}
 	req, err := readJSON[teaRoomWriteRequest](w, r)
@@ -188,7 +191,7 @@ func (s *Server) handleTeaRoomCreate(w http.ResponseWriter, r *http.Request) {
 //	Auth:      admin, or a user granted teahouse-tea-rooms
 //	Response:  200 {"tea_room": TeaRoom}
 func (s *Server) handleTeaRoomUpdate(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseTeaRooms) {
+	if !s.requirePermission(w, r, permissions.TeahouseTeaRooms) {
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "tea room")
@@ -246,7 +249,7 @@ type teaRoomPatchRequest struct {
 //	Auth:      admin, or a user granted teahouse-tea-rooms
 //	Response:  200 {"tea_room": TeaRoom}
 func (s *Server) handleTeaRoomPatch(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseTeaRooms) {
+	if !s.requirePermission(w, r, permissions.TeahouseTeaRooms) {
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "tea room")
@@ -317,7 +320,7 @@ func (s *Server) handleTeaRoomPatch(w http.ResponseWriter, r *http.Request) {
 //	Auth:      admin, or a user granted teahouse-tea-rooms
 //	Response:  204 No Content
 func (s *Server) handleTeaRoomDelete(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseTeaRooms) {
+	if !s.requirePermission(w, r, permissions.TeahouseTeaRooms) {
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "tea room")
@@ -342,7 +345,7 @@ type teaRoomReorderRequest struct {
 //	Auth:      admin, or a user granted teahouse-tea-rooms
 //	Response:  200 {"ok": true}
 func (s *Server) handleTeaRoomsReorder(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseTeaRooms) {
+	if !s.requirePermission(w, r, permissions.TeahouseTeaRooms) {
 		return
 	}
 	req, err := readJSON[teaRoomReorderRequest](w, r)
@@ -363,7 +366,7 @@ func (s *Server) handleTeaRoomsReorder(w http.ResponseWriter, r *http.Request) {
 //	Auth:      admin, or a user granted teahouse-tea-rooms
 //	Response:  200 {"tea_room": TeaRoom}
 func (s *Server) handleTeaRoomPost(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseTeaRooms) {
+	if !s.requirePermission(w, r, permissions.TeahouseTeaRooms) {
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "tea room")
@@ -442,26 +445,13 @@ func (s *Server) expireDueTeaRoomLocks(ctx context.Context) {
 			continue
 		}
 		slog.Info("tea room lock expired", "id", room.ID, "name", room.Name, "room_number", room.RoomNumber)
-		s.broadcastTeaRoomUnlocked(room)
+		// The staff with the Tea Rooms page are told by name and number: the plugin
+		// announces it to its operator the moment it lands, with no read to make.
+		api.TeaRoomUnlocked(s.live, room.ID, room.Name, room.RoomNumber)
 		// The rooms list itself changed, and nothing here went through the admin
-		// mutation middleware (no request made this happen), so invalidate it too.
-		s.broadcastResourceChanged("tea-rooms")
+		// mutation middleware (no request made this happen), so tell it too.
+		s.resourceChanged("tea-rooms")
 	}
-}
-
-// broadcastTeaRoomUnlocked tells admin clients that a room's lock has just run
-// out. It carries the room's name and number rather than only its id because the
-// consumers announce it rather than render it: the in-game plugin alerts its
-// operator by name the moment this lands, and looking the name up would mean a
-// REST round-trip for a room the server has right here. Admin channel only - the
-// tea-room list is permission-gated, and no player client has any use for it.
-func (s *Server) broadcastTeaRoomUnlocked(room model.TeaRoom) {
-	s.hub.BroadcastToAdmins(struct {
-		Type       string `json:"type"`
-		ID         int64  `json:"id"`
-		Name       string `json:"name"`
-		RoomNumber string `json:"room_number"`
-	}{Type: "tea_room_unlocked", ID: room.ID, Name: room.Name, RoomNumber: room.RoomNumber})
 }
 
 // -- Shared Discord webhook --------------------------------------------------
@@ -478,7 +468,7 @@ type teaRoomWebhookRequest struct {
 //	Auth:      admin, or a user granted teahouse-tea-rooms
 //	Response:  200 {"webhook_url": "..."}
 func (s *Server) handleTeaRoomWebhookSet(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseTeaRooms) {
+	if !s.requirePermission(w, r, permissions.TeahouseTeaRooms) {
 		return
 	}
 	req, err := readJSON[teaRoomWebhookRequest](w, r)
@@ -489,7 +479,7 @@ func (s *Server) handleTeaRoomWebhookSet(w http.ResponseWriter, r *http.Request)
 	webhook := strings.TrimSpace(req.WebhookURL)
 	// A provided webhook must be a Discord webhook so the server can't be pointed at
 	// an arbitrary outbound host. Empty clears it.
-	if webhook != "" && !isDiscordWebhookURL(webhook) {
+	if webhook != "" && !discord.IsWebhookURL(webhook) {
 		writeError(w, http.StatusBadRequest, "Discord webhook URLs must look like https://discord.com/api/webhooks/...")
 		return
 	}

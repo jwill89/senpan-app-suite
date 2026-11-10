@@ -22,7 +22,9 @@ import (
 	"strconv"
 	"strings"
 
+	"app-suite/internal/db"
 	"app-suite/internal/store"
+	"app-suite/internal/themes"
 )
 
 // defaultTokens mirrors the built-in theme (frontend/src/assets/styles/tokens.css).
@@ -234,16 +236,21 @@ func openDB(ctx context.Context, path string, readOnly bool) *store.Store {
 }
 
 func loadThemes(ctx context.Context, st *store.Store) []map[string]string {
-	list, err := st.ListStyles(ctx)
+	q := db.New(st.ReadDB())
+	list, err := q.ListStyles(ctx)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "list:", err)
 		os.Exit(1)
 	}
 	var out []map[string]string
 	for _, s := range list {
-		full, _ := st.GetStyle(ctx, s.ID)
+		full, err := q.GetStyle(ctx, s.ID)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "load:", err)
+			os.Exit(1)
+		}
 		m := map[string]string{"__id": strconv.FormatInt(s.ID, 10), "__name": s.Name}
-		for k, v := range full.Tokens {
+		for k, v := range themes.Unmarshal(full.Tokens) {
 			m[k] = v
 		}
 		out = append(out, m)
@@ -293,9 +300,9 @@ func run() int {
 		totalAA, totalAAA := 0, 0
 		aa, aaa := checkTheme("[default] (built-in)", defaultTokens)
 		totalAA, totalAAA = totalAA+aa, totalAAA+aaa
-		themes := loadThemes(ctx, st)
-		sort.Slice(themes, func(i, j int) bool { return themes[i]["__name"] < themes[j]["__name"] })
-		for _, m := range themes {
+		all := loadThemes(ctx, st)
+		sort.Slice(all, func(i, j int) bool { return all[i]["__name"] < all[j]["__name"] })
+		for _, m := range all {
 			aa, aaa := checkTheme(fmt.Sprintf("[%s] %s", m["__id"], m["__name"]), tokensOnly(m))
 			totalAA, totalAAA = totalAA+aa, totalAAA+aaa
 		}
@@ -336,34 +343,45 @@ func run() int {
 			fmt.Fprintln(os.Stderr, "parse changes:", err)
 			return 1
 		}
+		q := db.New(st.DB())
 		for idStr, over := range changes.Update {
 			id, _ := strconv.ParseInt(idStr, 10, 64)
-			cur, err := st.GetStyle(ctx, id)
-			if err != nil || cur == nil {
+			cur, err := q.GetStyle(ctx, id)
+			if err != nil {
 				fmt.Printf("update %s: not found\n", idStr)
 				continue
 			}
-			tok := map[string]string{}
-			for k, v := range cur.Tokens {
-				tok[k] = v
-			}
+			tok := themes.Unmarshal(cur.Tokens)
 			for k, v := range over {
 				tok[k] = v
 			}
-			if err := st.UpdateStyle(ctx, id, cur.Name, tok, cur.BoardFlourish, cur.NumberFlourish, cur.IsPublic); err != nil {
+			encoded, err := themes.Marshal(tok)
+			if err == nil {
+				_, err = q.UpdateStyle(ctx, db.UpdateStyleParams{ID: id, Name: cur.Name, Tokens: encoded,
+					BoardFlourish: cur.BoardFlourish, NumberFlourish: cur.NumberFlourish, IsPublic: cur.IsPublic})
+			}
+			if err != nil {
 				fmt.Printf("update %s: %v\n", idStr, err)
 				continue
 			}
 			fmt.Printf("updated [%d] %s (%d token overrides)\n", id, cur.Name, len(over))
 		}
 		for _, c := range changes.Create {
-			tok := merged(c.Tokens) // fill any omitted token from defaults
-			id, err := st.CreateStyle(ctx, c.Name, tok, c.BoardFlourish, c.NumberFlourish, false)
+			if !themes.ValidFlourish(c.BoardFlourish) || !themes.ValidFlourish(c.NumberFlourish) {
+				fmt.Printf("create %s: a flourish must be an images/<category>/<file>.svg path\n", c.Name)
+				continue
+			}
+			encoded, err := themes.Marshal(merged(c.Tokens)) // fill any omitted token from defaults
+			var made *db.CreateStyleRow
+			if err == nil {
+				made, err = q.CreateStyle(ctx, db.CreateStyleParams{Name: c.Name, Tokens: encoded,
+					BoardFlourish: c.BoardFlourish, NumberFlourish: c.NumberFlourish})
+			}
 			if err != nil {
 				fmt.Printf("create %s: %v\n", c.Name, err)
 				continue
 			}
-			fmt.Printf("created [%d] %s\n", id, c.Name)
+			fmt.Printf("created [%d] %s\n", made.ID, c.Name)
 		}
 
 	default:

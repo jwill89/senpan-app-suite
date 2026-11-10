@@ -17,28 +17,10 @@ type LogEntry struct {
 	Fields  map[string]any `json:"fields,omitempty"`
 }
 
-// LogsResponse is the tail of the server log returned by GET /api/logs, after
-// level/text filtering and ordered newest-first. Truncated is true when the read
-// cap dropped older lines (their history lives in the rotated/compressed files).
-// Level is the current process-wide minimum level (so the viewer can reflect
-// whether live DEBUG is on).
-type LogsResponse struct {
-	Entries   []LogEntry `json:"entries"`
-	File      string     `json:"file"`
-	Truncated bool       `json:"truncated"`
-	Level     string     `json:"level"`
-}
-
-// LogLevelResponse reports the process-wide minimum log level after a change
-// (POST /api/logs/level) - one of "debug", "info", "warn", "error".
-type LogLevelResponse struct {
-	Level string `json:"level"`
-}
-
 // ParseLogEntry parses one slog JSON log line into a LogEntry, promoting the
 // standard time/level/msg keys and carrying every other attribute in Fields.
 // ok is false for a blank or non-JSON line. Shared by the REST tail endpoint and
-// the live WebSocket tail so both surface identical entries.
+// the live log events so both surface identical entries.
 func ParseLogEntry(line []byte) (LogEntry, bool) {
 	var m map[string]any
 	if json.Unmarshal(line, &m) != nil {

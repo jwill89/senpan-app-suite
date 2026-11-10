@@ -9,19 +9,10 @@ vi.mock('@/router', () => ({ adminTabRouteName: (tab: string) => 'admin-' + tab 
 
 import AdminSidebar from './AdminSidebar.vue'
 import { useAuthStore } from '@/stores/auth'
-import type { User } from '@/types/api'
+import type { Account } from '@/api/client'
 
-function makeUser(partial: Partial<User>): User {
-  return {
-    id: 1,
-    username: 'u',
-    is_admin: false,
-    is_active: true,
-    permissions: [],
-    created_at: '',
-    last_login_at: '',
-    ...partial,
-  }
+function makeUser(partial: Partial<Account>): Account {
+  return { id: 1, username: 'u', isAdmin: false, permissions: [], ...partial }
 }
 
 /** Mounts the sidebar with the given logged-in account. The AppVersions footer
@@ -30,10 +21,10 @@ function makeUser(partial: Partial<User>): User {
  * document: jsdom (31 on), like a browser, computes no style for a detached
  * element, so `isVisible()` could not see a collapsed section's `display: none`. */
 let mounted: VueWrapper | undefined
-function mountAs(user: User): VueWrapper {
+function mountAs(user: Account): VueWrapper {
   const auth = useAuthStore()
   auth.user = user
-  auth.isAdmin = user.is_admin
+  auth.isAdmin = user.isAdmin
   mounted = mount(AdminSidebar, {
     attachTo: document.body,
     global: { stubs: { AppVersions: true } },
@@ -72,7 +63,7 @@ describe('AdminSidebar', () => {
   })
 
   it('shows every section for an admin, with the active section expanded', () => {
-    const wrapper = mountAs(makeUser({ is_admin: true }))
+    const wrapper = mountAs(makeUser({ isAdmin: true }))
     // Bingo, Senpan Tea House, Festival, Atelier Yao, System, User Options.
     expect(wrapper.findAll('.admin-nav-section')).toHaveLength(6)
     // admin.adminSection defaults to 'bingo', so Bingo starts expanded.
@@ -104,7 +95,7 @@ describe('AdminSidebar', () => {
   })
 
   it('header click expands a section independently (others stay open) WITHOUT navigating', async () => {
-    const wrapper = mountAs(makeUser({ is_admin: true }))
+    const wrapper = mountAs(makeUser({ isAdmin: true }))
     expect(isExpanded(wrapper, 'Bingo')).toBe(true) // active section starts open
 
     await clickHeader(wrapper, 'System')
@@ -117,7 +108,7 @@ describe('AdminSidebar', () => {
   })
 
   it('clicking an open section header again collapses it (no navigation)', async () => {
-    const wrapper = mountAs(makeUser({ is_admin: true }))
+    const wrapper = mountAs(makeUser({ isAdmin: true }))
     expect(isExpanded(wrapper, 'Bingo')).toBe(true)
 
     await clickHeader(wrapper, 'Bingo')
@@ -127,7 +118,7 @@ describe('AdminSidebar', () => {
   })
 
   it('item click navigates via the router', async () => {
-    const wrapper = mountAs(makeUser({ is_admin: true }))
+    const wrapper = mountAs(makeUser({ isAdmin: true }))
     await clickHeader(wrapper, 'System') // expand System to reveal its items
     const settingsBtn = section(wrapper, 'System')
       .findAll('.admin-nav-items button')
@@ -139,7 +130,7 @@ describe('AdminSidebar', () => {
   })
 
   it('accordion headers carry button semantics and toggle via the keyboard', async () => {
-    const wrapper = mountAs(makeUser({ is_admin: true }))
+    const wrapper = mountAs(makeUser({ isAdmin: true }))
     const header = section(wrapper, 'System').find('.admin-nav-header')
     expect(header.attributes('role')).toBe('button')
     expect(header.attributes('tabindex')).toBe('0')

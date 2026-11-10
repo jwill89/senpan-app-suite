@@ -1,33 +1,49 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { ApiError } from '@/lib/api'
-import type { BingoGameState, Card } from '@/types/api'
+import type { Card, Game } from '@/api/client'
 
-// Mock the endpoint layer so triggerYoever doesn't hit the network, and the sound
-// lib so importing the player/game stores doesn't touch the Web Audio API. The
-// mock fn is created via vi.hoisted so it exists when the hoisted vi.mock runs.
-const { yoeverEndpoint } = vi.hoisted(() => ({ yoeverEndpoint: vi.fn() }))
-vi.mock('@/lib/endpoints', () => ({ endpoints: { game: { yoever: yoeverEndpoint } } }))
+// Fake only the API client's calls, so triggerYoever doesn't hit the network, and
+// the sound lib so importing the player/game stores doesn't touch the Web Audio
+// API. Each fake answers a call's `{ data, error, response }`.
+const api = vi.hoisted(() => ({ POST: vi.fn() }))
+vi.mock('@/api/client', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  api,
+}))
 vi.mock('@/lib/sound', () => ({ setSoundVolume: vi.fn(), playWinnerChime: vi.fn() }))
 
 import { useYoeverStore, YOEVER_DURATION_MS } from './yoever'
 import { usePlayerStore } from './player'
 
-const fakeCard = { id: 'CARD1', board_data: [[1]] } as unknown as Card
-function enabledGame(): BingoGameState {
+/** A reaction the server took, as POST /game/yoever answers it. */
+const taken = (cooldownSeconds: number) => ({
+  data: { count: 1, cooldownSeconds },
+  response: new Response(null, { status: 200 }),
+})
+/** A reaction refused for its cooldown: a 429, with Retry-After when given. */
+const tooSoon = (retryAfter?: number) => ({
+  error: { title: 'Too Many Requests', status: 429, detail: 'You just did that.' },
+  response: new Response(null, {
+    status: 429,
+    headers: retryAfter ? { 'Retry-After': String(retryAfter) } : {},
+  }),
+})
+
+const fakeCard = { id: 'CARD1', boardData: [[1]] } as unknown as Card
+function enabledGame(): Game {
   return {
     id: 1,
-    called_numbers: [],
+    calledNumbers: [],
     patterns: [],
-    yoever_enabled: true,
-    yoever_count: 0,
-  } as unknown as BingoGameState
+    yoeverEnabled: true,
+    yoeverCount: 0,
+  } as unknown as Game
 }
 
 beforeEach(() => {
   localStorage.clear()
   setActivePinia(createPinia())
-  yoeverEndpoint.mockReset()
+  api.POST.mockReset()
 })
 
 describe('yoever store', () => {
@@ -106,53 +122,53 @@ describe('player.triggerYoever', () => {
   it('does nothing when the reaction is not enabled', async () => {
     const player = usePlayerStore()
     player.playerCard = fakeCard
-    player.playerGame = { ...enabledGame(), yoever_enabled: false }
+    player.playerGame = { ...enabledGame(), yoeverEnabled: false }
     expect(await player.triggerYoever()).toBe(false)
-    expect(yoeverEndpoint).not.toHaveBeenCalled()
+    expect(api.POST).not.toHaveBeenCalled()
   })
 
   it('triggers with the card id and arms the cooldown on success', async () => {
-    yoeverEndpoint.mockResolvedValue({ ok: true, count: 1, cooldown_seconds: 180 })
+    api.POST.mockResolvedValue(taken(180))
     const player = usePlayerStore()
     player.playerCard = fakeCard
     player.playerGame = enabledGame()
     const before = Date.now()
     expect(await player.triggerYoever()).toBe(true)
-    expect(yoeverEndpoint).toHaveBeenCalledWith('CARD1')
-    expect(player.yoeverCooldownUntil).toBeGreaterThan(before)
+    expect(api.POST).toHaveBeenCalledWith('/game/yoever', { body: { cardId: 'CARD1' } })
+    expect(player.yoeverCooldownUntil).toBeGreaterThan(before + 120_000)
   })
 
   it('is blocked while still on cooldown', async () => {
-    yoeverEndpoint.mockResolvedValue({ ok: true, count: 1, cooldown_seconds: 180 })
+    api.POST.mockResolvedValue(taken(180))
     const player = usePlayerStore()
     player.playerCard = fakeCard
     player.playerGame = enabledGame()
     await player.triggerYoever()
-    yoeverEndpoint.mockClear()
+    api.POST.mockClear()
     expect(await player.triggerYoever()).toBe(false)
-    expect(yoeverEndpoint).not.toHaveBeenCalled()
+    expect(api.POST).not.toHaveBeenCalled()
   })
 
-  it('re-arms the cooldown from the server retry_after on a 429', async () => {
-    yoeverEndpoint.mockRejectedValue(new ApiError('too soon', 429, { retry_after: 30 }))
+  it("re-arms the cooldown from the server's Retry-After on a 429", async () => {
+    api.POST.mockResolvedValue(tooSoon(30))
     const player = usePlayerStore()
     player.playerCard = fakeCard
     player.playerGame = enabledGame()
     const before = Date.now()
     expect(await player.triggerYoever()).toBe(false)
-    // Armed from retry_after (~30s), NOT the 180s hint default.
+    // Armed from Retry-After (~30s), NOT the 180s hint default.
     expect(player.yoeverCooldownUntil).toBeGreaterThan(before)
     expect(player.yoeverCooldownUntil).toBeLessThan(before + 60_000)
   })
 
-  it('falls back to the cooldown hint on a 429 with no retry_after', async () => {
-    yoeverEndpoint.mockRejectedValue(new ApiError('too soon', 429))
+  it('falls back to the cooldown hint on a 429 with no Retry-After', async () => {
+    api.POST.mockResolvedValue(tooSoon())
     const player = usePlayerStore()
     player.playerCard = fakeCard
     player.playerGame = enabledGame()
     const before = Date.now()
     expect(await player.triggerYoever()).toBe(false)
-    // No retry_after -> the 180s hint default keeps the button disabled.
+    // No Retry-After -> the 180s hint default keeps the button disabled.
     expect(player.yoeverCooldownUntil).toBeGreaterThan(before + 120_000)
   })
 })

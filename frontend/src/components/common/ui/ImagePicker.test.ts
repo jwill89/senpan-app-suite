@@ -15,7 +15,7 @@ vi.mock('@/lib/endpoints', () => ({
 
 import ImagePicker from './ImagePicker.vue'
 import { useAuthStore } from '@/stores/auth'
-import type { User } from '@/types/api'
+import type { Account } from '@/api/client'
 
 function cat(name: string, dir: string): ImageCategory {
   return { name, dir, file_count: 0, total_size: 0 }
@@ -124,7 +124,7 @@ describe('ImagePicker', () => {
   describe('upload control', () => {
     /** Signs in a user holding exactly the given permission keys. */
     function signIn(...permissions: string[]): void {
-      useAuthStore().user = { is_admin: false, permissions } as unknown as User
+      useAuthStore().user = { id: 1, username: 'u', isAdmin: false, permissions } satisfies Account
     }
 
     it('is hidden for users without the system-images permission', async () => {

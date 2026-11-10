@@ -1,46 +1,72 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import type { Style } from '@/types/api'
+import type { StyleList } from '@/api/client'
 
-const ep = vi.hoisted(() => ({
-  list: vi.fn(async () => ({ styles: [] as Style[], active_style_id: '' })),
-  get: vi.fn(async () => ({ style: { id: 1, tokens: {} } })),
-  create: vi.fn(async () => ({ id: 11 })),
-  update: vi.fn(async () => ({ ok: true })),
-  del: vi.fn(async () => ({ ok: true })),
+// The store calls the API client; only its calls are faked (unwrap is the real
+// one). Each fake answers a call's `{ data, response }`.
+const ok = (data: unknown, status = 200) => ({
+  data,
+  response: new Response(null, { status }),
+})
+const theme = { css: ':root{--accent:#fff}', boardFlourish: 'b.svg', numberFlourish: 'n.svg' }
+const api = vi.hoisted(() => ({ GET: vi.fn(), POST: vi.fn(), PUT: vi.fn(), DELETE: vi.fn() }))
+vi.mock('@/api/client', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  api,
 }))
-vi.mock('@/lib/endpoints', () => ({
-  endpoints: {
-    styles: { list: ep.list, get: ep.get, create: ep.create, update: ep.update, delete: ep.del },
-  },
-}))
-vi.mock('@/lib/theme', () => ({ applyCustomCSS: vi.fn() }))
+const applyCustomCSS = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/theme', () => ({ applyCustomCSS }))
 
 import { useStylesStore } from './styles'
 import { useUiStore } from './ui'
+import { useAppStore } from './app'
+
+const list = (over: Partial<StyleList> = {}) =>
+  ok({ styles: [], activeStyleId: null, ...over } satisfies StyleList)
 
 beforeEach(() => {
   setActivePinia(createPinia())
-  Object.values(ep).forEach((fn) => fn.mockClear())
+  Object.values(api).forEach((fn) => fn.mockReset())
+  applyCustomCSS.mockReset()
+  api.GET.mockResolvedValue(list())
 })
 
 describe('loading', () => {
   it('loadStyles populates list + active id and clears the editor', async () => {
-    ep.list.mockResolvedValueOnce({ styles: [{ id: 1 } as Style], active_style_id: '1' })
+    api.GET.mockResolvedValueOnce(
+      list({
+        styles: [{ id: 1, name: 'Dusk', isPublic: false, createdAt: '2026-11-09T10:00:00Z' }],
+        activeStyleId: 1,
+      }),
+    )
     const s = useStylesStore()
-    s.editingStyle = { id: 9 } as Style
+    s.newStyle()
     await s.loadStyles()
+    expect(api.GET).toHaveBeenCalledWith('/styles')
     expect(s.styles).toHaveLength(1)
-    expect(s.activeStyleId).toBe('1')
+    expect(s.activeStyleId).toBe(1)
     expect(s.editingStyle).toBeNull()
   })
 
   it('loadStyle merges saved tokens over the defaults', async () => {
-    ep.get.mockResolvedValueOnce({ style: { id: 2, tokens: { 'page-bg': '#abc' } } })
+    api.GET.mockResolvedValueOnce(
+      ok({
+        id: 2,
+        name: 'Dusk',
+        tokens: { 'page-bg': '#abc' },
+        css: '',
+        boardFlourish: '',
+        numberFlourish: '',
+        isPublic: true,
+        createdAt: null,
+      }),
+    )
     const s = useStylesStore()
     await s.loadStyle(2)
-    expect(s.editingStyle?.tokens?.['page-bg']).toBe('#abc') // saved override
-    expect(s.editingStyle?.tokens?.['panel-bg']).toBe('#272a22') // default filled in
+    expect(api.GET).toHaveBeenCalledWith('/styles/{id}', { params: { path: { id: 2 } } })
+    expect(s.editingStyle?.tokens['page-bg']).toBe('#abc') // saved override
+    expect(s.editingStyle?.tokens['panel-bg']).toBe('#272a22') // default filled in
+    expect(s.editingStyle?.isPublic).toBe(true)
   })
 })
 
@@ -49,7 +75,7 @@ describe('newStyle', () => {
     const s = useStylesStore()
     s.newStyle()
     expect(s.editingStyle).toMatchObject({ id: 0, name: '' })
-    expect(s.editingStyle?.tokens?.accent).toBe('#d6bdae')
+    expect(s.editingStyle?.tokens.accent).toBe('#d6bdae')
   })
 })
 
@@ -58,45 +84,70 @@ describe('saveStyle', () => {
     const s = useStylesStore()
     s.newStyle()
     await s.saveStyle()
-    expect(ep.create).not.toHaveBeenCalled()
+    expect(api.POST).not.toHaveBeenCalled()
   })
 
   it('creates a new theme with its tokens, then reloads (closing the editor)', async () => {
+    api.POST.mockResolvedValueOnce(ok({ id: 11 }, 201))
     const s = useStylesStore()
     s.newStyle()
-    s.editingStyle!.name = 'Midnight'
-    s.editingStyle!.tokens!['page-bg'] = '#000'
+    s.editingStyle!.name = ' Midnight '
+    s.editingStyle!.tokens['page-bg'] = '#000'
     await s.saveStyle()
-    expect(ep.create).toHaveBeenCalledTimes(1)
-    const [name, tokens, board, number] = ep.create.mock.calls[0] as unknown as [
-      string,
-      Record<string, string>,
-      string,
-      string,
-    ]
-    expect(name).toBe('Midnight')
-    expect(tokens['page-bg']).toBe('#000')
-    expect(board).toBe('')
-    expect(number).toBe('')
-    expect(ep.list).toHaveBeenCalled()
+    expect(api.POST).toHaveBeenCalledTimes(1)
+    const [path, init] = api.POST.mock.calls[0]!
+    expect(path).toBe('/styles')
+    expect(init.body).toMatchObject({
+      name: 'Midnight',
+      boardFlourish: '',
+      numberFlourish: '',
+      isPublic: false,
+    })
+    expect(init.body.tokens['page-bg']).toBe('#000')
+    expect(init.body).not.toHaveProperty('id')
+    expect(api.GET).toHaveBeenCalledWith('/styles')
     expect(s.editingStyle).toBeNull()
   })
 
   it('updates an existing theme with its tokens', async () => {
+    api.PUT.mockResolvedValueOnce(ok({}))
     const s = useStylesStore()
     s.editingStyle = {
       id: 5,
       name: 'Old',
       tokens: { 'page-bg': '#111' },
-      board_flourish: '',
-      number_flourish: '',
-      is_public: false,
-      created_at: '',
+      boardFlourish: '',
+      numberFlourish: '',
+      isPublic: false,
     }
     s.editingStyle.name = 'New'
     await s.saveStyle()
-    expect(ep.update).toHaveBeenCalledWith(5, 'New', { 'page-bg': '#111' }, '', '', false)
-    expect(ep.create).not.toHaveBeenCalled()
+    expect(api.PUT).toHaveBeenCalledWith('/styles/{id}', {
+      params: { path: { id: 5 } },
+      body: {
+        name: 'New',
+        tokens: { 'page-bg': '#111' },
+        boardFlourish: '',
+        numberFlourish: '',
+        isPublic: false,
+      },
+    })
+    expect(api.POST).not.toHaveBeenCalled()
+  })
+
+  it("shows the server's reason when a save is refused", async () => {
+    api.PUT.mockResolvedValueOnce({
+      error: { status: 422, title: 'Unprocessable Entity', detail: 'validation failed' },
+      response: new Response(null, { status: 422 }),
+    })
+    const notify = vi.spyOn(useUiStore(), 'notify')
+    const s = useStylesStore()
+    s.newStyle()
+    s.editingStyle!.id = 5
+    s.editingStyle!.name = 'Bad'
+    await s.saveStyle()
+    expect(notify).toHaveBeenCalledWith('validation failed', 'error')
+    expect(s.savingStyle).toBe(false)
   })
 })
 
@@ -105,15 +156,54 @@ describe('deleteStyle', () => {
     useUiStore().confirm = vi.fn(async () => false)
     const s = useStylesStore()
     await s.deleteStyle(1)
-    expect(ep.del).not.toHaveBeenCalled()
+    expect(api.DELETE).not.toHaveBeenCalled()
   })
 
   it('deletes and clears the editor when the open theme is removed', async () => {
     useUiStore().confirm = vi.fn(async () => true)
+    api.DELETE.mockResolvedValueOnce(ok(undefined, 204))
     const s = useStylesStore()
-    s.editingStyle = { id: 7 } as Style
+    s.newStyle()
+    s.editingStyle!.id = 7
     await s.deleteStyle(7)
-    expect(ep.del).toHaveBeenCalledWith(7)
+    expect(api.DELETE).toHaveBeenCalledWith('/styles/{id}', { params: { path: { id: 7 } } })
     expect(s.editingStyle).toBeNull()
+  })
+})
+
+describe('setActiveStyle', () => {
+  it('activates a theme and applies the stylesheet the server answers with', async () => {
+    api.POST.mockResolvedValueOnce(ok({ styleId: 3, ...theme }))
+    const s = useStylesStore()
+    const flourishes = vi
+      .spyOn(useAppStore(), 'applyFlourishes')
+      .mockImplementation(() => undefined)
+    await s.setActiveStyle(3)
+    expect(api.POST).toHaveBeenCalledWith('/styles/{id}/activate', { params: { path: { id: 3 } } })
+    expect(s.activeStyleId).toBe(3)
+    expect(applyCustomCSS).toHaveBeenCalledWith(theme.css)
+    expect(flourishes).toHaveBeenCalledWith('b.svg', 'n.svg')
+  })
+
+  it('goes back to the default look with null', async () => {
+    api.POST.mockResolvedValueOnce(ok({ css: '', boardFlourish: '', numberFlourish: '' }))
+    const s = useStylesStore()
+    s.activeStyleId = 3
+    await s.setActiveStyle(null)
+    expect(api.POST).toHaveBeenCalledWith('/styles/deactivate')
+    expect(s.activeStyleId).toBeNull()
+    expect(applyCustomCSS).toHaveBeenCalledWith('')
+  })
+
+  it('leaves the active theme alone when the server refuses', async () => {
+    api.POST.mockResolvedValueOnce({
+      error: { status: 404, title: 'Not Found', detail: 'There is no theme 9.' },
+      response: new Response(null, { status: 404 }),
+    })
+    const s = useStylesStore()
+    s.activeStyleId = 3
+    await s.setActiveStyle(9)
+    expect(s.activeStyleId).toBe(3)
+    expect(applyCustomCSS).not.toHaveBeenCalled()
   })
 })

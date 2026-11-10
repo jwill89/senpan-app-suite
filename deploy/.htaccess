@@ -8,8 +8,8 @@
 #
 # The Go binary serves the app: the API and, since 4.0.0, the SPA it embeds
 # (backend/internal/web), with the SPA's headers, cache rules and
-# Content-Security-Policy. The vhost's ProxyPass sends /api/ (the WebSocket included)
-# to it before this file runs; this file sends it everything else that isn't one of
+# Content-Security-Policy. The vhost's ProxyPass sends /api/ (the live event streams
+# included) to it before this file runs; this file sends it everything else that isn't one of
 # the web root's own folders.
 #
 # Expected layout at the DocumentRoot:
@@ -44,7 +44,7 @@ Options -Indexes
     RewriteEngine On
     RewriteBase /
 
-    # Never rewrite API / WebSocket requests - the vhost ProxyPass handles them.
+    # Never rewrite API requests (the event streams included) - the vhost ProxyPass handles them.
     RewriteRule ^api/ - [L]
 
     # The web root's own folders, served as they are (a missing file there is a 404).

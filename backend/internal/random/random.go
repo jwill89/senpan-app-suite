@@ -1,6 +1,6 @@
 // Package random draws numbers from crypto/rand: card IDs, boards, and every draw
-// people rely on being fair (bingo, raffles, the garapon), as the standards take
-// anything users rely on from a cryptographic source (security.md).
+// people rely on being fair (bingo, raffles, the garapon), so none can be
+// predicted from the ones before it.
 //
 // It uses math/rand/v2's algorithms over a crypto/rand source, so a bounded number
 // carries no modulo bias and a shuffle is Fisher-Yates.

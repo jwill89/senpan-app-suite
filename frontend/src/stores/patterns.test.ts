@@ -1,47 +1,110 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { nextTick } from 'vue'
-import type { Pattern, PatternCategory } from '@/types/api'
+import type { Pattern, PatternCategory } from '@/api/client'
 
-// Capture the bulk-reorder calls so the category position math can be asserted.
-// listPatterns backs the loadPatterns() refresh that saveCategoryForm runs.
-// (Cross-category moves + drag-order persistence go through the bulk `/reorder`
-// endpoints - patterns.bulkReorder / patternCategories.bulkReorder.)
-const { reorderCats, reorderPats, listPatterns } = vi.hoisted(() => ({
-  reorderCats: vi.fn(async () => ({})),
-  reorderPats: vi.fn(async () => ({})),
-  listPatterns: vi.fn(async () => ({ patterns: [], categories: [] })),
-}))
-vi.mock('@/lib/endpoints', () => ({
-  endpoints: {
-    patterns: { bulkReorder: reorderPats, list: listPatterns },
-    patternCategories: {
-      bulkReorder: reorderCats,
-      rename: vi.fn(async () => ({})),
-      create: vi.fn(async () => ({})),
-    },
-  },
+// The store calls the API client; only its calls are faked (unwrap is the real
+// one). Each fake answers a call's `{ data, error, response }`: a list for GET and
+// the reorders, a category for its create and rename, nothing for a delete.
+const ok = (data: unknown, status = 200) => ({ data, response: new Response(null, { status }) })
+const api = vi.hoisted(() => ({ GET: vi.fn(), POST: vi.fn(), PATCH: vi.fn(), DELETE: vi.fn() }))
+vi.mock('@/api/client', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  api,
 }))
 
 import { usePatternsStore } from './patterns'
+import { useUiStore } from './ui'
 
 function cat(id: number, name: string, sort = id): PatternCategory {
-  return { id, name, sort_order: sort }
+  return { id, name, sortOrder: sort }
 }
 function pat(id: number, name: string, categoryId: number): Pattern {
-  return {
-    id,
-    name,
-    category_id: categoryId,
-    category_name: '',
-    pattern_data: [],
-  } as unknown as Pattern
+  return { id, name, categoryId, categoryName: '', patternData: [], sortOrder: 0 }
 }
+const empty = { patterns: [], categories: [] }
 
 beforeEach(() => {
   setActivePinia(createPinia())
-  reorderCats.mockClear()
-  reorderPats.mockClear()
+  Object.values(api).forEach((fn) => fn.mockReset())
+  api.GET.mockResolvedValue(ok(empty))
+  api.POST.mockResolvedValue(ok(empty))
+  api.PATCH.mockResolvedValue(ok(cat(1, 'A')))
+  api.DELETE.mockResolvedValue(ok(undefined, 204))
+})
+
+describe('loading and saving', () => {
+  it('loadPatterns takes in the patterns and categories', async () => {
+    api.GET.mockResolvedValueOnce(ok({ patterns: [pat(10, 'Row', 1)], categories: [cat(1, 'A')] }))
+    const s = usePatternsStore()
+    await s.loadPatterns()
+    expect(api.GET).toHaveBeenCalledWith('/patterns')
+    expect(s.patterns.map((p) => p.name)).toEqual(['Row'])
+    expect(s.categories.map((c) => c.name)).toEqual(['A'])
+  })
+
+  it('savePattern POSTs the grid into the chosen category, then reloads', async () => {
+    const s = usePatternsStore()
+    s.categories = [cat(4, 'Lines')]
+    s.newPatternName = ' Corner '
+    s.toggleNewPatternCell(0, 0)
+    api.POST.mockResolvedValueOnce(ok(pat(11, 'Corner', 4), 201))
+    expect(await s.savePattern()).toBe(true)
+    const [path, init] = api.POST.mock.calls[0] as [string, { body: Record<string, unknown> }]
+    expect(path).toBe('/patterns')
+    expect(init.body.name).toBe('Corner')
+    expect(init.body.categoryId).toBe(4)
+    expect((init.body.patternData as boolean[][])[0]![0]).toBe(true)
+    expect(api.GET).toHaveBeenCalledWith('/patterns')
+    expect(s.newPatternName).toBe('')
+  })
+
+  it('savePattern refuses a grid another pattern has, naming it, without a call', async () => {
+    const s = usePatternsStore()
+    const grid = [0, 1, 2, 3, 4].map(() => [false, false, false, false, false])
+    grid[0]![0] = true
+    s.patterns = [{ ...pat(10, 'Corner', 1), patternData: grid, categoryName: 'Lines' }]
+    s.newPatternName = 'Again'
+    s.toggleNewPatternCell(0, 0)
+    const ui = useUiStore()
+    ui.notify = vi.fn()
+    expect(await s.savePattern()).toBe(false)
+    expect(api.POST).not.toHaveBeenCalled()
+    expect(ui.notify).toHaveBeenCalledWith(
+      'Duplicate pattern! Matches "Corner" in category "Lines"',
+      'error',
+    )
+  })
+
+  it('finishPatternRename PATCHes the new name', async () => {
+    const s = usePatternsStore()
+    s.patterns = [pat(10, 'Row', 1)]
+    s.startPatternRename(s.patterns[0]!)
+    s.editingPatternName = 'Top Row'
+    await s.finishPatternRename(10)
+    expect(api.PATCH).toHaveBeenCalledWith('/patterns/{id}', {
+      params: { path: { id: 10 } },
+      body: { name: 'Top Row' },
+    })
+    expect(s.patterns[0]!.name).toBe('Top Row')
+  })
+
+  it('deletePattern DELETEs it and drops it from the list', async () => {
+    const s = usePatternsStore()
+    s.patterns = [pat(10, 'Row', 1), pat(11, 'Col', 1)]
+    await s.deletePattern(10)
+    expect(api.DELETE).toHaveBeenCalledWith('/patterns/{id}', { params: { path: { id: 10 } } })
+    expect(s.patterns.map((p) => p.id)).toEqual([11])
+  })
+
+  it('deleteCategory DELETEs it and reloads', async () => {
+    const s = usePatternsStore()
+    await s.deleteCategory(2)
+    expect(api.DELETE).toHaveBeenCalledWith('/pattern-categories/{id}', {
+      params: { path: { id: 2 } },
+    })
+    expect(api.GET).toHaveBeenCalledWith('/patterns')
+  })
 })
 
 describe('patternsByCategory', () => {
@@ -110,25 +173,57 @@ describe('category positioning (index math + persistence)', () => {
     s.categories = [cat(1, 'A'), cat(2, 'B'), cat(3, 'C')]
   })
 
+  const reorderedTo = (orderedIds: number[]) =>
+    expect(api.POST).toHaveBeenCalledWith('/pattern-categories/reorder', { body: { orderedIds } })
+
   it('moves a category to the start', async () => {
     const s = usePatternsStore()
     s.categoryForm = { id: 3, name: 'C', position: 'start' }
     await s.saveCategoryForm()
-    expect(reorderCats).toHaveBeenCalledWith([3, 1, 2])
+    reorderedTo([3, 1, 2])
   })
 
   it('moves a category to right after another', async () => {
     const s = usePatternsStore()
     s.categoryForm = { id: 3, name: 'C', position: 'after:1' } // C after A -> [A, C, B]
     await s.saveCategoryForm()
-    expect(reorderCats).toHaveBeenCalledWith([1, 3, 2])
+    reorderedTo([1, 3, 2])
   })
 
   it('falls back to the end when the after-target is unknown', async () => {
     const s = usePatternsStore()
     s.categoryForm = { id: 3, name: 'C', position: 'after:999' }
     await s.saveCategoryForm()
-    expect(reorderCats).toHaveBeenCalledWith([1, 2, 3])
+    reorderedTo([1, 2, 3])
+  })
+
+  it('takes in the list the reorder answers', async () => {
+    const s = usePatternsStore()
+    api.POST.mockResolvedValueOnce(ok({ patterns: [], categories: [cat(3, 'C'), cat(1, 'A')] }))
+    s.categoryForm = { id: 3, name: 'C', position: 'start' }
+    await s.saveCategoryForm()
+    expect(s.categories.map((c) => c.id)).toEqual([3, 1])
+  })
+
+  it('renames an edited category before positioning it', async () => {
+    const s = usePatternsStore()
+    s.categoryForm = { id: 2, name: 'Bee', position: 'keep' }
+    await s.saveCategoryForm()
+    expect(api.PATCH).toHaveBeenCalledWith('/pattern-categories/{id}', {
+      params: { path: { id: 2 } },
+      body: { name: 'Bee' },
+    })
+    expect(api.POST).not.toHaveBeenCalled()
+    expect(api.GET).toHaveBeenCalledWith('/patterns')
+  })
+
+  it('creates a category, then puts it where the form says', async () => {
+    const s = usePatternsStore()
+    api.POST.mockResolvedValueOnce(ok(cat(9, 'New', 4), 201))
+    s.categoryForm = { id: 0, name: 'New', position: 'after:1' }
+    expect(await s.saveCategoryForm()).toBe(true)
+    expect(api.POST).toHaveBeenNthCalledWith(1, '/pattern-categories', { body: { name: 'New' } })
+    reorderedTo([1, 9, 2, 3])
   })
 })
 
@@ -149,10 +244,10 @@ describe('editableGroups stays in step with server state', () => {
    * The drag view holds shallow COPIES of the patterns so vue-draggable-plus can
    * reorder them, which means it drifts the moment `patterns` changes underneath
    * it. It used to be rebuilt in only two places, so deleting a pattern, renaming
-   * one, or receiving a patterns_update broadcast each left the admin editing a
-   * list that no longer matched what a save would write.
+   * one, or reading the list again after a live change each left the admin editing
+   * a list that no longer matched what a save would write.
    */
-  it('follows a replaced patterns array (delete, or a patterns_update broadcast)', async () => {
+  it('follows a replaced patterns array (delete, or the list read again)', async () => {
     const s = usePatternsStore()
     s.categories = [cat(1, 'Lines')]
     s.patterns = [pat(10, 'Row', 1), pat(11, 'Col', 1)]
@@ -202,12 +297,31 @@ describe('applyGroupedOrder', () => {
     ]
     await s.applyGroupedOrder()
     // Flattened order + reassigned category for the moved pattern.
-    expect(s.patterns.map((p) => [p.id, p.category_id])).toEqual([
+    expect(s.patterns.map((p) => [p.id, p.categoryId])).toEqual([
       [11, 1],
       [10, 1],
       [12, 2],
     ])
-    expect(reorderPats).toHaveBeenCalledWith(1, [11, 10])
-    expect(reorderPats).toHaveBeenCalledWith(2, [12])
+    expect(api.POST).toHaveBeenCalledWith('/patterns/reorder', {
+      body: { categoryId: 1, orderedIds: [11, 10] },
+    })
+    expect(api.POST).toHaveBeenCalledWith('/patterns/reorder', {
+      body: { categoryId: 2, orderedIds: [12] },
+    })
+  })
+
+  it('reloads from the server when a reorder is refused', async () => {
+    const s = usePatternsStore()
+    s.categories = [cat(1, 'Lines')]
+    s.editableGroups = [{ category: cat(1, 'Lines'), patterns: [pat(10, 'Row', 1)] }]
+    api.POST.mockResolvedValueOnce({
+      error: { status: 422, detail: 'There is no such pattern.' },
+      response: new Response(null, { status: 422 }),
+    })
+    const ui = useUiStore()
+    ui.notify = vi.fn()
+    await s.applyGroupedOrder()
+    expect(ui.notify).toHaveBeenCalledWith('There is no such pattern.', 'error')
+    expect(api.GET).toHaveBeenCalledWith('/patterns')
   })
 })

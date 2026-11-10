@@ -1,36 +1,11 @@
 package server_test
 
 import (
-	"context"
-	"encoding/json"
 	"net/http"
+	"strconv"
 	"testing"
 	"time"
-
-	"github.com/coder/websocket"
 )
-
-// readWsType reads WebSocket frames until it sees one whose "type" equals want,
-// decoding it into a generic map. Other message types (and non-JSON keepalives)
-// are skipped so the assertion is robust to unrelated traffic. Fails on timeout.
-func readWsType(t *testing.T, conn *websocket.Conn, want string) map[string]any {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	for {
-		_, data, err := conn.Read(ctx)
-		if err != nil {
-			t.Fatalf("ws read (waiting for %q): %v", want, err)
-		}
-		var msg map[string]any
-		if json.Unmarshal(data, &msg) != nil {
-			continue
-		}
-		if msg["type"] == want {
-			return msg
-		}
-	}
-}
 
 // topRowPattern is a top-row win pattern grid.
 func topRowPattern() [][]bool {
@@ -53,110 +28,89 @@ func (e *testEnv) startYoeverGame(t *testing.T, playerName string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp := e.postJSON(t, "/api/game/start", map[string]any{"pattern_ids": []int{int(patID)}})
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("start game status = %d; want 200", resp.StatusCode)
-	}
-	resp.Body.Close()
-
-	resp = e.postJSON(t, "/api/cards", map[string]any{"player_name": playerName})
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("create card status = %d; want 201", resp.StatusCode)
-	}
-	card, _ := decodeBody(t, resp)["card"].(map[string]any)
-	id, _ := card["id"].(string)
-	if id == "" {
-		t.Fatal("expected a card id")
-	}
-	return id
+	startGame(t, e, patID)
+	return makeCard(t, e, playerName).ID
 }
 
-// TestYoever_TriggerBroadcastsToClients verifies that a player's public trigger
-// increments the per-game count, is throttled by the cooldown, and pushes a
-// "yoever" frame (with the triggering player's name) to every connected client.
-func TestYoever_TriggerBroadcastsToClients(t *testing.T) {
+// TestYoever_TriggerReachesTheStreams verifies that a player's public trigger
+// increments the per-game count, is throttled by the cooldown, and sends a "yoever"
+// event (with the triggering player's name) to the staff's and the boards' streams.
+func TestYoever_TriggerReachesTheStreams(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 	cardID := env.startYoeverGame(t, "Tifa")
 
-	conn := env.dialAdminWS(t)
-	defer conn.Close(websocket.StatusNormalClosure, "")
+	staff := staffStream(t, env, env.client)
+	board := boardStream(t, env, cardID)
 
-	resp := env.postJSON(t, "/api/game/yoever", map[string]any{"card_id": cardID})
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("yoever status = %d; want 200", resp.StatusCode)
+	player := newClient(t, env)
+	var got struct {
+		Count           int
+		CooldownSeconds int
 	}
-	body := decodeBody(t, resp)
-	if body["count"].(float64) != 1 {
-		t.Errorf("count = %v; want 1", body["count"])
-	}
-
-	msg := readWsType(t, conn, "yoever")
-	if msg["player_name"] != "Tifa" {
-		t.Errorf("player_name = %v; want Tifa", msg["player_name"])
-	}
-	if msg["count"].(float64) != 1 {
-		t.Errorf("broadcast count = %v; want 1", msg["count"])
+	decodeInto(t, postAs(t, player, env, "/api/v1/game/yoever", map[string]any{"cardId": cardID}), http.StatusOK, &got)
+	if got.Count != 1 || got.CooldownSeconds != 180 {
+		t.Errorf("answer = %+v; want count 1, cooldown 180", got)
 	}
 
-	// A second trigger from the same card inside the cooldown is rejected (429).
-	resp = env.postJSON(t, "/api/game/yoever", map[string]any{"card_id": cardID})
-	if resp.StatusCode != http.StatusTooManyRequests {
-		t.Fatalf("second trigger status = %d; want 429", resp.StatusCode)
+	for name, s := range map[string]*stream{"staff": staff, "board": board} {
+		e := s.expect("yoever", 3*time.Second)
+		if e.str("playerName") != "Tifa" || e.Payload["count"] != float64(1) || e.game() == 0 {
+			t.Errorf("%s's yoever: %+v; want Tifa, count 1, the game", name, e)
+		}
 	}
-	if got := decodeBody(t, resp)["retry_after"].(float64); got <= 0 {
-		t.Errorf("retry_after = %v; want > 0", got)
+
+	// A second trigger from the same card inside the cooldown is refused (429), saying
+	// when to try again.
+	resp := postAs(t, player, env, "/api/v1/game/yoever", map[string]any{"cardId": cardID})
+	if _, status, _ := problem(t, resp); status != http.StatusTooManyRequests {
+		t.Fatalf("second trigger status = %d; want 429", status)
+	}
+	if after, err := strconv.Atoi(resp.Header.Get("Retry-After")); err != nil || after <= 0 {
+		t.Errorf("Retry-After = %q; want a number of seconds", resp.Header.Get("Retry-After"))
 	}
 }
 
 // TestYoever_DisabledTogglePreventsTrigger verifies the admin on/off switch:
-// PATCH /api/game {yoever_enabled:false} broadcasts yoever_config and makes the
+// PATCH /api/v1/game {yoeverEnabled:false} sends yoever_switched and makes the
 // public trigger return 403.
 func TestYoever_DisabledTogglePreventsTrigger(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 	cardID := env.startYoeverGame(t, "Aerith")
 
-	conn := env.dialAdminWS(t)
-	defer conn.Close(websocket.StatusNormalClosure, "")
+	live := staffStream(t, env, env.client)
 
-	resp := env.patchJSON(t, "/api/game", map[string]any{"yoever_enabled": false})
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("toggle status = %d; want 200", resp.StatusCode)
-	}
-	resp.Body.Close()
-
-	msg := readWsType(t, conn, "yoever_config")
-	if msg["enabled"] != false {
-		t.Errorf("yoever_config enabled = %v; want false", msg["enabled"])
+	var s gameState
+	decodeInto(t, env.patchJSON(t, "/api/v1/game", map[string]any{"yoeverEnabled": false}), http.StatusOK, &s)
+	if s.Game.YoeverEnabled {
+		t.Error("the answer still has the reaction on")
 	}
 
-	resp = env.postJSON(t, "/api/game/yoever", map[string]any{"card_id": cardID})
-	if resp.StatusCode != http.StatusForbidden {
-		t.Fatalf("disabled trigger status = %d; want 403", resp.StatusCode)
+	if e := live.expect("yoever_switched", 3*time.Second); e.Payload["enabled"] != false {
+		t.Errorf("yoever_switched: %+v; want enabled false", e)
 	}
-	resp.Body.Close()
+
+	if _, status, _ := problem(t, env.postJSON(t, "/api/v1/game/yoever", map[string]any{"cardId": cardID})); status != http.StatusForbidden {
+		t.Fatalf("disabled trigger status = %d; want 403", status)
+	}
 }
 
 // TestYoever_NoActiveGameConflict verifies the trigger returns 409 when no game
-// is running, and 404 for an unknown board id.
+// is running, 404 for an unknown board id, and 422 for one that isn't an id.
 func TestYoever_NoActiveGameConflict(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 
-	// A real card, but no active game.
-	resp := env.postJSON(t, "/api/cards", map[string]any{"player_name": "Yuffie"})
-	cardID, _ := decodeBody(t, resp)["card"].(map[string]any)["id"].(string)
+	cardID := makeCard(t, env, "Yuffie").ID
 
-	resp = env.postJSON(t, "/api/game/yoever", map[string]any{"card_id": cardID})
-	if resp.StatusCode != http.StatusConflict {
-		t.Fatalf("no-game trigger status = %d; want 409", resp.StatusCode)
+	if _, status, _ := problem(t, env.postJSON(t, "/api/v1/game/yoever", map[string]any{"cardId": cardID})); status != http.StatusConflict {
+		t.Fatalf("no-game trigger status = %d; want 409", status)
 	}
-	resp.Body.Close()
-
-	resp = env.postJSON(t, "/api/game/yoever", map[string]any{"card_id": "NOPE99"})
-	if resp.StatusCode != http.StatusNotFound {
-		t.Fatalf("unknown-card status = %d; want 404", resp.StatusCode)
+	if _, status, _ := problem(t, env.postJSON(t, "/api/v1/game/yoever", map[string]any{"cardId": "NOPE99"})); status != http.StatusNotFound {
+		t.Fatalf("unknown-card status = %d; want 404", status)
 	}
-	resp.Body.Close()
+	if at := invalid(t, env.postJSON(t, "/api/v1/game/yoever", map[string]any{"cardId": ""})); len(at) == 0 || at[0] != "body.cardId" {
+		t.Errorf("an empty id: errors at %v", at)
+	}
 }

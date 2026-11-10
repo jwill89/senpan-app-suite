@@ -45,7 +45,7 @@ watch(
   <ModalOverlay
     v-if="cards.previewCard"
     :box-style="{ maxWidth: '560px' }"
-    @close="cards.previewCard = null"
+    @close="cards.closePreview()"
   >
     <div class="flex-between mb-12">
       <h3 class="nowrap">
@@ -68,23 +68,24 @@ watch(
         >
           <font-awesome-icon :icon="['fas', 'link']" /> Copy URL
         </button>
-        <button type="button" class="btn-neutral btn-sm" @click="cards.previewCard = null">
+        <button type="button" class="btn-neutral btn-sm" @click="cards.closePreview()">
           Close
         </button>
       </div>
     </div>
     <div class="flex-center">
-      <BingoBoard :board="cards.previewCard.board_data" mode="preview" preview />
+      <BingoBoard :board="cards.previewCard.boardData" mode="preview" preview />
     </div>
     <div class="mt-12 text-center">
-      <template v-if="cards.previewCardEditing === 'player_name'">
+      <template v-if="cards.previewCardEditing === 'playerName'">
         <input
           ref="editInput"
           v-model="cards.previewCardEditValue"
           placeholder="Player name"
           class="inline-edit-input ta-center"
           style="font-weight: 600"
-          @blur="cards.savePreviewCardField('player_name')"
+          maxlength="100"
+          @blur="cards.savePreviewCardField('playerName')"
           @keydown.enter="($event.target as HTMLInputElement).blur()"
           @keydown.escape="cards.previewCardEditing = null"
         />
@@ -95,14 +96,14 @@ watch(
         role="button"
         tabindex="0"
         :title="
-          cards.previewCard.player_name ? 'Double-click to edit' : 'Double-click to set player name'
+          cards.previewCard.playerName ? 'Double-click to edit' : 'Double-click to set player name'
         "
-        @dblclick="cards.startPreviewCardEdit('player_name')"
-        @keydown.enter="cards.startPreviewCardEdit('player_name')"
-        @keydown.space.prevent="cards.startPreviewCardEdit('player_name')"
+        @dblclick="cards.startPreviewCardEdit('playerName')"
+        @keydown.enter="cards.startPreviewCardEdit('playerName')"
+        @keydown.space.prevent="cards.startPreviewCardEdit('playerName')"
       >
-        {{ cards.previewCard.player_name || 'No player assigned' }}
-        <span v-if="!cards.previewCard.player_name" class="text-muted text-sm">
+        {{ cards.previewCard.playerName || 'No player assigned' }}
+        <span v-if="!cards.previewCard.playerName" class="text-muted text-sm">
           (double-click to edit)</span
         >
       </p>
@@ -112,6 +113,7 @@ watch(
           v-model="cards.previewCardEditValue"
           placeholder="Details (e.g. character name)"
           class="inline-edit-input text-muted text-sm ta-center"
+          maxlength="1000"
           @blur="cards.savePreviewCardField('details')"
           @keydown.enter="($event.target as HTMLInputElement).blur()"
           @keydown.escape="cards.previewCardEditing = null"

@@ -86,7 +86,7 @@ export const test = base.extend<
   staff: [
     async ({ playwright }, use) => {
       const staff = await playwright.request.newContext({ baseURL: SITE_URL })
-      await ok(staff.post('/api/auth', { data: { action: 'login', ...STAFF } }))
+      await ok(staff.post('/api/v1/auth/login', { data: STAFF }))
       await use(staff)
       await staff.dispose()
     },
@@ -95,30 +95,32 @@ export const test = base.extend<
 
   bingo: async ({ staff }, use) => {
     const { patterns } = await body<{ patterns: { id: number; name: string }[] }>(
-      staff.get('/api/patterns'),
+      staff.get('/api/v1/patterns'),
     )
     // The API refuses a second pattern with the same grid, so later tests reuse it.
+    // Category 1 is the one the migrations seed.
     const pattern =
       patterns.find((p) => p.name === 'Middle Row') ??
-      (
-        await body<{ pattern: { id: number } }>(
-          staff.post('/api/patterns', {
-            data: { name: 'Middle Row', pattern_data: MIDDLE_ROW, category_id: 1 },
-          }),
-        )
-      ).pattern
-    const { card } = await body<{ card: { id: string; board_data: number[][] } }>(
-      staff.post('/api/cards', { data: { player_name: PLAYER } }),
+      (await body<{ id: number }>(
+        staff.post('/api/v1/patterns', {
+          data: { name: 'Middle Row', patternData: MIDDLE_ROW, categoryId: 1 },
+        }),
+      ))
+    const card = await body<{ id: string; boardData: number[][] }>(
+      staff.post('/api/v1/cards', { data: { playerName: PLAYER } }),
     )
-    await ok(staff.post('/api/game/start', { data: { pattern_ids: [pattern.id] } }))
+    // A game left running by an earlier test is replaced (its winners unlogged).
+    await ok(
+      staff.post('/api/v1/game/start', { data: { patternIds: [pattern.id], replace: true } }),
+    )
     await use({
       cardId: card.id,
-      board: card.board_data,
+      board: card.boardData,
       // No player delay: the board hears the number as soon as it is drawn.
       draw: async () =>
         (
           await body<{ drawn: { number: number } }>(
-            staff.post('/api/game/draw', { data: { delay: 0 } }),
+            staff.post('/api/v1/game/draw', { data: { delay: 0 } }),
           )
         ).drawn.number,
     })

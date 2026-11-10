@@ -11,11 +11,6 @@ type DeletedResponse struct {
 	Deleted bool `json:"deleted"`
 }
 
-// DeletedCountResponse reports how many rows a bulk delete removed - {"deleted": N}.
-type DeletedCountResponse struct {
-	Deleted int64 `json:"deleted"`
-}
-
 // StatusResponse is the success envelope for actions that flip a status flag -
 // JSON: {"ok": true, "status": "open"}. Shared by raffle/garapon/stamp-rally
 // set_status (and similar) actions.

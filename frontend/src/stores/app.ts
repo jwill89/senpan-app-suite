@@ -6,21 +6,25 @@
  */
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { endpoints } from '@/lib/endpoints'
+import { api, unwrap, type Integrations, type SettingsInput, type UploadedFont } from '@/api/client'
 import {
   applyCustomCSS,
   applyHeaderFont,
   applyUploadedFonts,
   applyNumberFlourish,
 } from '@/lib/theme'
-import { DEFAULT_APP_SETTINGS } from '@/lib/constants'
-import type { AppSettings, UploadedFont } from '@/types/api'
+import { DEFAULT_SETTINGS } from '@/lib/constants'
 import { useUiStore } from './ui'
 
 export const useAppStore = defineStore('app', () => {
   const ui = useUiStore()
 
-  const settings = ref<AppSettings>({ ...DEFAULT_APP_SETTINGS })
+  const settings = ref<SettingsInput>({ ...DEFAULT_SETTINGS })
+  /**
+   * The keys and webhooks the server uses (Settings -> Integrations): admin-only,
+   * loaded by the settings page for an admin, and blank for anyone else.
+   */
+  const integrations = ref<Integrations>({ googleFontsApiKey: '', bookClubWebhooks: {} })
   const googleFontsList = ref<string[]>([])
   /** Fonts uploaded via System -> Font Upload (name + serving token). */
   const uploadedFonts = ref<UploadedFont[]>([])
@@ -40,7 +44,7 @@ export const useAppStore = defineStore('app', () => {
 
   /**
    * True once the server's settings have been read (successfully or not). Until
-   * then `settings` holds DEFAULT_APP_SETTINGS, which is a guess - anything that
+   * then `settings` holds DEFAULT_SETTINGS, which is a guess - anything that
    * would SHOW something the settings might hide has to wait for this, or the
    * hidden thing flashes up and vanishes, and can be clicked while it's there.
    */
@@ -48,20 +52,17 @@ export const useAppStore = defineStore('app', () => {
 
   /**
    * Whether the public home page hides its Bingo entry points (Join Bingo and the
-   * Custom Card request that belongs with it). Settings are stored as strings, so
-   * this is the one place that decides what counts as "on" - the server only ever
-   * stores '0' or '1', and anything else is treated as off so a surprise value
-   * can't hide the site's main feature.
+   * Custom Card request that belongs with it).
    */
-  const hideBingo = computed(() => settings.value.hide_bingo === '1')
+  const hideBingo = computed(() => settings.value.hideBingo)
 
   /**
    * Whether the home page hides the Custom Card request on its own, leaving Join
    * Bingo where it is - for a stretch when staff aren't taking requests but games
-   * are still running. Same '0'/'1' rule as `hideBingo`, which is the wider switch
-   * of the two: it hides this section as well, so the home page checks both.
+   * are still running. `hideBingo` is the wider switch of the two: it hides this
+   * section as well, so the home page checks both.
    */
-  const hideCustomCards = computed(() => settings.value.hide_custom_cards === '1')
+  const hideCustomCards = computed(() => settings.value.hideCustomCards)
 
   /** Sets the active flourishes + applies the number-flourish CSS variable. */
   function applyFlourishes(board: string, number: string): void {
@@ -73,15 +74,14 @@ export const useAppStore = defineStore('app', () => {
   /** Loads app settings, applies title + header font, then fetches fonts. */
   async function loadSettings(): Promise<void> {
     try {
-      const data = await endpoints.settings.get()
+      const { uploadedFonts: fonts, ...data } = await unwrap(api.GET('/settings'))
       // Register uploaded fonts first so applyHeaderFont knows to skip Google
       // for an uploaded family.
-      uploadedFonts.value = data.uploaded_fonts ?? []
+      uploadedFonts.value = fonts
       applyUploadedFonts(uploadedFonts.value)
-      settings.value = { ...settings.value, ...data.settings }
-      document.title = settings.value.app_title || 'Senpan App Suite'
-      applyHeaderFont(settings.value.header_font)
-      void loadGoogleFontsList()
+      settings.value = data
+      document.title = settings.value.appTitle || 'Senpan App Suite'
+      applyHeaderFont(settings.value.headerFont)
     } catch {
       /* silent */
     } finally {
@@ -91,25 +91,37 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
-  /** Saves settings to the server, applies them, and notifies. */
-  async function saveSettings(): Promise<void> {
+  /** Loads the integrations (admin-only), then the Google Fonts list their key opens. */
+  async function loadIntegrations(): Promise<void> {
+    try {
+      integrations.value = await unwrap(api.GET('/settings/integrations'))
+      void loadGoogleFontsList()
+    } catch (e) {
+      ui.notify((e as Error).message, 'error')
+    }
+  }
+
+  /**
+   * Saves the settings, and the integrations too for an admin, then applies them
+   * and notifies. A save made from an older copy is refused (409), with the
+   * server's message saying to reload.
+   */
+  async function saveSettings(withIntegrations = false): Promise<void> {
     savingSettings.value = true
     try {
-      // The settings API is a string->string map, but a number <input> bound with
-      // v-model yields a *number* for any field the admin edited - and a numeric
-      // JSON value fails the backend's map[string]string decode ("Invalid JSON").
-      // Coerce every value back to a string before sending. (The AppSettings type
-      // says the values are already strings, hence the `unknown` view to allow it.)
-      const payload = Object.fromEntries(
-        Object.entries(settings.value as Record<string, string | number>).map(([k, v]) => [
-          k,
-          String(v),
-        ]),
-      ) as unknown as AppSettings
-      await endpoints.settings.save(payload)
-      document.title = settings.value.app_title || 'Senpan App Suite'
-      applyHeaderFont(settings.value.header_font)
-      void loadGoogleFontsList()
+      const { uploadedFonts: fonts, ...saved } = await unwrap(
+        api.PUT('/settings', { body: settings.value }),
+      )
+      settings.value = saved
+      uploadedFonts.value = fonts
+      if (withIntegrations) {
+        integrations.value = await unwrap(
+          api.PUT('/settings/integrations', { body: integrations.value }),
+        )
+        void loadGoogleFontsList()
+      }
+      document.title = settings.value.appTitle || 'Senpan App Suite'
+      applyHeaderFont(settings.value.headerFont)
       ui.notify('Settings saved!', 'success')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -120,7 +132,7 @@ export const useAppStore = defineStore('app', () => {
 
   /** Fetches the Google Fonts list if an API key is configured (cached). */
   async function loadGoogleFontsList(): Promise<void> {
-    const key = (settings.value.google_fonts_api_key || '').trim()
+    const key = integrations.value.googleFontsApiKey.trim()
     if (!key) {
       googleFontsList.value = []
       googleFontsCacheKey = ''
@@ -147,7 +159,7 @@ export const useAppStore = defineStore('app', () => {
 
   /** Previews the header font without saving (live update in settings panel). */
   function previewHeaderFont(): void {
-    const font = (settings.value.header_font || '').trim()
+    const font = settings.value.headerFont.trim()
     if (font) {
       applyHeaderFont(font)
     }
@@ -157,9 +169,9 @@ export const useAppStore = defineStore('app', () => {
    *  "Default" look - used when the player hasn't picked a specific public theme. */
   async function loadActiveCSS(): Promise<void> {
     try {
-      const data = await endpoints.styles.activeCss()
-      applyCustomCSS(data.css || '')
-      applyFlourishes(data.board_flourish || '', data.number_flourish || '')
+      const data = await unwrap(api.GET('/styles/active'))
+      applyCustomCSS(data.css)
+      applyFlourishes(data.boardFlourish, data.numberFlourish)
     } catch {
       /* silent - custom CSS is optional */
     }
@@ -169,8 +181,9 @@ export const useAppStore = defineStore('app', () => {
   // Players may pick any Public theme for themselves; the choice is persisted per
   // browser as 'default' | '<style id>'. 'default' follows whatever theme the admin
   // has activated (see loadActiveCSS) and is always labelled "Default" in the picker
-  // - the admin theme's real name is never shown, since the active-CSS endpoint and
-  // the style_update broadcast carry CSS only.
+  // - the admin theme's real name is never shown, since the active-CSS endpoint
+  // carries CSS only. A theme_changed event has a page wearing the site's theme, or
+  // the theme written, read it again (useLiveEvents).
   const THEME_PREF_KEY = 'bingo_theme'
   const themePreference = ref(localStorage.getItem(THEME_PREF_KEY) || 'default')
 
@@ -178,9 +191,9 @@ export const useAppStore = defineStore('app', () => {
    *  public/available (so the caller can fall back to Default). */
   async function applyPublicTheme(id: number): Promise<boolean> {
     try {
-      const data = await endpoints.styles.publicCss(id)
-      applyCustomCSS(data.css || '')
-      applyFlourishes(data.board_flourish || '', data.number_flourish || '')
+      const data = await unwrap(api.GET('/styles/public/{id}', { params: { path: { id } } }))
+      applyCustomCSS(data.css)
+      applyFlourishes(data.boardFlourish, data.numberFlourish)
       return true
     } catch {
       return false
@@ -211,6 +224,7 @@ export const useAppStore = defineStore('app', () => {
 
   return {
     settings,
+    integrations,
     googleFontsList,
     uploadedFonts,
     savingSettings,
@@ -221,6 +235,7 @@ export const useAppStore = defineStore('app', () => {
     hideCustomCards,
     applyFlourishes,
     loadSettings,
+    loadIntegrations,
     saveSettings,
     loadGoogleFontsList,
     previewHeaderFont,

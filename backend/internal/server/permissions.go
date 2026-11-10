@@ -3,68 +3,10 @@ package server
 import (
 	"net/http"
 
+	"app-suite/internal/bookclubs"
 	"app-suite/internal/model"
+	"app-suite/internal/permissions"
 )
-
-// Page-permission keys. Each corresponds to exactly one admin page and mirrors
-// the frontend AdminTab ids (and the router's meta.perm). Admins implicitly hold
-// every permission; non-admin users are limited to the keys granted to them.
-//
-// The Users page itself ("system-users") is intentionally NOT a grantable
-// permission - it is admin-only and guarded with requireAdmin.
-const (
-	permBingoGame          = "bingo-game"
-	permBingoCards         = "bingo-cards"
-	permBingoWinnersLog    = "bingo-winners-log"
-	permBingoPatterns      = "bingo-patterns"
-	permBingoPresets       = "bingo-presets"
-	permTeahouseAnnounce   = "teahouse-announcements"
-	permTeahouseAffiliates = "teahouse-affiliates"
-	permTeahouseTeaRooms   = "teahouse-tea-rooms"
-	permTeahouseRaffles    = "teahouse-raffles"
-	permFestivalMap        = "festival-map"
-	permFestivalGarapon    = "festival-garapon"
-	permFestivalStampRally = "festival-stamp-rally"
-	// The plaque board: setup, windows and webhooks, and reviewing site plaques.
-	permFestivalEma = "festival-ema"
-	// The artist's request queue - on its own, so the artist can work it without
-	// seeing the board's webhooks.
-	permFestivalEmaRequests = "festival-ema-requests"
-	permAtelierFonts        = "atelier-fonts"
-	permAtelierCarrd        = "atelier-carrd"
-	permSystemSettings      = "system-settings"
-	permSystemThemes        = "system-themes"
-	permSystemImages        = "system-images"
-)
-
-// bookClubSlugs lists the known book clubs that get their own page permission.
-//
-// NOTE: keep this in sync with BOOK_CLUBS in frontend/src/lib/constants.ts.
-// Adding a club there means adding its slug here so its page permission is both
-// grantable (validated in set_permissions) and enforceable by the handlers.
-var bookClubSlugs = []string{"yaoi", "yuri"}
-
-// bookClubPerm returns the page-permission key for a book club slug.
-func bookClubPerm(slug string) string { return "bookclub-" + slug }
-
-// validPermissions returns the set of all grantable page-permission keys.
-func validPermissions() map[string]bool {
-	keys := []string{
-		permBingoGame, permBingoCards, permBingoWinnersLog, permBingoPatterns, permBingoPresets,
-		permTeahouseAnnounce, permTeahouseAffiliates, permTeahouseTeaRooms, permTeahouseRaffles,
-		permFestivalMap, permFestivalGarapon, permFestivalStampRally, permFestivalEma, permFestivalEmaRequests,
-		permAtelierFonts, permAtelierCarrd,
-		permSystemSettings, permSystemThemes, permSystemImages,
-	}
-	set := make(map[string]bool, len(keys)+len(bookClubSlugs))
-	for _, k := range keys {
-		set[k] = true
-	}
-	for _, slug := range bookClubSlugs {
-		set[bookClubPerm(slug)] = true
-	}
-	return set
-}
 
 // userHasPermission reports whether a non-admin user holds a specific page
 // permission. Callers should special-case admins (who hold everything) before
@@ -85,8 +27,8 @@ func anyBookClubPerm(u *model.User) bool {
 	if u.IsAdmin {
 		return true
 	}
-	for _, slug := range bookClubSlugs {
-		if userHasPermission(u, bookClubPerm(slug)) {
+	for _, slug := range bookclubs.Slugs() {
+		if userHasPermission(u, permissions.BookClub(slug)) {
 			return true
 		}
 	}

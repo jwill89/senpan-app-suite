@@ -21,7 +21,7 @@ import { useUsersStore, PROTECTED_ADMIN } from '@/stores/users'
 import { useUiStore } from '@/stores/ui'
 import { ADMIN_PERMISSIONS } from '@/lib/constants'
 import { formatServerTimestamp } from '@/lib/datetime'
-import type { User } from '@/types/api'
+import type { User } from '@/api/client'
 
 const users = useUsersStore()
 const ui = useUiStore()
@@ -63,8 +63,8 @@ const displayedUsers = computed(() => {
     : users.users.slice()
   // Admins first, then by username.
   return rows.sort((a, b) => {
-    if (a.is_admin !== b.is_admin) {
-      return a.is_admin ? -1 : 1
+    if (a.isAdmin !== b.isAdmin) {
+      return a.isAdmin ? -1 : 1
     }
     return a.username.localeCompare(b.username)
   })
@@ -85,13 +85,13 @@ const permissionGroups = computed(() => {
 })
 
 /** Formats a user's last-login timestamp for the table, or "Never". */
-function formatLastLogin(ts: string): string {
+function formatLastLogin(ts: string | null): string {
   return ts ? formatServerTimestamp(ts) : 'Never'
 }
 
 /** Human summary of a user's access for the table cell. */
 function permissionSummary(u: User): string {
-  if (u.is_admin) {
+  if (u.isAdmin) {
     return 'Full access (admin)'
   }
   if (!u.permissions.length) {
@@ -119,8 +119,8 @@ const editUser = computed(() => users.users.find((u) => u.id === editUserId.valu
 
 function openEdit(u: User): void {
   editUserId.value = u.id
-  editActive.value = u.is_active
-  editAdmin.value = u.is_admin
+  editActive.value = u.isActive
+  editAdmin.value = u.isAdmin
   permDraft.value = new Set(u.permissions)
   editPassword.value = ''
   editConfirm.value = ''
@@ -157,7 +157,7 @@ async function saveUser(): Promise<void> {
   savingUser.value = true
   const ok = await users.updateUser(
     editUserId.value,
-    { is_active: editActive.value, is_admin: editAdmin.value, permissions: [...permDraft.value] },
+    { isActive: editActive.value, isAdmin: editAdmin.value, permissions: [...permDraft.value] },
     editPassword.value || undefined,
   )
   savingUser.value = false
@@ -214,20 +214,20 @@ onMounted(() => users.loadUsers())
           <span class="code-highlight">{{ row.username }}</span>
         </template>
         <template #cell-status="{ row }">
-          <span :class="row.is_active ? 'badge-active' : 'badge-inactive'">
-            {{ row.is_active ? 'Active' : 'Inactive' }}
+          <span :class="row.isActive ? 'badge-active' : 'badge-inactive'">
+            {{ row.isActive ? 'Active' : 'Inactive' }}
           </span>
         </template>
         <template #cell-role="{ row }">
-          <span :class="row.is_admin ? 'badge-admin' : 'text-muted'">
-            {{ row.is_admin ? 'Admin' : 'User' }}
+          <span :class="row.isAdmin ? 'badge-admin' : 'text-muted'">
+            {{ row.isAdmin ? 'Admin' : 'User' }}
           </span>
         </template>
         <template #cell-permissions="{ row }">
           <span class="text-muted">{{ permissionSummary(row) }}</span>
         </template>
         <template #cell-lastLogin="{ row }">
-          <span class="text-muted">{{ formatLastLogin(row.last_login_at) }}</span>
+          <span class="text-muted">{{ formatLastLogin(row.lastLoginAt) }}</span>
         </template>
         <template #cell-actions="{ row }">
           <div class="row-actions">

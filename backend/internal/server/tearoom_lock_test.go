@@ -1,8 +1,6 @@
 package server_test
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"testing"
@@ -10,8 +8,6 @@ import (
 
 	"app-suite/internal/model"
 	"app-suite/internal/server"
-
-	"github.com/coder/websocket"
 )
 
 // -- Tea-room locks ----------------------------------------------------------
@@ -134,41 +130,13 @@ func TestParseTeaRoomLockTime(t *testing.T) {
 	}
 }
 
-// expectTeaRoomUnlocked reads WS frames until a tea_room_unlocked for wantName
-// arrives, or fails on timeout. Other message types are skipped - the sweep also
-// emits resource_changed, and the socket carries unrelated traffic.
-func expectTeaRoomUnlocked(t *testing.T, conn *websocket.Conn, wantName string) {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	for {
-		_, data, err := conn.Read(ctx)
-		if err != nil {
-			t.Fatalf("waiting for tea_room_unlocked(%q): %v", wantName, err)
-		}
-		var msg struct {
-			Type       string `json:"type"`
-			Name       string `json:"name"`
-			RoomNumber string `json:"room_number"`
-		}
-		if json.Unmarshal(data, &msg) != nil || msg.Type != "tea_room_unlocked" {
-			continue
-		}
-		if msg.Name != wantName {
-			t.Fatalf("tea_room_unlocked name = %q; want %q", msg.Name, wantName)
-		}
-		if msg.RoomNumber == "" {
-			t.Error("tea_room_unlocked carried no room number")
-		}
-		return
-	}
-}
-
 // TestTeaRoomLockExpirySweep is the whole point of the expiry: a lock whose time
-// has passed lifts on its own and says so by name, while a lock with no expiry
-// and one still in the future are left for the people who set them.
+// has passed lifts on its own and says so by name, to the staff with the Tea Rooms
+// page alone, while a lock with no expiry and one still in the future are left for
+// the people who set them.
 func TestTeaRoomLockExpirySweep(t *testing.T) {
 	env := newTestEnv(t)
+	other := makeActiveUser(t, env, "gamestaff", "correct horse battery", []string{"bingo-game"})
 	env.loginAdmin(t)
 
 	due, err := env.store.CreateTeaRoom(t.Context(), &model.TeaRoom{Name: "Jasmine Room", RoomNumber: "12"})
@@ -189,8 +157,8 @@ func TestTeaRoomLockExpirySweep(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	admin := env.dialAdminWS(t)
-	defer admin.Close(websocket.StatusNormalClosure, "")
+	admin := staffStream(t, env, env.client)
+	without := staffStream(t, env, other)
 
 	server.ExpireDueTeaRoomLocksForTest(env.srv, t.Context())
 
@@ -204,30 +172,16 @@ func TestTeaRoomLockExpirySweep(t *testing.T) {
 		t.Error("a lock still in the future was swept")
 	}
 
-	expectTeaRoomUnlocked(t, admin, "Jasmine Room")
+	e := admin.expect("tea_room_unlocked", 3*time.Second)
+	if e.str("name") != "Jasmine Room" || e.str("roomNumber") != "12" || e.Payload["id"] != float64(due) {
+		t.Errorf("tea_room_unlocked: %+v", e)
+	}
+	if e := admin.expect("resource_changed", time.Second); e.str("resource") != "tea-rooms" {
+		t.Errorf("resource_changed: %+v; want tea-rooms", e)
+	}
+	without.expectNone("tea_room_unlocked", 300*time.Millisecond)
 
 	// A second pass has nothing left to do, so nothing is announced twice.
 	server.ExpireDueTeaRoomLocksForTest(env.srv, t.Context())
-	expectNoTeaRoomUnlocked(t, admin, 500*time.Millisecond)
-}
-
-// expectNoTeaRoomUnlocked reads until the deadline and fails if any
-// tea_room_unlocked arrives. Other traffic is ignored - the point is the absence
-// of this one message, not silence on the socket.
-func expectNoTeaRoomUnlocked(t *testing.T, conn *websocket.Conn, within time.Duration) {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), within)
-	defer cancel()
-	for {
-		_, data, err := conn.Read(ctx)
-		if err != nil {
-			return // deadline reached with nothing announced: the expected outcome.
-		}
-		var msg struct {
-			Type string `json:"type"`
-		}
-		if json.Unmarshal(data, &msg) == nil && msg.Type == "tea_room_unlocked" {
-			t.Fatalf("lock expiry announced twice: %s", data)
-		}
-	}
+	admin.expectNone("tea_room_unlocked", 500*time.Millisecond)
 }

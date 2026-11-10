@@ -24,7 +24,7 @@ import (
 // tailSink taps the log stream for the live viewer. It is an io.Writer plugged
 // into the log MultiWriter, so its Write receives each fully-formatted JSON log
 // line (all attributes included) exactly once. It forwards the raw line to a
-// callback registered later - once the WebSocket hub exists - and is a cheap
+// callback registered later - once the live events' hub exists - and is a cheap
 // no-op until then (and whenever nobody is watching). Tapping the stream here
 // (rather than tailing the file) means the live tail also works when file
 // logging is disabled, and never has to deal with rotation.
@@ -46,7 +46,7 @@ func (s *sink) Write(p []byte) (int, error) {
 }
 
 // SetTailSink registers the callback invoked with each JSON log line for the
-// live tail. Pass nil to detach. Wired from main once the WebSocket hub exists.
+// live tail. Pass nil to detach. Wired from main once the live events' hub exists.
 func SetTailSink(cb func(line []byte)) {
 	tailSink.mu.Lock()
 	tailSink.cb = cb

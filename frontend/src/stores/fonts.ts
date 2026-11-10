@@ -16,7 +16,8 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { endpoints } from '@/lib/endpoints'
-import type { Font, UploadedFont } from '@/types/api'
+import type { UploadedFont } from '@/api/client'
+import type { Font } from '@/types/api'
 import { useUiStore } from './ui'
 
 /** Public base URL of the external fonts host (no trailing slash). Its vhost

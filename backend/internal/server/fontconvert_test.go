@@ -15,11 +15,12 @@ import (
 
 	"golang.org/x/image/font/gofont/goregular"
 
+	"app-suite/internal/api/apitest"
+	"app-suite/internal/live"
 	"app-suite/internal/model"
 	"app-suite/internal/server"
 	"app-suite/internal/store"
 	"app-suite/internal/store/storetest"
-	"app-suite/internal/ws"
 )
 
 // postFontsUpload posts a multipart upload of name->content font files.
@@ -231,8 +232,14 @@ func TestFontConvert_CustomFamily(t *testing.T) {
 	if css := env.kitCSS(t, nil); !strings.Contains(css, "font-family:'Fancy Heading'") {
 		t.Errorf("kit.css missing the custom family:\n%s", css)
 	}
-	sresp := env.get(t, "/api/settings")
-	var settings model.SettingsResponse
+	sresp := env.get(t, "/api/v1/settings")
+	var settings struct {
+		UploadedFonts []struct {
+			Name   string `json:"name"`
+			Family string `json:"family"`
+			Token  string `json:"token"`
+		} `json:"uploadedFonts"`
+	}
 	_ = json.NewDecoder(sresp.Body).Decode(&settings)
 	sresp.Body.Close()
 	found := false
@@ -337,12 +344,13 @@ func TestFontConvert_StartupBackfillAndMetaMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := server.New(t.Context(), st, ws.NewHub(), webRoot, nil)
+	srv := server.New(t.Context(), st, live.New(), webRoot, nil)
 	ts := httptest.NewTLSServer(srv)
 	t.Cleanup(ts.Close)
 	jar, _ := cookiejar.New(nil)
 	client := ts.Client()
 	client.Jar = jar
+	client.Transport = apitest.Transport(t, client.Transport)
 	env := &testEnv{ts: ts, client: client, store: st, srv: srv}
 	env.loginAdmin(t)
 

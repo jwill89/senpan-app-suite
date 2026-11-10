@@ -30,15 +30,15 @@ async function deleteSelectedEntries(): Promise<void> {
 }
 
 const columns: DataColumn[] = [
-  { key: 'logged_at', label: 'Date', sortable: true },
-  { key: 'card_id', label: 'Card ID', sortable: true },
-  { key: 'player_name', label: 'Player', sortable: true },
-  { key: 'game_details', label: 'Details' },
-  { key: 'winning_patterns', label: 'Patterns' },
+  { key: 'loggedAt', label: 'Date', sortable: true },
+  { key: 'cardId', label: 'Card ID', sortable: true },
+  { key: 'playerName', label: 'Player', sortable: true },
+  { key: 'gameDetails', label: 'Details' },
+  { key: 'winningPatterns', label: 'Patterns' },
   { key: 'actions', label: '', align: 'right' },
 ]
 
-/** Parses the JSON winning_patterns array into a comma-joined string. */
+/** Parses the JSON winningPatterns array into a comma-joined string. */
 function patternsLabel(json: string): string {
   try {
     const arr = JSON.parse(json || '[]') as string[]
@@ -106,17 +106,17 @@ function patternsLabel(json: string): string {
           selectable
           resizable
           :page-size="game.winnersLogPerPage"
-          :default-sort="{ key: 'logged_at', dir: 'desc' }"
+          :default-sort="{ key: 'loggedAt', dir: 'desc' }"
           @update:view="view = $event"
         >
-          <template #cell-logged_at="{ row }">{{ formatServerTimestamp(row.logged_at) }}</template>
-          <template #cell-card_id="{ row }">
-            <span class="code-highlight">{{ row.card_id }}</span>
+          <template #cell-loggedAt="{ row }">{{ formatServerTimestamp(row.loggedAt) }}</template>
+          <template #cell-cardId="{ row }">
+            <span class="code-highlight">{{ row.cardId }}</span>
           </template>
-          <template #cell-player_name="{ row }">{{ row.player_name || '-' }}</template>
-          <template #cell-game_details="{ row }">{{ row.game_details || '-' }}</template>
-          <template #cell-winning_patterns="{ row }">
-            {{ patternsLabel(row.winning_patterns) }}
+          <template #cell-playerName="{ row }">{{ row.playerName || '-' }}</template>
+          <template #cell-gameDetails="{ row }">{{ row.gameDetails || '-' }}</template>
+          <template #cell-winningPatterns="{ row }">
+            {{ patternsLabel(row.winningPatterns) }}
           </template>
           <template #cell-actions="{ row }">
             <div class="row-actions">

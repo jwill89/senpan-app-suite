@@ -37,10 +37,13 @@ func (rt rewriteHostRoundTripper) RoundTrip(req *http.Request) (*http.Response, 
 // The following expose pure, unexported helpers to the external server_test
 // package so their logic can be unit-tested without spinning up the HTTP server.
 var (
-	// AdminMutationResourceForTest maps a POST path to its invalidation resource
-	// key - the core of the live-admin invalidation feature, including the
-	// deliberate exclusion of the public ".../enter" and ".../draw" paths.
+	// AdminMutationResourceForTest maps a write's path to the resource_changed
+	// resource it tells, including the deliberate exclusion of the public
+	// ".../enter" and ".../draw" paths.
 	AdminMutationResourceForTest = adminMutationResource
+	// AccountMutationForTest reports whether a write's path has the staff streams
+	// check their accounts again.
+	AccountMutationForTest = accountMutation
 	// SafeFontNameForTest validates/normalizes an uploaded font filename.
 	SafeFontNameForTest = safeFontName
 	// SanitizeGaraponPrizesForTest trims/normalizes incoming garapon prize rows.
@@ -56,15 +59,6 @@ var (
 	// FontFileTokenForTest derives a font's serving token for a given bucket, so
 	// the expiry window (current + previous bucket) can be exercised directly.
 	FontFileTokenForTest = (*Server).fontFileToken
-	// ParseLogLinesForTest exposes the NDJSON log parser (level/text filtering,
-	// time/level/msg promotion, malformed-line skipping) for unit testing.
-	ParseLogLinesForTest = parseLogLines
-	// SlogLevelValueForTest exposes the level-name -> severity mapping.
-	SlogLevelValueForTest = slogLevelValue
-	// LogLevelNameForTest / ParseLogLevelNameForTest expose the runtime-level
-	// name<->slog.Level mapping used by the live DEBUG toggle.
-	LogLevelNameForTest      = logLevelName
-	ParseLogLevelNameForTest = parseLogLevelName
 	// LogClientIPForTest exposes the CF-Connecting-IP-first client-IP extraction
 	// used for the request log's ip field.
 	LogClientIPForTest = logClientIP

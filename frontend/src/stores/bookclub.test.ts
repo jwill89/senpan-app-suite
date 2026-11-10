@@ -60,7 +60,7 @@ describe('applyExternalChange (live invalidation)', () => {
   it('refetches the open club (+ open list detail) when viewing', () => {
     const s = useBookclubStore()
     s.selectedList = { id: 4 } as ReadingList
-    s.applyExternalChange(true)
+    s.applyExternalChange('yaoi', true)
     expect(ep.lists).toHaveBeenCalled()
     expect(ep.listDetail).toHaveBeenCalledWith('yaoi', 4)
   })
@@ -69,9 +69,20 @@ describe('applyExternalChange (live invalidation)', () => {
     const s = useBookclubStore()
     s.openClub('yaoi') // stamps freshness
     ep.lists.mockClear()
-    s.applyExternalChange(false) // not viewing -> invalidate, no immediate fetch
+    s.applyExternalChange('yaoi', false) // not viewing -> invalidate, no immediate fetch
     expect(ep.lists).not.toHaveBeenCalled()
     s.openClub('yaoi') // now stale again -> refetch
+    expect(ep.lists).toHaveBeenCalledTimes(1)
+  })
+
+  it('invalidates the club the change names, not the open one', () => {
+    const s = useBookclubStore()
+    s.openClub('yuri')
+    s.openClub('yaoi')
+    ep.lists.mockClear()
+    s.applyExternalChange('yuri', false)
+    expect(ep.lists).not.toHaveBeenCalled()
+    s.openClub('yuri')
     expect(ep.lists).toHaveBeenCalledTimes(1)
   })
 })

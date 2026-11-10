@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"app-suite/internal/model"
+	"app-suite/internal/permissions"
 	"app-suite/internal/store"
 )
 
@@ -150,7 +151,7 @@ func (s *Server) handleFestivalMapsList(w http.ResponseWriter, r *http.Request) 
 	// The Ema board editor picks its festival from this list, and a board can't
 	// exist without one. The list carries nothing secret (the maps' stalls aren't
 	// in it), so the narrowing requireAnyPermission allows for isn't needed here.
-	if s.requireAnyPermission(w, r, permFestivalMap, permFestivalEma) == nil {
+	if s.requireAnyPermission(w, r, permissions.FestivalMap, permissions.FestivalEma) == nil {
 		return
 	}
 	maps, err := s.store.ListFestivalMaps(r.Context())
@@ -166,7 +167,7 @@ func (s *Server) handleFestivalMapsList(w http.ResponseWriter, r *http.Request) 
 //	Endpoint:  GET /api/festival-maps/{id}
 //	Auth:      admin, or a user granted festival-map
 func (s *Server) handleFestivalMapDetail(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permFestivalMap) {
+	if !s.requirePermission(w, r, permissions.FestivalMap) {
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "festival map")
@@ -266,7 +267,7 @@ func mapFromRequest(req festivalMapWriteRequest, title string) *model.FestivalMa
 //	Auth:      admin, or a user granted festival-map
 //	Response:  201 {"map": FestivalMap}
 func (s *Server) handleFestivalMapCreate(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permFestivalMap) {
+	if !s.requirePermission(w, r, permissions.FestivalMap) {
 		return
 	}
 	req, err := readJSON[festivalMapWriteRequest](w, r)
@@ -304,7 +305,7 @@ func (s *Server) handleFestivalMapCreate(w http.ResponseWriter, r *http.Request)
 //	Auth:      admin, or a user granted festival-map
 //	Response:  200 {"ok": true}
 func (s *Server) handleFestivalMapUpdate(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permFestivalMap) {
+	if !s.requirePermission(w, r, permissions.FestivalMap) {
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "festival map")
@@ -356,7 +357,7 @@ func (s *Server) handleFestivalMapUpdate(w http.ResponseWriter, r *http.Request)
 //	Auth:      admin, or a user granted festival-map
 //	Response:  204 No Content
 func (s *Server) handleFestivalMapDelete(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permFestivalMap) {
+	if !s.requirePermission(w, r, permissions.FestivalMap) {
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "festival map")
@@ -397,7 +398,7 @@ type festivalMapStatusRequest struct {
 //	Request:   {"status":"in_progress"|"published"|"closed"}
 //	Response:  200 {"ok": true, "status": "published"}
 func (s *Server) handleFestivalMapPatch(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permFestivalMap) {
+	if !s.requirePermission(w, r, permissions.FestivalMap) {
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "festival map")

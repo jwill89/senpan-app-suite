@@ -9,7 +9,7 @@
  * Loads the initial admin data set once when the dashboard mounts (this used to
  * happen in the App shell after a successful login; now it runs whenever the
  * admin area is entered, including via a direct link / refresh). Logout
- * disconnects the WebSocket implicitly (App's route watcher) and returns home.
+ * closes the live stream implicitly (App's route watcher) and returns home.
  */
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -33,10 +33,14 @@ import { useGaraponsStore } from '@/stores/garapons'
 import { useEmaStore } from '@/stores/ema'
 import { useFestivalMapsStore } from '@/stores/festivalMaps'
 import { useUiStore } from '@/stores/ui'
-import { endpoints } from '@/lib/endpoints'
 import { armAudioOnFirstGesture } from '@/lib/sound'
-import { listPasskeys, registerPasskey, deletePasskey, passkeysSupported } from '@/lib/passkeys'
-import type { AccountTokenInfoResponse, Passkey } from '@/types/api'
+import {
+  addPasskey as addPasskeyNow,
+  deletePasskey,
+  listPasskeys,
+  passkeysSupported,
+} from '@/lib/passkeys'
+import { api, unwrap, type Passkey, type TokenSummary } from '@/api/client'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -86,8 +90,8 @@ onMounted(async () => {
     if (auth.hasPermission('festival-ema-requests')) {
       loads.push(ema.loadRequests())
     }
+    // The game state carries the shared draw delay (loadGameState sets it).
     await Promise.allSettled(loads)
-    game.drawDelay = parseInt(app.settings.default_draw_delay) || 0
   } catch {
     /* show the dashboard even if a data load failed */
   }
@@ -132,7 +136,7 @@ onMounted(() => {
 })
 onBeforeUnmount(() => navMql?.removeEventListener('change', syncIsNarrow))
 
-/** Log out, then return home (App's route watcher disconnects the WebSocket). */
+/** Log out, then return home (App's route watcher closes the live stream). */
 async function logout(): Promise<void> {
   await auth.logout()
   void router.push({ name: 'home' })
@@ -172,7 +176,11 @@ async function submitChangePw(): Promise<void> {
   }
   savingPw.value = true
   try {
-    await endpoints.account.changePassword(currentPw.value, newPw.value)
+    await unwrap(
+      api.PUT('/me/password', {
+        body: { currentPassword: currentPw.value, newPassword: newPw.value },
+      }),
+    )
     ui.notify('Password changed', 'success')
     showChangePw.value = false
   } catch (e) {
@@ -184,7 +192,8 @@ async function submitChangePw(): Promise<void> {
 
 // -- Access-token modal (personal access token for external API clients) -------
 const showToken = ref(false)
-const tokenInfo = ref<AccountTokenInfoResponse | null>(null)
+/** The account's token, without its secret; null while loading or when it has none. */
+const tokenInfo = ref<TokenSummary | null>(null)
 const tokenLoading = ref(false)
 const tokenBusy = ref(false)
 const tokenError = ref('')
@@ -192,7 +201,7 @@ const tokenError = ref('')
 const newToken = ref('')
 
 /** Formats a server timestamp for local display ("Never" when empty). */
-function fmtTokenTime(ts: string): string {
+function fmtTokenTime(ts: string | null): string {
   return ts ? formatServerTimestamp(ts) || ts : 'Never'
 }
 
@@ -205,7 +214,7 @@ async function onAccessToken(): Promise<void> {
   showToken.value = true
   tokenLoading.value = true
   try {
-    tokenInfo.value = await endpoints.account.tokenInfo()
+    tokenInfo.value = (await unwrap(api.GET('/me/token'))).token
   } catch (e) {
     tokenError.value = (e as Error).message
   } finally {
@@ -218,9 +227,9 @@ async function generateToken(): Promise<void> {
   tokenBusy.value = true
   tokenError.value = ''
   try {
-    const res = await endpoints.account.generateToken()
-    newToken.value = res.token
-    tokenInfo.value = await endpoints.account.tokenInfo()
+    const made = await unwrap(api.POST('/me/token'))
+    newToken.value = made.token
+    tokenInfo.value = { prefix: made.prefix, createdAt: made.createdAt, lastUsedAt: null }
   } catch (e) {
     tokenError.value = (e as Error).message
   } finally {
@@ -233,9 +242,9 @@ async function revokeToken(): Promise<void> {
   tokenBusy.value = true
   tokenError.value = ''
   try {
-    await endpoints.account.revokeToken()
+    await unwrap(api.DELETE('/me/token'))
     newToken.value = ''
-    tokenInfo.value = await endpoints.account.tokenInfo()
+    tokenInfo.value = null
     ui.notify('Token revoked', 'success')
   } catch (e) {
     tokenError.value = (e as Error).message
@@ -261,16 +270,19 @@ const passkeysLoading = ref(false)
 const passkeyBusy = ref(false)
 const passkeyError = ref('')
 const newPasskeyName = ref('')
+/** The account's password, which adding a passkey asks for. */
+const passkeyPassword = ref('')
 
 /** Sidebar "Add Passkey" -> close the drawer, open the modal, load the list. */
 async function onManagePasskeys(): Promise<void> {
   navOpen.value = false
   passkeyError.value = ''
   newPasskeyName.value = ''
+  passkeyPassword.value = ''
   showPasskeys.value = true
   passkeysLoading.value = true
   try {
-    passkeys.value = (await listPasskeys()).passkeys
+    passkeys.value = await listPasskeys()
   } catch (e) {
     passkeyError.value = (e as Error).message
   } finally {
@@ -287,8 +299,10 @@ async function addPasskey(): Promise<void> {
   passkeyBusy.value = true
   passkeyError.value = ''
   try {
-    passkeys.value = (await registerPasskey(newPasskeyName.value.trim() || 'Passkey')).passkeys
+    const added = await addPasskeyNow(newPasskeyName.value.trim(), passkeyPassword.value)
+    passkeys.value = [...passkeys.value, added]
     newPasskeyName.value = ''
+    passkeyPassword.value = ''
     ui.notify('Passkey added', 'success')
   } catch (e) {
     passkeyError.value = (e as Error).message
@@ -302,7 +316,8 @@ async function removePasskey(id: number): Promise<void> {
   passkeyBusy.value = true
   passkeyError.value = ''
   try {
-    passkeys.value = (await deletePasskey(id)).passkeys
+    await deletePasskey(id)
+    passkeys.value = passkeys.value.filter((pk) => pk.id !== id)
     ui.notify('Passkey removed', 'success')
   } catch (e) {
     passkeyError.value = (e as Error).message
@@ -312,7 +327,7 @@ async function removePasskey(id: number): Promise<void> {
 }
 
 /** Formats a server timestamp for local display ("Never" when empty). */
-function fmtPasskeyTime(ts: string): string {
+function fmtPasskeyTime(ts: string | null): string {
   return ts ? formatServerTimestamp(ts) || ts : 'Never'
 }
 </script>
@@ -452,16 +467,16 @@ function fmtPasskeyTime(ts: string): string {
 
       <!-- Existing-token metadata + controls. -->
       <template v-else>
-        <template v-if="tokenInfo?.has_token">
+        <template v-if="tokenInfo">
           <dl class="access-token-meta">
             <dt class="text-muted">Token</dt>
             <dd>
               <code>{{ tokenInfo.prefix }}...</code>
             </dd>
             <dt class="text-muted">Created</dt>
-            <dd>{{ fmtTokenTime(tokenInfo.created_at) }}</dd>
+            <dd>{{ fmtTokenTime(tokenInfo.createdAt) }}</dd>
             <dt class="text-muted">Last used</dt>
-            <dd>{{ fmtTokenTime(tokenInfo.last_used_at) }}</dd>
+            <dd>{{ fmtTokenTime(tokenInfo.lastUsedAt) }}</dd>
           </dl>
           <p class="text-muted access-token-note">
             For security the token itself can't be shown again. If you've lost it, regenerate to get
@@ -474,7 +489,7 @@ function fmtPasskeyTime(ts: string): string {
 
         <div class="modal-actions">
           <button
-            v-if="tokenInfo?.has_token"
+            v-if="tokenInfo"
             type="button"
             class="btn-danger"
             :disabled="tokenBusy"
@@ -485,10 +500,8 @@ function fmtPasskeyTime(ts: string): string {
           <button type="button" class="btn-action" :disabled="tokenBusy" @click="generateToken">
             <LoadingSpinner v-if="tokenBusy" label="Working..." />
             <template v-else>
-              <font-awesome-icon
-                :icon="tokenInfo?.has_token ? ['fas', 'rotate'] : ['fad', 'key']"
-              />
-              {{ tokenInfo?.has_token ? 'Regenerate' : 'Generate token' }}
+              <font-awesome-icon :icon="tokenInfo ? ['fas', 'rotate'] : ['fad', 'key']" />
+              {{ tokenInfo ? 'Regenerate' : 'Generate token' }}
             </template>
           </button>
         </div>
@@ -516,8 +529,8 @@ function fmtPasskeyTime(ts: string): string {
               <font-awesome-icon :icon="['fad', 'user-key']" />
               <strong>{{ pk.name }}</strong>
               <span class="text-muted text-xs">
-                Added {{ fmtPasskeyTime(pk.created_at) }} - Last used
-                {{ fmtPasskeyTime(pk.last_used_at) }}
+                Added {{ fmtPasskeyTime(pk.createdAt) }} - Last used
+                {{ fmtPasskeyTime(pk.lastUsedAt) }}
               </span>
             </span>
             <button
@@ -540,6 +553,15 @@ function fmtPasskeyTime(ts: string): string {
               v-model="newPasskeyName"
               placeholder="e.g. My Laptop"
               maxlength="60"
+            />
+          </FormField>
+          <FormField label="Your password" html-for="pk-password">
+            <input
+              id="pk-password"
+              v-model="passkeyPassword"
+              type="password"
+              autocomplete="current-password"
+              required
             />
           </FormField>
           <p v-if="passkeyError" class="error-msg">{{ passkeyError }}</p>

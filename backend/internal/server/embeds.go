@@ -416,7 +416,7 @@ func (s *Server) sendDiscordWebhook(ctx context.Context, target webhookTarget, w
 	slog.Debug("discord webhook post", "kind", target.Kind, "name", target.Name,
 		"embeds", len(payload.Embeds), "components", len(payload.Components), "bytes", len(body))
 	start := time.Now()
-	// Every stored webhook passed isDiscordWebhookURL when it was saved, and the
+	// Every stored webhook passed discord.IsWebhookURL when it was saved, and the
 	// override is the operator's own flag or environment value.
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, webhookURL, bytes.NewReader(body)) //nolint:gosec // a checked Discord webhook URL (see above)
 	if err != nil {

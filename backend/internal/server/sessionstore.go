@@ -11,7 +11,7 @@ import (
 
 // sessionStore keeps sign-ins in the database (the sessions table) through scs's
 // SQLite store, so a deploy or restart signs nobody out. It stores each session
-// under a SHA-256 hash of its token, as the standards have it (security.md), so the
+// under a SHA-256 hash of its token, so the
 // database, its backups and the dev copies hold nothing that signs anyone in: the
 // token itself lives only in the browser's cookie.
 type sessionStore struct {

@@ -13,25 +13,30 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/alexedwards/scs/v2"
 
-	"app-suite/internal/bingo"
+	"app-suite/internal/api"
+	"app-suite/internal/auth"
+	"app-suite/internal/game"
+	"app-suite/internal/live"
 	"app-suite/internal/model"
 	"app-suite/internal/store"
-	"app-suite/internal/ws"
+	"app-suite/internal/version"
 )
 
 // Server holds all dependencies and implements http.Handler.
 type Server struct {
 	store       *store.Store
-	game        *bingo.Service
-	hub         *ws.Hub
+	game        *game.Service
+	live        *live.Hub
 	sessions    *scs.SessionManager
 	sessHandler http.Handler // pre-built session middleware wrapping mux
-	webRoot     string
+	// apiHandler is everything under /api past the CORS and CSRF checks: the caching
+	// baseline, then sessHandler (apilayer.go).
+	apiHandler http.Handler
+	webRoot    string
 	// allowedOrigins is the CORS allowlist (exact origin strings). Normally
 	// empty - the SPA and API are same-origin - so no CORS headers are sent.
 	allowedOrigins map[string]bool
@@ -83,9 +88,6 @@ type Server struct {
 	// skipped) when turnstileSecret is empty - see SetTurnstile / turnstile.go.
 	turnstileSecret  string
 	turnstileSiteKey string
-	// openAPISpec is the embedded openapi.yaml served at GET /api/openapi.yaml
-	// and rendered by GET /api/docs. Injected from main via SetOpenAPISpec.
-	openAPISpec []byte
 	// logFile is the path to the rotating JSON log file the admin log viewer
 	// (GET /api/logs) tails. Empty disables the viewer. Injected via SetLogFile.
 	logFile string
@@ -111,20 +113,11 @@ type Server struct {
 	// and a restart is a perfectly good reason to try again. Guarded by postFailMu.
 	postFailMu sync.Mutex
 	postFails  map[int64]int
+}
 
-	// autoWake is a one-slot mailbox that nudges the automatic-draw scheduler
-	// (RunAutoDrawScheduler) to re-evaluate its timer after any auto-relevant
-	// change - game start/end, enable/disable, interval or delay change. See game.go.
-	autoWake chan struct{}
-	// autoDrawNow, when set, tells the scheduler to draw the first number the moment
-	// auto is switched on (rather than after one interval). Set on start-with-auto
-	// and on the enable toggle; consumed once by the scheduler. See game.go.
-	autoDrawNow atomic.Bool
-	// halftimeReadyAt records when the half-time-triggering number reaches players,
-	// so a confirmed mini-game alert is held until they've seen that number. Guarded
-	// by halftimeMu.
-	halftimeMu      sync.Mutex
-	halftimeReadyAt time.Time
+// RunAutoDrawScheduler makes the game's automatic draws until ctx ends (game.Run).
+func (s *Server) RunAutoDrawScheduler(ctx context.Context) {
+	s.game.Run(ctx)
 }
 
 // SetTurnstile enables the Cloudflare Turnstile bot check on the login form.
@@ -169,8 +162,9 @@ func (s *Server) SetLogFile(path string) {
 // by its hash, and it outlives a restart.
 //
 // ctx is used only for the startup migrations below that touch the database; the
-// Server keeps no context of its own.
-func New(ctx context.Context, st *store.Store, hub *ws.Hub, webRoot string, allowedOrigins []string) *Server {
+// Server keeps no context of its own. hub is the live feed the changes are published
+// to and the event streams read.
+func New(ctx context.Context, st *store.Store, hub *live.Hub, webRoot string, allowedOrigins []string) *Server {
 	sm := scs.New()
 	sm.Store = newSessionStore(st.DB())
 	sm.Lifetime = 24 * time.Hour
@@ -188,8 +182,8 @@ func New(ctx context.Context, st *store.Store, hub *ws.Hub, webRoot string, allo
 
 	s := &Server{
 		store:          st,
-		game:           bingo.NewService(st),
-		hub:            hub,
+		game:           game.New(st.ReadDB(), st.DB(), hub),
+		live:           hub,
 		sessions:       sm,
 		webRoot:        webRoot,
 		allowedOrigins: origins,
@@ -216,15 +210,31 @@ func New(ctx context.Context, st *store.Store, hub *ws.Hub, webRoot string, allo
 		passkeyBeginLimiter: newRateLimiter(30, 10*time.Minute),
 		dashboardLimiter:    newRateLimiter(120, 10*time.Minute),
 		emaLimiter:          newRateLimiter(10, 10*time.Minute),
-		autoWake:            make(chan struct{}, 1), // one-slot wake mailbox for the auto-draw scheduler
 	}
 
 	s.routes()
+	// The operations already on huma (internal/api), on the same mux: they share its
+	// session, CSRF and access-log layers with the routes still registered by hand.
+	api.New(s.mux, api.Deps{
+		Store:            st,
+		Version:          version.Version,
+		Live:             hub,
+		TurnstileSiteKey: func() string { return s.turnstileSiteKey },
+		LogFile:          func() string { return s.logFile },
+		UploadedFonts:    s.uploadedFontRefs,
+		Sessions:         sm,
+		SignInLimit:      s.limiter,
+		RegisterLimit:    s.regLimiter,
+		PasskeyLimit:     s.passkeyBeginLimiter,
+		CardRequestLimit: s.cardReqLimiter,
+		Turnstile: func(ctx context.Context, response, ip string) bool {
+			return !s.turnstileEnabled() || s.verifyTurnstile(ctx, response, ip)
+		},
+		Game:         s.game,
+		CardsChanged: s.game.CardsChanged,
+	})
 	// Everything outside /api/: GET /healthz and the SPA (site.go).
 	s.siteRoutes()
-	// API-reference endpoints (GET /api/docs, GET /api/openapi.yaml). Registered
-	// apart from routes() so routes() stays the authoritative API-surface list.
-	s.registerDocs()
 	// Upgrade the image-category manifest to the current schema (folds the
 	// formerly hardcoded permanent categories into the manifest; runs once).
 	s.migrateImageCategoryManifest()
@@ -242,7 +252,8 @@ func New(ctx context.Context, st *store.Store, hub *ws.Hub, webRoot string, allo
 	s.migrateFontDerivatives()
 	// LoadAndSave (outer) populates the session, then withUserCache adds a
 	// per-request memo so currentUser hits the DB at most once per request.
-	s.sessHandler = sm.LoadAndSave(s.withUserCache(s.withActor(s.mux)))
+	s.sessHandler = sm.LoadAndSave(s.withUserCache(s.withActor(s.withWho(http.HandlerFunc(s.routeAPI)))))
+	s.apiHandler = withCaching(s.sessHandler)
 	return s
 }
 
@@ -251,11 +262,28 @@ func New(ctx context.Context, st *store.Store, hub *ws.Hub, webRoot string, allo
 type userCacheCtxKey struct{}
 
 // userCache memoizes currentUser for the lifetime of a single request, so a
-// handler that runs several guards (e.g. requireAuth then requirePermission)
+// handler that runs several guards (e.g. requirePermission then requireAnyPermission)
 // loads the account from the store once instead of per guard.
 type userCache struct {
 	loaded bool
 	user   *model.User
+}
+
+// withWho tells the operations on huma who is signed in (api.WithWho): the same
+// account currentUser answers, looked up only if an operation asks. With it goes
+// what an operation can't read for itself (api.WithRequest): the client's address,
+// the site's, and whether a token rather than a session signs the caller in.
+func (s *Server) withWho(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := api.WithWho(r.Context(), func() *model.User { return s.currentUser(r) })
+		ctx = api.WithRequest(ctx, api.Request{
+			IP:      clientIP(r),
+			Site:    s.siteBaseURL(r),
+			ByToken: s.sessionUserID(r) == 0 && bearerToken(r) != "",
+			Account: func(ctx context.Context) *model.User { return s.callerAfresh(ctx, r) },
+		})
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
 }
 
 // withUserCache injects an empty per-request user memo into the request context.
@@ -269,93 +297,6 @@ func (s *Server) withUserCache(next http.Handler) http.Handler {
 // routes registers all API endpoint handlers on the internal mux.
 // Uses Go 1.22+ method-pattern routing ("GET /api/..." syntax).
 func (s *Server) routes() {
-	s.mux.HandleFunc("GET /api/version", s.handleVersion)
-	s.mux.HandleFunc("GET /api/config", s.handleConfig)
-	s.mux.HandleFunc("GET /api/auth", s.handleAuthCheck)
-	s.mux.HandleFunc("POST /api/auth", s.handleAuthAction)
-	s.mux.HandleFunc("POST /api/register", s.handleRegister)
-	// Passkey (WebAuthn) login - public, usernameless discoverable-credential flow.
-	s.mux.HandleFunc("POST /api/auth/passkey/begin", s.handlePasskeyLoginBegin)
-	s.mux.HandleFunc("POST /api/auth/passkey/finish", s.handlePasskeyLoginFinish)
-
-	// User management (admin, resource-oriented: PATCH merges the former
-	// set_active/set_admin/set_permissions/set_password actions) + self-service
-	// account (any logged-in user). The literal /account/change-password and
-	// /account/token sub-paths are matched ahead of one another by the Go 1.22 mux.
-	s.mux.HandleFunc("GET /api/users", s.handleUsersList)
-	s.mux.HandleFunc("PATCH /api/users/{id}", s.handleUserPatch)
-	s.mux.HandleFunc("DELETE /api/users/{id}", s.handleUserDelete)
-	s.mux.HandleFunc("POST /api/account/change-password", s.handleAccountChangePassword)
-	// Personal access tokens (self-service): GET reads the non-secret metadata,
-	// POST generates (returning the plaintext once), DELETE revokes. Used by
-	// external API clients (e.g. the FFXIV plugin).
-	s.mux.HandleFunc("GET /api/account/token", s.handleAccountTokenInfo)
-	s.mux.HandleFunc("POST /api/account/token", s.handleAccountTokenGenerate)
-	s.mux.HandleFunc("DELETE /api/account/token", s.handleAccountTokenRevoke)
-	// Passkeys (self-service): register a new passkey (begin/finish), list, delete.
-	s.mux.HandleFunc("POST /api/account/passkeys/register/begin", s.handlePasskeyRegisterBegin)
-	s.mux.HandleFunc("POST /api/account/passkeys/register/finish", s.handlePasskeyRegisterFinish)
-	s.mux.HandleFunc("GET /api/account/passkeys", s.handlePasskeyList)
-	s.mux.HandleFunc("DELETE /api/account/passkeys/{id}", s.handlePasskeyDelete)
-	s.mux.HandleFunc("GET /api/board", s.handleBoard)
-	// Cards (resource-oriented). The literal /generate and /all sub-paths are
-	// matched ahead of the {id} wildcard by the Go 1.22 mux, so there's no
-	// conflict. Card handlers self-broadcast (cards_update / card_deleted), so
-	// cards are intentionally absent from the adminMutationResource middleware.
-	s.mux.HandleFunc("GET /api/cards", s.handleCardsList)
-	s.mux.HandleFunc("POST /api/cards", s.handleCardCreate)
-	s.mux.HandleFunc("POST /api/cards/generate", s.handleCardsGenerate)
-	s.mux.HandleFunc("POST /api/cards/request", s.handleCardRequest) // public: Personal Card Request
-	s.mux.HandleFunc("DELETE /api/cards/all", s.handleCardsDeleteAll)
-	s.mux.HandleFunc("DELETE /api/cards/{id}", s.handleCardDelete)
-	s.mux.HandleFunc("PATCH /api/cards/{id}", s.handleCardUpdate)
-	s.mux.HandleFunc("POST /api/cards/{id}/approve", s.handleCardApprove)
-	s.mux.HandleFunc("POST /api/cards/{id}/protect", s.handleCardProtect)
-	// Game (singleton resource): GET state, POST lifecycle verbs, PATCH controls.
-	// The game handlers self-broadcast (game_update / game_draw / etc.), so game
-	// is intentionally absent from the adminMutationResource middleware.
-	s.mux.HandleFunc("GET /api/game", s.handleGameState)
-	s.mux.HandleFunc("POST /api/game/start", s.handleGameStart)
-	s.mux.HandleFunc("POST /api/game/draw", s.handleGameDraw)
-	s.mux.HandleFunc("POST /api/game/end", s.handleGameEnd)
-	s.mux.HandleFunc("POST /api/game/halftime", s.handleGameHalftime)
-	s.mux.HandleFunc("POST /api/game/yoever", s.handleGameYoever)
-	s.mux.HandleFunc("PATCH /api/game", s.handleGamePatch)
-	// Patterns (resource-oriented). Single reorder is folded into PATCH /{id}
-	// (direction field); bulk reorder is the literal POST /reorder sub-path,
-	// matched ahead of the {id} wildcard by the Go 1.22 mux. Handlers
-	// self-broadcast (patterns_update), so patterns/categories are intentionally
-	// absent from the adminMutationResource middleware.
-	s.mux.HandleFunc("GET /api/patterns", s.handlePatternsList)
-	s.mux.HandleFunc("POST /api/patterns", s.handlePatternCreate)
-	s.mux.HandleFunc("POST /api/patterns/reorder", s.handlePatternsReorder)
-	s.mux.HandleFunc("PATCH /api/patterns/{id}", s.handlePatternPatch)
-	s.mux.HandleFunc("DELETE /api/patterns/{id}", s.handlePatternDelete)
-	s.mux.HandleFunc("GET /api/pattern-categories", s.handleCategoriesList)
-	s.mux.HandleFunc("POST /api/pattern-categories", s.handleCategoryCreate)
-	s.mux.HandleFunc("POST /api/pattern-categories/reorder", s.handleCategoriesReorder)
-	s.mux.HandleFunc("PATCH /api/pattern-categories/{id}", s.handleCategoryPatch)
-	s.mux.HandleFunc("DELETE /api/pattern-categories/{id}", s.handleCategoryDelete)
-	s.mux.HandleFunc("GET /api/presets", s.handlePresetsList)
-	s.mux.HandleFunc("POST /api/presets", s.handlePresetCreate)
-	s.mux.HandleFunc("PUT /api/presets/{id}", s.handlePresetUpdate)
-	s.mux.HandleFunc("DELETE /api/presets/{id}", s.handlePresetDelete)
-	// Styles (resource-oriented). The literal /active (public CSS) and
-	// /deactivate sub-paths are matched ahead of the {id} wildcard by the Go 1.22
-	// mux. Style write handlers self-broadcast (style_update), so styles are
-	// intentionally absent from the adminMutationResource middleware.
-	s.mux.HandleFunc("GET /api/styles", s.handleStylesList)
-	s.mux.HandleFunc("POST /api/styles", s.handleStyleCreate)
-	s.mux.HandleFunc("POST /api/styles/deactivate", s.handleStyleDeactivate)
-	s.mux.HandleFunc("GET /api/styles/active", s.handleActiveStyleCSS)
-	s.mux.HandleFunc("GET /api/styles/public", s.handlePublicStylesList)    // public: theme picker list
-	s.mux.HandleFunc("GET /api/styles/public/{id}", s.handlePublicStyleCSS) // public: theme CSS by id
-	s.mux.HandleFunc("GET /api/styles/{id}", s.handleStyleGet)
-	s.mux.HandleFunc("PUT /api/styles/{id}", s.handleStyleUpdate)
-	s.mux.HandleFunc("DELETE /api/styles/{id}", s.handleStyleDelete)
-	s.mux.HandleFunc("POST /api/styles/{id}/activate", s.handleStyleActivate)
-	s.mux.HandleFunc("/api/ws", s.handleWS) // WebSocket: method-agnostic for upgrade
-
 	// Raffles (resource-oriented: methods for CRUD, POST /{id}/{verb} for commands)
 	s.mux.HandleFunc("GET /api/raffles", s.handleRafflesList)
 	s.mux.HandleFunc("POST /api/raffles", s.handleRaffleCreate)
@@ -522,21 +463,10 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/announcements/{id}/send", s.handleAnnouncementSend)
 	s.mux.HandleFunc("POST /api/announcements/{id}/skip", s.handleAnnouncementSkip)
 
-	// Winners log routes. The literal /all and /frequent sub-paths are matched
-	// ahead of the {id} wildcard by the Go 1.22 mux, so there's no conflict.
-	s.mux.HandleFunc("GET /api/winners-log", s.handleWinnersLog)
-	s.mux.HandleFunc("DELETE /api/winners-log/all", s.handleWinnersLogDeleteAll)
-	s.mux.HandleFunc("DELETE /api/winners-log/{id}", s.handleWinnersLogDelete)
-	s.mux.HandleFunc("GET /api/winners-log/frequent", s.handleFrequentWinners)
-
 	// App settings
-	s.mux.HandleFunc("GET /api/settings", s.handleSettingsGet)
-	s.mux.HandleFunc("POST /api/settings", s.handleSettingsUpdate)
 
 	// Server log viewer (admin-only): tails the rotating JSON log file, and flips
 	// the runtime log level (live DEBUG toggle).
-	s.mux.HandleFunc("GET /api/logs", s.handleLogs)
-	s.mux.HandleFunc("POST /api/logs/level", s.handleLogLevelSet)
 
 	// Font management (Atelier -> Font Upload). Font FILES are keyed by filename
 	// ({name}); logical FONTS (groups of variants sharing a base name) are keyed
@@ -604,13 +534,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// WebSocket connections must bypass session middleware and response
-	// wrappers - coder/websocket needs the raw ResponseWriter for upgrade.
-	if r.URL.Path == "/api/ws" {
-		s.mux.ServeHTTP(w, r)
-		return
-	}
-
 	// Everything outside /api/ - the SPA and its files, and GET /healthz - skips the
 	// API's session, CSRF and access-log layers: a page load is dozens of asset
 	// requests, which Apache served (and logged) before 4.0.0.
@@ -653,25 +576,28 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					// flag the failure for the access log below.
 					rw.status = http.StatusInternalServerError
 				} else {
-					writeError(rw, http.StatusInternalServerError, "Internal server error")
+					writeProblem(rw, http.StatusInternalServerError, "Something went wrong on the server.")
 				}
 			}
 		}()
-		s.sessHandler.ServeHTTP(rw, r)
+		s.apiHandler.ServeHTTP(rw, r)
 	}()
 	duration := time.Since(start)
 
-	// Live admin invalidation: after a successful admin-mutation POST, push a thin
-	// "resource changed" signal so any admin viewing that resource refetches it via
-	// REST (which re-applies the per-feature permission guard). The signal carries
-	// no data - see broadcastResourceChanged. Public/auth/self-service paths and the
-	// rich-realtime endpoints (game/cards/patterns/styles/settings, which emit their
-	// own targeted events) are excluded by adminMutationResource.
+	// After a successful write to one of the pages' data, the staff whose pages show
+	// it hear that it changed and read it again over REST, which applies their own
+	// permission guard (resource_changed). The operations with events of their own
+	// (the game, cards, patterns, themes, settings) and the public, sign-in and
+	// self-service paths are left out by adminMutationResource. A write to an account
+	// or a sign-out has every staff stream check its account again at once.
 	switch r.Method {
 	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
 		if rw.status >= 200 && rw.status < 300 {
 			if resource, ok := adminMutationResource(r.URL.Path); ok {
-				s.broadcastResourceChanged(resource)
+				s.resourceChanged(resource)
+			}
+			if accountMutation(r.URL.Path) {
+				s.live.RecheckStaff()
 			}
 		}
 	}
@@ -740,11 +666,22 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// responseWriter wraps http.ResponseWriter to capture the status code.
+// responseWriter wraps http.ResponseWriter to capture the status code. Unwrap and
+// Flush let an event stream flush through it, and set its write deadline
+// (http.ResponseController).
 type responseWriter struct {
 	http.ResponseWriter
 	status      int
 	wroteHeader bool
+}
+
+func (rw *responseWriter) Unwrap() http.ResponseWriter { return rw.ResponseWriter }
+
+func (rw *responseWriter) Flush() {
+	if !rw.wroteHeader {
+		rw.wroteHeader = true
+	}
+	_ = http.NewResponseController(rw.ResponseWriter).Flush()
 }
 
 func (rw *responseWriter) WriteHeader(code int) {
@@ -851,7 +788,7 @@ func pathInt64(w http.ResponseWriter, r *http.Request, name, label string) (int6
 // The id is stored as int64 (see handleAuthAction), so it is read back via a
 // type assertion rather than scs's GetInt (which only matches plain int).
 func (s *Server) sessionUserID(r *http.Request) int64 {
-	if id, ok := s.sessions.Get(r.Context(), "user_id").(int64); ok {
+	if id, ok := s.sessions.Get(r.Context(), auth.SessionUserID).(int64); ok {
 		return id
 	}
 	return 0
@@ -862,23 +799,10 @@ func (s *Server) sessionUserID(r *http.Request) int64 {
 // default password_epoch of an unchanged account). Compared against the user's
 // current PasswordEpoch to invalidate sessions after a password change/reset.
 func (s *Server) sessionUserEpoch(r *http.Request) int64 {
-	if e, ok := s.sessions.Get(r.Context(), "user_epoch").(int64); ok {
+	if e, ok := s.sessions.Get(r.Context(), auth.SessionEpoch).(int64); ok {
 		return e
 	}
 	return 0
-}
-
-// establishSession mints a logged-in session for u. EVERY login path must go
-// through here rather than writing the session keys itself: a session carries the
-// account's password epoch as well as its id, and one minted without the epoch
-// reads back as epoch 0 - which loadCurrentUser rejects outright for any account
-// whose password has ever been changed or reset, leaving a login that returns 200
-// and then 401s on the very next request. Rotating the token first defeats
-// session fixation.
-func (s *Server) establishSession(r *http.Request, u *model.User) {
-	_ = s.sessions.RenewToken(r.Context())
-	s.sessions.Put(r.Context(), "user_id", u.ID)
-	s.sessions.Put(r.Context(), "user_epoch", u.PasswordEpoch)
 }
 
 // checkCSRF is a defense-in-depth CSRF guard layered on top of the SameSite=Lax
@@ -919,7 +843,7 @@ func (s *Server) checkCSRF(w http.ResponseWriter, r *http.Request) bool {
 	}
 	slog.Warn("blocked cross-origin state-changing request",
 		"origin", origin, "host", r.Host, "method", r.Method, "path", r.URL.Path)
-	writeError(w, http.StatusForbidden, "Cross-origin request blocked")
+	writeProblem(w, http.StatusForbidden, "Cross-origin request blocked.")
 	return false
 }
 
@@ -934,38 +858,33 @@ func sameHost(originHost, requestHost string) bool {
 	return strings.EqualFold(originHost, requestHost)
 }
 
-// wsSessionUser loads the account for a request that bypasses the session
-// middleware - specifically the /api/ws upgrade, which is dispatched straight to
-// the mux (coder/websocket needs the raw ResponseWriter, so it can't go through
-// LoadAndSave/withUserCache). It reads the session cookie, loads the SCS session
-// manually, and returns the authenticated, active account or nil. A request with
-// no usable cookie session falls back to a personal access token (the WS upgrade
-// accepts it via `?token=`), so the FFXIV plugin can open the admin channel too.
-// Used to gate the privileged admin WebSocket channel.
-func (s *Server) wsSessionUser(r *http.Request) *model.User {
-	cookie, err := r.Cookie(s.sessions.Cookie.Name)
-	if err != nil {
-		return s.wsUserFromToken(r)
+// callerAfresh is the account behind r read again now, as loadCurrentUser reads it
+// but past the request's memo and its session as loaded when the request began: the
+// session is loaded from the store again, so one signed out or expired since signs
+// nobody in, and a token is looked up again, so one revoked since signs nobody in.
+// An open event stream checks its account with it.
+func (s *Server) callerAfresh(ctx context.Context, r *http.Request) *model.User {
+	if cookie, err := r.Cookie(s.sessions.Cookie.Name); err == nil {
+		// A context that already holds a session is answered with that session, so
+		// the store is read from one that holds none.
+		lctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		sctx, err := s.sessions.Load(lctx, cookie.Value)
+		if err != nil {
+			return nil
+		}
+		if id, ok := s.sessions.Get(sctx, auth.SessionUserID).(int64); ok && id != 0 {
+			u := s.account(ctx, id)
+			if u == nil || !u.IsActive {
+				return nil
+			}
+			if epoch, _ := s.sessions.Get(sctx, auth.SessionEpoch).(int64); epoch != u.PasswordEpoch {
+				return nil
+			}
+			return u
+		}
 	}
-	ctx, err := s.sessions.Load(r.Context(), cookie.Value)
-	if err != nil {
-		return s.wsUserFromToken(r)
-	}
-	id, ok := s.sessions.Get(ctx, "user_id").(int64)
-	if !ok || id == 0 {
-		return s.wsUserFromToken(r)
-	}
-	u, err := s.store.GetUserByID(ctx, id)
-	if err != nil || u == nil || !u.IsActive {
-		return nil
-	}
-	// Same password-epoch check as loadCurrentUser: a session minted before the
-	// account's last password change no longer opens the admin channel.
-	epoch, _ := s.sessions.Get(ctx, "user_epoch").(int64)
-	if epoch != u.PasswordEpoch {
-		return nil
-	}
-	return u
+	return s.userForToken(ctx, bearerToken(r))
 }
 
 // currentUser loads the active account for the current session, or nil if the
@@ -1009,48 +928,18 @@ func (s *Server) loadCurrentUser(r *http.Request) *model.User {
 		// API clients (e.g. the FFXIV plugin) authenticate through the same guards.
 		return s.userFromToken(r)
 	}
-	u, err := s.store.GetUserByID(r.Context(), id)
-	if err != nil || u == nil || !u.IsActive {
+	u := s.account(r.Context(), id)
+	if u == nil || !u.IsActive {
 		return nil
 	}
 	// Reject a session minted before the account's last password change/reset
 	// (its stored epoch no longer matches), so a password change logs out every
-	// other session. The current session is kept valid by re-stamping its epoch
-	// in the change-password handler.
+	// other session. The current session is kept valid by signing it in again under
+	// the new epoch (the change-password operation, auth.SignIn).
 	if s.sessionUserEpoch(r) != u.PasswordEpoch {
 		return nil
 	}
 	return u
-}
-
-// isAdmin reports whether the current request is from an authenticated, active
-// admin user.
-func (s *Server) isAdmin(r *http.Request) bool {
-	u := s.currentUser(r)
-	return u != nil && u.IsAdmin
-}
-
-// requireAuth is a guard for endpoints any logged-in (active) user may call. It
-// returns the user and true, or writes a 401 and returns false. Handlers should
-// return immediately when this returns false.
-func (s *Server) requireAuth(w http.ResponseWriter, r *http.Request) (*model.User, bool) {
-	u := s.currentUser(r)
-	if u == nil {
-		writeError(w, http.StatusUnauthorized, "Unauthorized - login required")
-		return nil, false
-	}
-	return u, true
-}
-
-// requireAdmin is a guard that writes a 401 error and returns false if the
-// request is not from an authenticated admin. Handlers should return immediately
-// when this returns false.
-func (s *Server) requireAdmin(w http.ResponseWriter, r *http.Request) bool {
-	if !s.isAdmin(r) {
-		writeError(w, http.StatusUnauthorized, "Unauthorized - admin login required")
-		return false
-	}
-	return true
 }
 
 // requirePermission is the per-page guard: it allows admins (who hold every
@@ -1092,46 +981,44 @@ func (s *Server) requireAnyPermission(w http.ResponseWriter, r *http.Request, pe
 	return nil
 }
 
-// -- Broadcast helpers -------------------------------------------------------
+// -- Live events ---------------------------------------------------------------
 
-// broadcastResourceChanged notifies all admin clients that a named admin resource
-// changed, so any admin currently viewing it refetches via REST. It deliberately
-// carries no payload: the refetch re-applies that feature's permission guard
-// (keeping authorization fresh, unlike a per-connection cached check) and keeps
-// the REST handler the single source of truth for the data's shape. Rich,
-// high-frequency streams (the bingo game, cards, patterns, theme, settings) emit
-// their own targeted broadcasts instead - see adminMutationResource.
-func (s *Server) broadcastResourceChanged(resource string) {
-	s.hub.BroadcastToAdmins(struct {
-		Type     string `json:"type"`
-		Resource string `json:"resource"`
-	}{Type: "resource_changed", Resource: resource})
+// resourceChanged tells the staff whose pages show resource that it changed, so a
+// page showing it reads it again over REST. The event carries nothing more: the
+// read applies the reader's own permission guard and keeps the REST answer the one
+// shape of the data.
+func (s *Server) resourceChanged(resource string) {
+	api.ResourceChanged(s.live, resource)
 }
 
 // adminMutationResource maps a successful admin-mutation request (POST/PUT/PATCH/
-// DELETE) to the frontend resource key to refetch, returning ok=false when the
-// path should emit no invalidation. It keys on the first path segment after
-// /api/, so every resource-oriented sub-path (/{id}, /{id}/entries/{entryId},
-// /{id}/{verb}, ...) is covered automatically. Public, auth, self-service
-// (/api/account), and the rich-realtime endpoints (game/cards/patterns/styles/
-// settings) are intentionally absent - they broadcast their own targeted events
-// (or none). The public raffle sign-up (.../enter) is excluded explicitly; it
-// broadcasts "raffles" itself.
+// DELETE) to the resource_changed resource to tell, returning ok=false when the
+// path tells none. It keys on the first path segment after /api/ (and v1/), so
+// every resource-oriented sub-path (/{id}, /{id}/entries/{entryId}, /{id}/{verb},
+// ...) is covered. The public, sign-in and self-service paths and the operations
+// with events of their own (the game, cards, patterns, themes, settings) are
+// absent. The public raffle sign-up (.../enter) is left out here because its
+// handler tells "raffles" itself. A book club's paths tell that club's resource.
 func adminMutationResource(path string) (string, bool) {
-	seg, _, _ := strings.Cut(strings.TrimPrefix(path, "/api/"), "/")
+	rest := strings.TrimPrefix(strings.TrimPrefix(path, "/api/"), "v1/")
+	seg, after, _ := strings.Cut(rest, "/")
 	switch seg {
 	case "garapons", "affiliates", "tea-rooms", "stamp-rallies", "festival-maps", "presets", "users", "winners-log", "fonts",
 		"ema-boards", "ema-requests":
 		return seg, true
 	case "raffles":
 		if strings.HasSuffix(path, "/enter") {
-			return "", false // public sign-up self-broadcasts
+			return "", false
 		}
 		return "raffles", true
 	case "announcements", "announcement-types", "announcement-roles":
 		return "announcements", true
 	case "book-clubs":
-		return "bookclub", true
+		club, _, _ := strings.Cut(after, "/")
+		if club == "" {
+			return "", false
+		}
+		return "bookclub-" + club, true
 	case "carrd":
 		return "carrd", true
 	case "images", "image-categories":
@@ -1140,123 +1027,17 @@ func adminMutationResource(path string) (string, bool) {
 	return "", false
 }
 
-// broadcastCards sends the updated card list to all WebSocket clients. It carries
-// the FULL GET /api/cards shape (model.CardListEntry - including protected,
-// custom_status, and world) so a client that replaces its list from this broadcast
-// keeps every indicator (player-assignment, the pending/approved star, the
-// Protected lock) live. Using the model type keeps this in lockstep with
-// handleCardsList - a broadcast that dropped a field would show a stale status
-// until a manual refetch (e.g. protecting a card wouldn't show the lock).
-//
-// The read runs detached: a broadcast follows a change that has already been
-// saved and tells every OTHER admin about it, so the requester going away is no
-// reason to skip it.
-func (s *Server) broadcastCards(ctx context.Context) {
-	cards, err := s.store.ListCardIDsWithNames(context.WithoutCancel(ctx))
-	if err != nil {
-		return
+// accountMutation reports whether a successful write to path may have changed what
+// an open staff stream's account may follow: an account changed or deleted, a
+// password changed, a token made or revoked, or a sign-out.
+func accountMutation(path string) bool {
+	rest := strings.TrimPrefix(strings.TrimPrefix(path, "/api/"), "v1/")
+	seg, after, _ := strings.Cut(rest, "/")
+	switch seg {
+	case "users", "me":
+		return true
+	case "auth":
+		return after == "logout"
 	}
-	entries := make([]model.CardListEntry, len(cards))
-	for i, c := range cards {
-		entries[i] = model.CardListEntry{
-			ID:           c.ID,
-			PlayerName:   c.PlayerName,
-			Details:      c.Details,
-			CreatedAt:    c.CreatedAt,
-			Protected:    c.Protected,
-			CustomStatus: c.CustomStatus,
-			World:        c.World,
-		}
-	}
-	// Admin channel only. This is the permission-gated GET /api/cards payload
-	// (requirePermission(permBingoCards)), and an unfiltered Broadcast would hand
-	// every card id, character name, world and staff note to anonymous player
-	// sockets - which subscribe with just ?id=<card>. No player client consumes it
-	// either: the SPA discards cards_update outside the admin view, and the plugin
-	// sits on this same no-card-id channel.
-	s.hub.BroadcastToAdmins(struct {
-		Type  string                `json:"type"`
-		Cards []model.CardListEntry `json:"cards"`
-	}{Type: "cards_update", Cards: entries})
-}
-
-// broadcastPatterns sends updated patterns and categories to the admin channel.
-// Its reads run detached, for the same reason as broadcastCards.
-func (s *Server) broadcastPatterns(ctx context.Context) {
-	ctx = context.WithoutCancel(ctx)
-	patterns, err := s.store.ListPatterns(ctx)
-	if err != nil {
-		return
-	}
-	categories, err := s.store.ListPatternCategories(ctx)
-	if err != nil {
-		return
-	}
-	// Admin channel only, for the same reason as broadcastCards: this is the
-	// permission-gated GET /api/patterns payload, and players never render it.
-	s.hub.BroadcastToAdmins(struct {
-		Type       string                  `json:"type"`
-		Patterns   []model.Pattern         `json:"patterns"`
-		Categories []model.PatternCategory `json:"categories"`
-	}{Type: "patterns_update", Patterns: patterns, Categories: categories})
-}
-
-// broadcastGameStart sends the new game state to all clients.
-// Players receive game state + details; admins receive game state only
-// (admin who started the game already received details via the HTTP response).
-func (s *Server) broadcastGameStart(state *model.BingoGameState, details string) {
-	s.hub.BroadcastToPlayers(struct {
-		Type    string                `json:"type"`
-		Game    *model.BingoGameState `json:"game"`
-		Details string                `json:"game_details"`
-	}{Type: "game_update", Game: state, Details: details})
-
-	s.hub.BroadcastToAdmins(struct {
-		Type    string                `json:"type"`
-		Game    *model.BingoGameState `json:"game"`
-		Winners []string              `json:"winners"`
-	}{Type: "game_update", Game: state, Winners: []string{}})
-}
-
-// broadcastGameEnd notifies all clients that the game has ended.
-func (s *Server) broadcastGameEnd() {
-	s.hub.Broadcast(struct {
-		Type string `json:"type"`
-		Game any    `json:"game"`
-	}{Type: "game_update", Game: nil})
-}
-
-// broadcastDrawToPlayers sends just the drawn number to all player clients.
-// gameID stamps the draw with the game it belongs to, so a client can drop a frame
-// for a game it is no longer showing. The SPA already reads and honors this field
-// (useWebSocket's messageGameId); nothing was sending it, which left that guard
-// dead code and a delayed draw indistinguishable from a current one.
-func (s *Server) broadcastDrawToPlayers(gameID int64, drawn model.BingoDrawnNumber) {
-	s.hub.BroadcastToPlayers(struct {
-		Type   string                 `json:"type"`
-		GameID int64                  `json:"game_id"`
-		Drawn  model.BingoDrawnNumber `json:"drawn"`
-	}{Type: "game_draw", GameID: gameID, Drawn: drawn})
-}
-
-// broadcastDrawToAdmins sends the drawn number + updated winners to all admin clients.
-func (s *Server) broadcastDrawToAdmins(gameID int64, drawn model.BingoDrawnNumber, winners []string) {
-	s.hub.BroadcastToAdmins(struct {
-		Type    string                 `json:"type"`
-		GameID  int64                  `json:"game_id"`
-		Drawn   model.BingoDrawnNumber `json:"drawn"`
-		Winners []string               `json:"winners"`
-	}{Type: "game_draw", GameID: gameID, Drawn: drawn, Winners: winners})
-}
-
-// broadcastStyleUpdate sends a style_update message with the active theme's CSS
-// and decorative flourishes to all clients (empty strings when the theme is
-// cleared), so the live board/last-called flourishes update without a reload.
-func (s *Server) broadcastStyleUpdate(css, boardFlourish, numberFlourish string) {
-	s.hub.Broadcast(struct {
-		Type           string `json:"type"`
-		CSS            string `json:"css"`
-		BoardFlourish  string `json:"board_flourish"`
-		NumberFlourish string `json:"number_flourish"`
-	}{Type: "style_update", CSS: css, BoardFlourish: boardFlourish, NumberFlourish: numberFlourish})
+	return false
 }

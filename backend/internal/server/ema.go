@@ -19,7 +19,9 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"app-suite/internal/discord"
 	"app-suite/internal/model"
+	"app-suite/internal/permissions"
 	"app-suite/internal/store"
 )
 
@@ -137,7 +139,7 @@ func emaBoardFromRequest(req emaBoardWriteRequest) (*model.EmaBoard, string) {
 		if !end.After(start) {
 			return nil, w.Label + " ends before it starts"
 		}
-		if w.WebhookURL != "" && !isDiscordWebhookURL(w.WebhookURL) {
+		if w.WebhookURL != "" && !discord.IsWebhookURL(w.WebhookURL) {
 			return nil, w.Label + "'s webhook isn't a Discord webhook URL"
 		}
 		if w.ArtistLimit < 0 || w.ArtistLimit > maxEmaArtistLimit {
@@ -163,7 +165,7 @@ func emaBoardFromRequest(req emaBoardWriteRequest) (*model.EmaBoard, string) {
 //	Endpoint:  GET /api/ema-boards
 //	Auth:      festival-ema
 func (s *Server) handleEmaBoardsList(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permFestivalEma) {
+	if !s.requirePermission(w, r, permissions.FestivalEma) {
 		return
 	}
 	boards, err := s.store.ListEmaBoards(r.Context())
@@ -179,7 +181,7 @@ func (s *Server) handleEmaBoardsList(w http.ResponseWriter, r *http.Request) {
 //	Endpoint:  GET /api/ema-boards/{id}
 //	Auth:      festival-ema
 func (s *Server) handleEmaBoardDetail(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permFestivalEma) {
+	if !s.requirePermission(w, r, permissions.FestivalEma) {
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "board")
@@ -228,7 +230,7 @@ func (s *Server) checkEmaFestival(w http.ResponseWriter, r *http.Request, mapID,
 //	Auth:      festival-ema
 //	Response:  201 EmaBoardResponse
 func (s *Server) handleEmaBoardCreate(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permFestivalEma) {
+	if !s.requirePermission(w, r, permissions.FestivalEma) {
 		return
 	}
 	req, err := readJSON[emaBoardWriteRequest](w, r)
@@ -263,7 +265,7 @@ func (s *Server) handleEmaBoardCreate(w http.ResponseWriter, r *http.Request) {
 //	Endpoint:  PUT /api/ema-boards/{id}
 //	Auth:      festival-ema
 func (s *Server) handleEmaBoardUpdate(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permFestivalEma) {
+	if !s.requirePermission(w, r, permissions.FestivalEma) {
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "board")
@@ -315,7 +317,7 @@ type emaStatusRequest struct {
 //	Endpoint:  PATCH /api/ema-boards/{id}
 //	Auth:      festival-ema
 func (s *Server) handleEmaBoardPatch(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permFestivalEma) {
+	if !s.requirePermission(w, r, permissions.FestivalEma) {
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "board")
@@ -340,7 +342,7 @@ func (s *Server) handleEmaBoardPatch(w http.ResponseWriter, r *http.Request) {
 //	Endpoint:  DELETE /api/ema-boards/{id}
 //	Auth:      festival-ema
 func (s *Server) handleEmaBoardDelete(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permFestivalEma) {
+	if !s.requirePermission(w, r, permissions.FestivalEma) {
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "board")
@@ -370,7 +372,7 @@ func (s *Server) handleEmaBoardDelete(w http.ResponseWriter, r *http.Request) {
 //	Endpoint:  GET /api/ema-boards/{id}/plaques
 //	Auth:      festival-ema
 func (s *Server) handleEmaPlaquesList(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permFestivalEma) {
+	if !s.requirePermission(w, r, permissions.FestivalEma) {
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "board")
@@ -423,7 +425,7 @@ func (s *Server) loadReviewablePlaque(w http.ResponseWriter, r *http.Request) (*
 // member approving it at the same moment is refused rather than posting it twice.
 // A failed post hands it back to pending to try again.
 func (s *Server) handleEmaPlaqueApprove(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permFestivalEma) {
+	if !s.requirePermission(w, r, permissions.FestivalEma) {
 		return
 	}
 	p, ok := s.loadReviewablePlaque(w, r)
@@ -494,7 +496,7 @@ func (s *Server) handleEmaPlaqueApprove(w http.ResponseWriter, r *http.Request) 
 //	Endpoint:  POST /api/ema-boards/{id}/plaques/{plaqueId}/reject
 //	Auth:      festival-ema
 func (s *Server) handleEmaPlaqueReject(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permFestivalEma) {
+	if !s.requirePermission(w, r, permissions.FestivalEma) {
 		return
 	}
 	p, ok := s.loadReviewablePlaque(w, r)
@@ -551,7 +553,7 @@ func (s *Server) writeEmaPlaque(ctx context.Context, w http.ResponseWriter, id i
 //	Endpoint:  GET /api/ema-requests
 //	Auth:      festival-ema-requests
 func (s *Server) handleEmaRequestsList(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permFestivalEmaRequests) {
+	if !s.requirePermission(w, r, permissions.FestivalEmaRequests) {
 		return
 	}
 	plaques, err := s.store.ListEmaArtistRequests(r.Context())
@@ -572,7 +574,7 @@ type emaRequestPatch struct {
 //	Endpoint:  PATCH /api/ema-requests/{id}
 //	Auth:      festival-ema-requests
 func (s *Server) handleEmaRequestPatch(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permFestivalEmaRequests) {
+	if !s.requirePermission(w, r, permissions.FestivalEmaRequests) {
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "request")
@@ -628,7 +630,7 @@ func emaArtistImageName(contentType string) string {
 // The request is claimed (requested -> posting) before the post, like an approval,
 // so a double click can't post it twice; a failed post hands it back.
 func (s *Server) handleEmaRequestPost(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permFestivalEmaRequests) {
+	if !s.requirePermission(w, r, permissions.FestivalEmaRequests) {
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "request")
@@ -885,7 +887,7 @@ func (s *Server) handleEmaPlaqueSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusCreated, model.EmaPlaqueResponse{Plaque: *p})
 	slog.Info("ema plaque submitted", "plaque_id", p.ID, "board_id", board.ID, "window", win.Label)
-	s.broadcastResourceChanged("ema-boards")
+	s.resourceChanged("ema-boards")
 }
 
 // emaRequestSubmit is the JSON body for POST /api/ema/{id}/requests.
@@ -950,7 +952,7 @@ func (s *Server) handleEmaRequestSubmit(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	writeJSON(w, http.StatusCreated, model.EmaPlaqueResponse{Plaque: *p})
-	s.broadcastResourceChanged("ema-requests")
+	s.resourceChanged("ema-requests")
 }
 
 // -- Files ----------------------------------------------------------------------

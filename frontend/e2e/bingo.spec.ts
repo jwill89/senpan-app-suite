@@ -5,7 +5,7 @@ import { expect, test, title } from './fixtures.ts'
  * The key flow, as a player meets a bingo night: they type the board ID staff gave them
  * on the front page and join; the caller draws until a number on their card comes up,
  * and each one reaches the board live; they stamp it, and the stamp outlasts a full
- * reload. It needs the board API, the WebSocket through the proxy and the browser's own
+ * reload. It needs the board API, the board's live event stream and the browser's own
  * stamp store to work end to end.
  */
 test('a player joins with their board ID, follows the calls and stamps one', async ({
@@ -22,7 +22,7 @@ test('a player joins with their board ID, follows the calls and stamps one', asy
     page.getByRole('heading', { name: 'Called Numbers (0 / 75)', exact: true }),
   ).toBeVisible()
 
-  // The caller draws on the admin Game page; the board hears each draw over the socket.
+  // The caller draws on the admin Game page; the board hears each draw on its stream.
   const onCard = new Set(bingo.board.flat())
   let calls = 0
   let called = 0

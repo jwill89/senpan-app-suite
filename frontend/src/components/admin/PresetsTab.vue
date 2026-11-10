@@ -61,7 +61,7 @@ function patternById(id: number) {
         Create some win patterns first.
       </p>
       <FormField v-else label="Win Patterns">
-        <PatternPicker v-model="presets.editingPreset.pattern_ids" />
+        <PatternPicker v-model="presets.editingPreset.patternIds" />
       </FormField>
 
       <FormField>
@@ -70,7 +70,7 @@ function patternById(id: number) {
           <span class="text-muted fw-normal text-xs"> (Markdown supported) </span>
         </template>
         <MarkdownEditor
-          v-model="presets.editingPreset.game_details"
+          v-model="presets.editingPreset.gameDetails"
           min-height="120px"
           placeholder="Enter game details, rules, prizes, etc. Supports bold, italics, lists, and more..."
         />
@@ -85,7 +85,7 @@ function patternById(id: number) {
           <label class="text-muted text-sm" for="preset-auto-interval">Time Between Calls:</label>
           <select
             id="preset-auto-interval"
-            v-model.number="presets.editingPreset.auto_interval"
+            v-model.number="presets.editingPreset.autoInterval"
             class="manager-filter"
           >
             <option v-for="s in AUTO_INTERVAL_OPTIONS" :key="s" :value="s">
@@ -139,19 +139,19 @@ function patternById(id: number) {
           <h4 style="margin: 0 0 8px">{{ preset.name }}</h4>
           <div class="pattern-cards">
             <div
-              v-for="pid in preset.pattern_ids"
+              v-for="pid in preset.patternIds"
               :key="pid"
               class="pattern-card"
               :title="patternById(pid)?.name || 'Deleted pattern'"
             >
-              <PatternMini v-if="patternById(pid)" :pattern-data="patternById(pid)!.pattern_data" />
+              <PatternMini v-if="patternById(pid)" :pattern-data="patternById(pid)!.patternData" />
               <span>{{ patternById(pid)?.name || 'Deleted pattern' }}</span>
             </div>
           </div>
           <p class="text-muted text-xs mt-8">
-            {{ preset.game_details ? 'Includes game details' : 'No game details' }}
+            {{ preset.gameDetails ? 'Includes game details' : 'No game details' }}
             <template v-if="preset.auto">
-              - Auto-draw every {{ autoIntervalLabel(preset.auto_interval) }}</template
+              - Auto-draw every {{ autoIntervalLabel(preset.autoInterval) }}</template
             >
           </p>
           <template #actions>

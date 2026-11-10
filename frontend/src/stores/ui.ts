@@ -8,6 +8,7 @@
  */
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import type { FeedStatus } from '@/lib/feed'
 
 export type ToastType = 'info' | 'success' | 'error'
 
@@ -52,12 +53,12 @@ export const useUiStore = defineStore('ui', () => {
     routeLoading.value = v
   }
 
-  // -- Realtime connection status -----------------------------------------------
-  // Reflects the shared WebSocket state so the player view can show a "Live" /
-  // "Reconnecting..." badge. Driven by WsClient via the useWebSocket composable.
-  const wsStatus = ref<'closed' | 'connecting' | 'open' | 'reconnecting'>('closed')
-  function setWsStatus(s: 'closed' | 'connecting' | 'open' | 'reconnecting'): void {
-    wsStatus.value = s
+  // -- Live stream status ---------------------------------------------------------
+  // Where the page's live stream is, so the player view can show a "Live" /
+  // "Reconnecting..." badge. Set by the useLiveEvents composable.
+  const feedStatus = ref<FeedStatus>('closed')
+  function setFeedStatus(s: FeedStatus): void {
+    feedStatus.value = s
   }
 
   // -- Themed confirm dialog --------------------------------------------------
@@ -157,8 +158,8 @@ export const useUiStore = defineStore('ui', () => {
     confirmState,
     routeLoading,
     setRouteLoading,
-    wsStatus,
-    setWsStatus,
+    feedStatus,
+    setFeedStatus,
     notify,
     dismissToast,
     alerts,

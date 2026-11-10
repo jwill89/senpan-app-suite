@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
-
-	"app-suite/internal/auth"
 )
 
 // -- Stamp Rally admin CRUD --------------------------------------------------
@@ -435,31 +433,14 @@ func TestGarapon_LinkedStampRally(t *testing.T) {
 // gates the admin API (store-driven, single session - see affiliates_test.go).
 func TestStampRally_PermissionGating(t *testing.T) {
 	env := newTestEnv(t)
-	hash, err := auth.Hash("password123")
-	if err != nil {
-		t.Fatal(err)
-	}
-	staff, err := env.store.CreateUser(t.Context(), "staff", hash)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := env.store.SetUserActive(t.Context(), staff.ID, true); err != nil {
-		t.Fatal(err)
-	}
-	if err := env.store.SetUserPermissions(t.Context(), staff.ID, []string{"bingo-cards"}); err != nil {
-		t.Fatal(err)
-	}
-	env.postJSON(t, "/api/auth", map[string]string{
-		"action": "login", "username": "staff", "password": "password123",
-	}).Body.Close()
+	staff := addAccount(t, env, "staff", "password123", []string{"bingo-cards"})
+	env.signIn(t, "staff", "password123")
 
 	if resp := env.get(t, "/api/stamp-rallies"); resp.StatusCode != http.StatusForbidden {
 		t.Errorf("wrong-permission status = %d; want 403", resp.StatusCode)
 		resp.Body.Close()
 	}
-	if err := env.store.SetUserPermissions(t.Context(), staff.ID, []string{"festival-stamp-rally"}); err != nil {
-		t.Fatal(err)
-	}
+	setAccess(t, env, staff, []string{"festival-stamp-rally"})
 	if resp := env.get(t, "/api/stamp-rallies"); resp.StatusCode != http.StatusOK {
 		t.Errorf("granted status = %d; want 200", resp.StatusCode)
 		resp.Body.Close()

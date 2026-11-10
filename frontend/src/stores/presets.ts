@@ -5,21 +5,13 @@
  */
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { endpoints } from '@/lib/endpoints'
-import type { GamePreset } from '@/types/api'
+import { api, unwrap, type GamePreset, type GamePresetInput } from '@/api/client'
 import { DEFAULT_AUTO_INTERVAL } from '@/lib/constants'
 import { useUiStore } from './ui'
 
 /** The editable form model for a preset (id 0 = new). */
-export interface PresetForm {
+export interface PresetForm extends GamePresetInput {
   id: number
-  name: string
-  pattern_ids: number[]
-  game_details: string
-  /** Pre-select the auto-draw toggle when this preset is applied on the Game tab. */
-  auto: boolean
-  /** "Time Between Calls" (seconds) filled in when the preset is applied. */
-  auto_interval: number
 }
 
 export const usePresetsStore = defineStore('presets', () => {
@@ -36,8 +28,7 @@ export const usePresetsStore = defineStore('presets', () => {
   async function loadPresets(): Promise<void> {
     presetsLoading.value = true
     try {
-      const data = await endpoints.presets.list()
-      presets.value = data.presets
+      presets.value = (await unwrap(api.GET('/presets'))).presets
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     } finally {
@@ -50,10 +41,10 @@ export const usePresetsStore = defineStore('presets', () => {
     editingPreset.value = {
       id: 0,
       name: '',
-      pattern_ids: [],
-      game_details: '',
+      patternIds: [],
+      gameDetails: '',
       auto: false,
-      auto_interval: DEFAULT_AUTO_INTERVAL,
+      autoInterval: DEFAULT_AUTO_INTERVAL,
     }
   }
 
@@ -62,10 +53,10 @@ export const usePresetsStore = defineStore('presets', () => {
     editingPreset.value = {
       id: preset.id,
       name: preset.name,
-      pattern_ids: [...preset.pattern_ids],
-      game_details: preset.game_details || '',
+      patternIds: [...preset.patternIds],
+      gameDetails: preset.gameDetails || '',
       auto: preset.auto,
-      auto_interval: preset.auto_interval || DEFAULT_AUTO_INTERVAL,
+      autoInterval: preset.autoInterval || DEFAULT_AUTO_INTERVAL,
     }
   }
 
@@ -77,36 +68,24 @@ export const usePresetsStore = defineStore('presets', () => {
     if (!editingPreset.value) {
       return
     }
-    const form = editingPreset.value
+    const { id, ...form } = editingPreset.value
     const name = form.name.trim()
     if (!name) {
       ui.notify('Preset name is required', 'error')
       return
     }
-    if (form.pattern_ids.length === 0) {
+    if (form.patternIds.length === 0) {
       ui.notify('Select at least one win pattern', 'error')
       return
     }
+    const body: GamePresetInput = { ...form, name }
     savingPreset.value = true
     try {
-      if (form.id) {
-        await endpoints.presets.update(
-          form.id,
-          name,
-          form.pattern_ids,
-          form.game_details,
-          form.auto,
-          form.auto_interval,
-        )
+      if (id) {
+        await unwrap(api.PUT('/presets/{id}', { params: { path: { id } }, body }))
         ui.notify('Preset saved', 'success')
       } else {
-        await endpoints.presets.create(
-          name,
-          form.pattern_ids,
-          form.game_details,
-          form.auto,
-          form.auto_interval,
-        )
+        await unwrap(api.POST('/presets', { body }))
         ui.notify('Preset created', 'success')
       }
       editingPreset.value = null
@@ -125,7 +104,7 @@ export const usePresetsStore = defineStore('presets', () => {
       return
     }
     try {
-      await endpoints.presets.delete(id)
+      await unwrap(api.DELETE('/presets/{id}', { params: { path: { id } } }))
       if (editingPreset.value?.id === id) {
         editingPreset.value = null
       }

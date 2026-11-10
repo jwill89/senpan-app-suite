@@ -13,6 +13,8 @@ import (
 
 	"modernc.org/sqlite"
 	sqlite3 "modernc.org/sqlite/lib"
+
+	"app-suite/internal/db"
 )
 
 // What the store relies on the SQLite driver for: the pragmas on every pooled
@@ -218,7 +220,7 @@ func TestInterruptedIgnoresOtherErrors(t *testing.T) {
 	}
 }
 
-// Timestamps in the one stored form (database.md): RFC 3339 in UTC to the second.
+// Timestamps in the one stored form: RFC 3339 in UTC to the second.
 // The driver parses a DATETIME column into a time.Time, which database/sql formats
 // back as RFC 3339 when it scans into a string, so a value in the stored form reads
 // back as the same text - these are the paths the frontend and the plugin parse.
@@ -241,40 +243,45 @@ func TestTimestampsInTheStoredForm(t *testing.T) {
 	const stored = "2026-01-02T03:04:05Z"
 	form := regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$`)
 
-	u, err := s.CreateUser(ctx, "timestamps", "hash")
+	q := db.New(s.write)
+	if err := q.CreateUser(ctx, db.CreateUserParams{Username: "timestamps", PasswordHash: "hash"}); err != nil {
+		t.Fatal(err)
+	}
+	made, err := q.GetUserByUsername(ctx, "timestamps")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !form.MatchString(u.CreatedAt) {
-		t.Errorf("a new user's created_at = %q, want the stored form", u.CreatedAt)
+	if made.CreatedAt == nil || !form.MatchString(*made.CreatedAt) {
+		t.Errorf("a new user's created_at = %v, want the stored form", made.CreatedAt)
 	}
-	must(exec(`UPDATE users SET created_at = ? WHERE id = ?`, stored, u.ID))
-	got, err := s.GetUserByID(ctx, u.ID)
+	id := made.ID
+	must(exec(`UPDATE users SET created_at = ? WHERE id = ?`, stored, id))
+	got, err := q.GetUser(ctx, id)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.CreatedAt != stored || got.LastLoginAt != "" {
-		t.Errorf("user created_at %q, last_login_at %q; want %q and none", got.CreatedAt, got.LastLoginAt, stored)
+	if got.CreatedAt == nil || *got.CreatedAt != stored || got.LastLoginAt != nil {
+		t.Errorf("user created_at %v, last_login_at %v; want %q and none", got.CreatedAt, got.LastLoginAt, stored)
 	}
-	if err := s.UpdateLastLogin(ctx, u.ID); err != nil {
+	if err := q.TouchLastLogin(ctx, id); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ = s.GetUserByID(ctx, u.ID); !form.MatchString(got.LastLoginAt) {
-		t.Errorf("last_login_at = %q after a sign-in, want the stored form", got.LastLoginAt)
+	if got, _ = q.GetUser(ctx, id); got.LastLoginAt == nil || !form.MatchString(*got.LastLoginAt) {
+		t.Errorf("last_login_at = %v after a sign-in, want the stored form", got.LastLoginAt)
 	}
 
 	for _, bad := range []string{"2026-01-02 03:04:05", "2026-01-02T03:04:05.000Z", "2026-01-02T04:04:05+01:00", "2026-02-30T03:04:05Z"} {
-		if _, err := exec(`UPDATE users SET created_at = ? WHERE id = ?`, bad, u.ID); err == nil {
+		if _, err := exec(`UPDATE users SET created_at = ? WHERE id = ?`, bad, id); err == nil {
 			t.Errorf("created_at took %q; the CHECK should refuse all but the stored form", bad)
 		}
 	}
 
 	must(exec(`INSERT INTO winners_log (logged_at, card_id) VALUES (?, 'ABC234')`, stored))
-	entries, _, err := s.ListWinnersLog(ctx, 10, 0, "", "")
+	entries, err := q.ListWinners(ctx, db.ListWinnersParams{Sort: "loggedAt", Dir: "desc", PageSize: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 1 || entries[0].LoggedAt != stored {
+	if len(entries) != 1 || entries[0].LoggedAt == nil || *entries[0].LoggedAt != stored {
 		t.Errorf("winners log = %+v, want one entry logged at %q", entries, stored)
 	}
 
@@ -300,19 +307,19 @@ func TestTimestampsInTheStoredForm(t *testing.T) {
 	}
 
 	// A new game's start time, as SQL writes "now".
-	_, createdAt, err := s.StartGame(ctx, nil)
+	created, err := q.CreateGame(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !form.MatchString(createdAt) {
-		t.Errorf("game created_at = %q, want the stored form", createdAt)
+	if created.CreatedAt == nil || !form.MatchString(*created.CreatedAt) {
+		t.Errorf("game created_at = %v, want the stored form", created.CreatedAt)
 	}
-	g, err := s.GetActiveGame(ctx)
+	g, err := q.GetActiveGame(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if g == nil || g.CreatedAt != createdAt {
-		t.Errorf("active game = %+v, want created_at %q", g, createdAt)
+	if g.CreatedAt == nil || *g.CreatedAt != *created.CreatedAt {
+		t.Errorf("active game = %+v, want created_at %v", g, created.CreatedAt)
 	}
 }
 

@@ -5,10 +5,16 @@
  */
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
-import { endpoints } from '@/lib/endpoints'
-import type { ApiError } from '@/lib/api'
+import {
+  api,
+  problemMessage,
+  unwrap,
+  type Board,
+  type Card,
+  type DrawnNumber,
+  type Game,
+} from '@/api/client'
 import { STAMP_COLORS, STAMP_SHAPES } from '@/lib/constants'
-import type { BingoDrawnNumber, BingoGameState, Card } from '@/types/api'
 import { setSoundVolume as applySoundVolume } from '@/lib/sound'
 import { useUiStore } from './ui'
 import { useGameStore } from './game'
@@ -81,7 +87,7 @@ export const usePlayerStore = defineStore('player', () => {
   const joinId = ref('')
   const joinError = ref('')
   const playerCard = ref<Card | null>(null)
-  const playerGame = ref<BingoGameState | null>(null)
+  const playerGame = ref<Game | null>(null)
   /** True while joining / loading a board (drives the Join button + board load). */
   const joining = ref(false)
 
@@ -130,9 +136,31 @@ export const usePlayerStore = defineStore('player', () => {
 
   const showMinigameModal = ref(false)
 
+  /**
+   * Shows the half-time mini-game alert for game `gameId` - from the live channel,
+   * or a board opened after players were told (the game state says so) - once per
+   * card and game, so a reload or a reconnect doesn't show it again. Returns
+   * whether it showed it.
+   */
+  function alertMinigame(gameId: number): boolean {
+    const key = playerCard.value ? `minigame_seen_${playerCard.value.id}_${gameId}` : null
+    if (key && localStorage.getItem(key)) {
+      return false
+    }
+    showMinigameModal.value = true
+    if (key) {
+      try {
+        localStorage.setItem(key, '1')
+      } catch {
+        /* storage unavailable - it may show again after a reload */
+      }
+    }
+    return true
+  }
+
   // -- Live-game feedback (ambient; never tracks the player's own board) -------
   /** The most recently called number, for the player's "last called" banner. */
-  const lastDrawn = ref<BingoDrawnNumber | null>(null)
+  const lastDrawn = ref<DrawnNumber | null>(null)
   /** True after a game the player was watching ends (drives the end summary). */
   const gameEnded = ref(false)
   /** How many numbers were called in the game that just ended (neutral stat). */
@@ -161,7 +189,7 @@ export const usePlayerStore = defineStore('player', () => {
    */
   const yoeverCooldownHint = ref(180)
   /** Whether the reaction is currently offered: admin-enabled AND a game running. */
-  const yoeverEnabled = computed(() => !!playerGame.value?.yoever_enabled)
+  const yoeverEnabled = computed(() => !!playerGame.value?.yoeverEnabled)
 
   const stampShapes = STAMP_SHAPES
   const stampColors = STAMP_COLORS
@@ -173,7 +201,7 @@ export const usePlayerStore = defineStore('player', () => {
     if (!playerGame.value) {
       return new Set<number>()
     }
-    return new Set(playerGame.value.called_numbers)
+    return new Set(playerGame.value.calledNumbers)
   })
 
   const currentStampEmoji = computed(() => (stampShape.value === 'emoji' ? stampEmoji.value : ''))
@@ -197,13 +225,13 @@ export const usePlayerStore = defineStore('player', () => {
   /**
    * Cell keys ("ri-ci") that are part of an active win pattern - the union of
    * every active pattern's required cells. Mirrors how the backend treats a cell
-   * as pattern-relevant (`pattern_data[r][c] === true`). Used to route the
+   * as pattern-relevant (`patternData[r][c] === true`). Used to route the
    * secondary stamp onto the non-pattern cells.
    */
   const winningPatternCells = computed(() => {
     const set = new Set<string>()
     for (const p of playerGame.value?.patterns ?? []) {
-      const grid = p.pattern_data
+      const grid = p.patternData
       for (let r = 0; r < 5 && r < grid.length; r++) {
         const row = grid[r] ?? []
         for (let c = 0; c < 5 && c < row.length; c++) {
@@ -424,27 +452,30 @@ export const usePlayerStore = defineStore('player', () => {
     }
     yoeverTriggering.value = true
     try {
-      const res = await endpoints.game.yoever(playerCard.value.id)
-      setYoeverCooldown(res.cooldown_seconds)
-      return true
-    } catch (e) {
-      const err = e as ApiError
-      if (err.status === 429) {
-        // Our local timer disagreed with the server - re-arm from the server's
-        // reported retry_after (exact remaining time) when present, falling back
-        // to the last-known cooldown length so we don't over-disable the button.
-        const retryAfter = (err.body as { retry_after?: number } | null | undefined)?.retry_after
-        setYoeverCooldown(
-          typeof retryAfter === 'number' && retryAfter > 0 ? retryAfter : yoeverCooldownHint.value,
-        )
+      const { data, error, response } = await api.POST('/game/yoever', {
+        body: { cardId: playerCard.value.id },
+      })
+      if (data) {
+        setYoeverCooldown(data.cooldownSeconds)
+        return true
+      }
+      if (response.status === 429) {
+        // Our local timer disagreed with the server - re-arm from its Retry-After
+        // (the exact time left) when present, falling back to the last-known
+        // cooldown length so we don't over-disable the button.
+        const retryAfter = Number(response.headers.get('Retry-After'))
+        setYoeverCooldown(retryAfter > 0 ? retryAfter : yoeverCooldownHint.value)
         ui.notify('You just did that - give it a moment.', 'info')
-      } else if (err.status === 403) {
+      } else if (response.status === 403) {
         ui.notify("It's Yoever is switched off right now.", 'info')
-      } else if (err.status === 409) {
+      } else if (response.status === 409) {
         ui.notify('No game is currently active.', 'info')
       } else {
-        ui.notify(err.message || 'Could not do that right now.', 'error')
+        ui.notify(problemMessage(error, response), 'error')
       }
+      return false
+    } catch (e) {
+      ui.notify((e as Error).message || 'Could not do that right now.', 'error')
       return false
     } finally {
       yoeverTriggering.value = false
@@ -557,6 +588,91 @@ export const usePlayerStore = defineStore('player', () => {
 
   // -- Join / leave -----------------------------------------------------------
 
+  /** Reads a board by its card id; a mistyped id says so plainly. */
+  async function fetchBoard(id: string): Promise<Board> {
+    const { data, error, response } = await api.GET('/board/{id}', { params: { path: { id } } })
+    if (data) {
+      return data
+    }
+    if (response.status === 422) {
+      throw new Error('A board ID is six letters or digits.')
+    }
+    if (response.status === 404) {
+      throw new Error('Board not found')
+    }
+    throw new Error(problemMessage(error, response))
+  }
+
+  /**
+   * Takes in a board just read: the card, and the game as players see it - the
+   * numbers that have reached them, the last of them, and the mini-game alert if
+   * players were told about one before this board opened.
+   */
+  function takeBoard(data: Board): void {
+    playerCard.value = data.card
+    playerGame.value = data.game
+    loadStamps()
+    loadYoeverCooldown()
+    const last = data.game?.lastDraw
+    lastDrawn.value = last
+      ? { number: last.number, letter: last.letter, callOrder: last.callOrder }
+      : null
+    gameEnded.value = false
+    if (data.game?.minigameAlerted) {
+      alertMinigame(data.game.id)
+    } else if (!data.game) {
+      showMinigameModal.value = false
+    }
+  }
+
+  /**
+   * Reads this board again (whenever its live stream opens, or the game starts or
+   * ends), catching up on what it missed. Returns the game details, or null when it
+   * couldn't.
+   */
+  async function refreshBoard(): Promise<string | null> {
+    if (!playerCard.value) {
+      return null
+    }
+    try {
+      const data = await unwrap(
+        api.GET('/board/{id}', { params: { path: { id: playerCard.value.id } } }),
+      )
+      const changed = data.game?.id !== playerGame.value?.id
+      playerGame.value = data.game
+      if (changed) {
+        loadStamps()
+        loadYoeverCooldown()
+      }
+      if (data.game?.minigameAlerted) {
+        alertMinigame(data.game.id)
+      } else if (!data.game) {
+        showMinigameModal.value = false
+      }
+      return data.gameDetails
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * Whether this board's card still exists: false only when the server says there
+   * is no such card. A failed read is not taken for a deleted card.
+   */
+  async function cardExists(): Promise<boolean> {
+    if (!playerCard.value) {
+      return false
+    }
+    try {
+      const { response } = await api.GET('/board/{id}', {
+        params: { path: { id: playerCard.value.id }, query: { preview: true } },
+      })
+      return response.status !== 404
+    } catch {
+      return true
+    }
+  }
+
   /**
    * Joins a game by card ID. Returns the loaded game details string so the
    * caller (App/Player) can sync the shared game-details state.
@@ -569,14 +685,9 @@ export const usePlayerStore = defineStore('player', () => {
     }
     joining.value = true
     try {
-      const data = await endpoints.board.get(joinId.value.trim())
-      playerCard.value = data.card
-      playerGame.value = data.game ?? null
-      loadStamps()
-      loadYoeverCooldown()
-      lastDrawn.value = null
-      gameEnded.value = false
-      return data.game_details || ''
+      const data = await fetchBoard(joinId.value.trim())
+      takeBoard(data)
+      return data.gameDetails
     } catch (e) {
       joinError.value = (e as Error).message
       return null
@@ -594,6 +705,7 @@ export const usePlayerStore = defineStore('player', () => {
     frozenPatternCells.value = null
     frozenGameDetails.value = ''
     yoeverCooldownUntil.value = 0
+    showMinigameModal.value = false
   }
 
   /**
@@ -612,14 +724,9 @@ export const usePlayerStore = defineStore('player', () => {
     }
     joining.value = true
     try {
-      const data = await endpoints.board.get(id)
-      playerCard.value = data.card
-      playerGame.value = data.game ?? null
-      loadStamps()
-      loadYoeverCooldown()
-      lastDrawn.value = null
-      gameEnded.value = false
-      return data.game_details || ''
+      const data = await fetchBoard(id)
+      takeBoard(data)
+      return data.gameDetails
     } catch (e) {
       joinError.value = (e as Error).message
       return null
@@ -643,6 +750,8 @@ export const usePlayerStore = defineStore('player', () => {
     secondaryStampEnabled,
     secondaryStampColor,
     showMinigameModal,
+    alertMinigame,
+    cardExists,
     lastDrawn,
     gameEnded,
     endedCalledCount,
@@ -683,5 +792,6 @@ export const usePlayerStore = defineStore('player', () => {
     joinGame,
     resetPlayer,
     loadBoardById,
+    refreshBoard,
   }
 })

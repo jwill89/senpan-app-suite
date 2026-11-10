@@ -1,76 +1,155 @@
 # Senpan App Suite - API
 
-The HTTP & WebSocket API is described by a machine-readable **OpenAPI 3** spec:
+The HTTP API is moving to [huma](https://huma.rocks) in release 5.0.0, domain by domain
+([`plans/release-c.md`](plans/release-c.md)), on the shape shared-tooling's standards
+give an API ([`shared/standards/api-and-realtime.md`](shared/standards/api-and-realtime.md)),
+as Kindred Nights and Home Library have it.
 
-- **Spec (source of truth):** [`backend/openapi.yaml`](backend/openapi.yaml) - also
-  served live at **`GET /api/openapi.yaml`**.
-- **Interactive reference:** **`GET /api/docs`** renders the spec with
-  [Scalar](https://scalar.com) (an explorable, try-it-out API reference). Both
-  endpoints are public - the API contract carries no secrets.
+## The document
 
-## How the spec stays accurate
-
-The spec is **generated from the Go code**, not hand-written prose:
-
-- **Schemas** are reflected from the `model` package structs (the same structs the
-  handlers return and tygo generates the frontend types from), so a documented
-  response shape can never drift from the code. See
-  [`internal/apidoc`](backend/internal/apidoc/).
-- **Paths** (auth, params, request bodies, response refs) are a hand-maintained
-  table in `internal/apidoc/paths*.go`.
-- Regenerate after changing a model struct or a route:
+- The operations on huma live under **`/api/v1`**, registered in
+  [`backend/internal/api`](backend/internal/api/), one file per domain.
+- huma generates their **OpenAPI 3.1** document from the code: every operation's
+  inputs and outputs are Go types, so the document can't drift from them. It is
+  committed as [`frontend/src/api/openapi.json`](frontend/src/api/openapi.json), and
+  the SPA's types are generated from it into `frontend/src/api/schema.d.ts`
+  (openapi-typescript); `frontend/src/api/client.ts` is the client (openapi-fetch).
+  Neither generated file is edited by hand.
+- After an API change, regenerate both and commit them with it:
 
   ```bash
-  cd backend && go run ./cmd/openapi-gen   # rewrites backend/openapi.yaml
+  task gen   # go run . openapi, then openapi-typescript and Prettier
   ```
 
-- Two CI tests (`internal/apidoc/openapi_test.go`) keep it honest: one fails if the
-  committed `openapi.yaml` is stale (regenerate + commit), the other fails if any
-  registered route is undocumented (or vice-versa).
+  CI's `generated` job, and `scripts/check.ps1`, run the same and fail on a difference.
+- The server tests hold every documented 2xx answer to the document
+  (`internal/api/apitest`): a test that calls an operation fails if the answer isn't
+  one the document declares.
+
+The routes not yet on huma are still registered by hand under `/api` in
+`backend/internal/server` (`routes()`), with the SPA's types for them generated from
+the Go models by tygo (`frontend/src/types/api.generated.ts`). They move one domain at
+a time; nothing deploys until all have.
+
+## Errors
+
+Every error under `/api` is an RFC 9457 problem details body
+(`application/problem+json`): `title`, `status`, a `detail` a person can read, and,
+for a failed validation, `errors` naming each field. That holds for huma's
+operations, a path or method the API doesn't have (404, or 405 with `Allow`), and a
+crash (a generic 500). The routes still registered by hand answer
+`{ "error": "message" }` until they move.
+
+## Caching
+
+An answer is `Cache-Control: private, no-store`, except a public read (the same for
+everyone), which is `no-cache` with an `ETag`; a request that already holds that ETag
+gets `304 Not Modified` with no body.
 
 ## Authentication (orientation)
 
-Identity comes from either a **session cookie** (set by `POST /api/auth` login) or a
-**personal access token** - `Authorization: Bearer pat_...` (or `?token=pat_...` on the
-WebSocket upgrade). A token inherits its account's permissions, so external clients
-(e.g. the FFXIV plugin) pass through the same guards as the SPA.
+Identity comes from either a **session cookie** (set by signing in, `POST /api/v1/auth/login` or
+`POST /api/v1/auth/passkey/finish`; `GET /api/v1/me` says who it is) or a
+**personal access token** - `Authorization: Bearer pat_...`, never in a URL. A token inherits its account's permissions, so external clients
+(e.g. the FFXIV plugin) pass through the same guards as the SPA. An operation that
+needs sign-in answers 401 when there is none, and 403 when the account lacks the
+access.
 
-Each operation's description states its guard: **public**, **auth** (any active
-account), **admin**, or **permission:\<key>**. Grantable page-permission keys:
-`bingo-game`, `bingo-cards`, `bingo-winners-log`, `bingo-patterns`, `bingo-presets`,
-`teahouse-announcements`, `teahouse-affiliates`, `teahouse-tea-rooms`, `teahouse-raffles`,
-`festival-garapon`, `festival-stamp-rally`, `atelier-fonts`, `atelier-carrd`,
-`system-settings`, `system-themes`, `system-images`, plus per-book-club
-`bookclub-yaoi` / `bookclub-yuri`. The Users page is admin-only (not grantable).
+Grantable page-permission keys: `bingo-game`, `bingo-cards`, `bingo-winners-log`,
+`bingo-patterns`, `bingo-presets`, `teahouse-announcements`, `teahouse-affiliates`,
+`teahouse-tea-rooms`, `teahouse-raffles`, `festival-garapon`, `festival-stamp-rally`,
+`atelier-fonts`, `atelier-carrd`, `system-settings`, `system-themes`, `system-images`,
+plus per-book-club `bookclub-yaoi` / `bookclub-yuri`. The Users page is admin-only
+(not grantable).
 
-## WebSocket
+## Live events
 
-`GET /api/ws` isn't an HTTP operation (OpenAPI can't model the upgrade), so it's
-documented in the spec's top-level description: the channel is chosen by the `id`
-query param (player vs. admin), and the broadcast message types are listed there.
+Two streams of server-sent events replace the WebSocket. They are operations in the
+document (`stream-staff-events`, `stream-board-events`), each event a named schema, so
+the SPA's types for them are generated. Both are `private, no-store` with no ETag, and
+the access log writes a stream once, when it closes.
+
+| Stream | Who | Refused |
+|---|---|---|
+| `GET /api/v1/events` | A session or a Bearer token: the consoles and the plugin | 401 for nobody, 403 for an account with no permission, 503 when the feed can't take another stream |
+| `GET /api/v1/board/{id}/events` | Anyone, by the board's card id | 404 for an unknown card, 403 for a pending personal card, 422 for a bad id, 503 with `Retry-After` past 500 open boards |
+
+### The envelope
+
+Every event is `{ id, type, gameId, at, payload }`: `id` is the event's number (also the
+SSE `id:`; 0, with none, for a `ping` or a `log`), `type` its name (also the SSE `event:`), `gameId` the game it belongs to or
+`null`, `at` an RFC 3339 time in UTC. The `payload` is the event's own. An event names
+what changed and the client reads it again over REST. Two kinds carry their data
+instead: a draw carries the number called, and an event with nothing to read again
+carries what it reports (a log line, a reaction, who answered half-time).
+
+### Events and who hears them
+
+The hub filters every event by viewer. Admins hold every permission.
+
+| Event | Payload | Heard by |
+|---|---|---|
+| `game_started`, `game_ended` | none: read the game again | boards, Game staff |
+| `draw` | `{ drawn, winners }` | Game staff, at once |
+| `draw` | `{ drawn }` | boards, after the draw delay |
+| `yoever` | `{ playerName, count }` | boards, Game staff |
+| `yoever_switched` | `{ enabled }` | boards, Game staff |
+| `game_details` | `{ details }` | boards, Game staff |
+| `halftime_prompt` | `{ autoPaused }` | Game staff |
+| `halftime_resolved` | `{ minigame, by }` | Game staff |
+| `auto_draw` | `{ enabled, interval }` | Game staff |
+| `draw_delay` | `{ delay }` | Game or Settings staff |
+| `minigame` | none | boards |
+| `card_deleted` | none; that board's stream then ends | that board |
+| `cards_changed` | none | holders of Cards |
+| `patterns_changed` | none | holders of Patterns |
+| `resource_changed` | `{ resource }` | holders of the page that shows the resource; `users` and `integrations` go to admins; `bookclub-<slug>` to that club's page |
+| `settings_changed` | none | everyone |
+| `theme_changed` | `{ styleId }`, `null` when the site went back to the default look | everyone |
+| `tea_room_unlocked` | `{ id, name, roomNumber }` | Tea Rooms staff |
+| `log` | `{ entry }` | admins only; lossy, never replayed |
+| `resync`, `ping` | none | every stream |
+
+A `halftime_resolved` is the first answer to the prompt; a second answer is refused with
+409. A number inside its draw delay is hidden from anyone without the Game page, here
+and in `GET /game` and `GET /board/{id}`.
+
+### Staying in step
+
+- **Heartbeat.** Every stream gets a `ping` every 25 seconds, so a quiet stream isn't
+  cut by a proxy. A client that hears nothing for much longer has lost the stream and
+  opens it again.
+- **Resuming.** The hub keeps the last 1000 events, with ids that keep rising across
+  restarts. A client that reopens sends `Last-Event-ID` (a browser's `EventSource` does
+  it by itself) and gets the events after it that it may hear. An id too old, or from
+  before a restart, gets `resync`: read everything again.
+- **Re-read on open.** The stream carries only what changes, so a client reads the state
+  it shows again every time a stream opens, and on `resync`.
+- **Slow clients.** A stream that falls 64 events behind is ended, and resumes from its
+  last id when it reconnects.
+- **Accounts.** A staff stream checks its account on every heartbeat and right after any
+  account change. An account deactivated or deleted, a password change, signing out, or
+  losing every permission ends the stream; losing one permission narrows what it hears.
+  A client that gets 401 or 403 on reopening stops.
 
 ## Conventions
 
-The API is **hybrid REST**: HTTP methods carry the intent, resources live at
-predictable paths, and non-CRUD commands are explicit verb sub-paths.
+The standards' ([`api-and-realtime.md`](shared/standards/api-and-realtime.md)), in
+short:
 
-- **Methods:** `GET` reads, `POST` creates (-> `201`) or runs a command, `PUT`
-  replaces, `PATCH` applies a partial update, `DELETE` removes (-> `204`).
-- **Resources & items:** a collection is `/api/<resource>` and a single item is
-  `/api/<resource>/{id}` (string keys such as a card id, font filename, or carrd
-  folder use the same shape). Sub-collections nest: `/api/<resource>/{id}/<subs>`
-  and `/api/<resource>/{id}/<subs>/{subId}`.
-- **Commands (non-CRUD):** state transitions and processes that aren't a plain
-  field-set are `POST /api/<resource>/{id}/<verb>` - e.g. `.../close`, `.../reopen`,
-  `.../activate`, `.../pick-winner`, an announcement's `.../send`, the game's
-  `/api/game/start`. A declarative field-set (including a single reorder or
-  toggling a flag) is a `PATCH` instead.
-- **Bulk:** bulk writes are `POST` (e.g. `.../reorder`, `/api/cards/generate`);
-  bulk deletes are `DELETE /api/<resource>/all` (returning `{ "deleted": N }`).
-- All responses are `application/json` with `Cache-Control: no-store`; errors use
-  `{ "error": "message" }`. Request bodies are JSON (1 MB cap); uploads are
-  `multipart/form-data`.
+- **Methods:** `GET` reads, `POST` creates (-> `201` with the resource) or runs a
+  command, `PUT` replaces, `PATCH` changes only what it sends, `DELETE` removes
+  (-> `204`).
+- **Resources & items:** a collection is `/api/v1/<resource>`, an item
+  `/api/v1/<resource>/{id}`; sub-collections nest. Path segments are kebab-case; JSON
+  fields and query parameters are camelCase. A trailing slash answers as the path
+  without it.
+- **Commands:** a state change that isn't CRUD is `POST …/{id}/<verb>` (`…/close`,
+  `…/pick-winner`); bulk writes are `POST` (`…/reorder`); deleting everything is
+  `DELETE …/all`, answering `{ "deleted": N }`.
+- **Times** are RFC 3339 in UTC, `null` for none.
 
-The one intentional exception is `POST /api/auth` (login/logout) and
-`POST /api/register`, which stay small action/credential bodies rather than
-resource CRUD.
+The one intentional exception is signing in and out and signing up, under
+`/api/v1/auth/*` (`login`, `logout`, `register`, `passkey/begin`, `passkey/finish`),
+which stay small action-shaped credential calls rather than resource CRUD. A 401 from
+one of them means the credentials were wrong, not that a session ended.

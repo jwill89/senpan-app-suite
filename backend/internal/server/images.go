@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"app-suite/internal/model"
+	"app-suite/internal/permissions"
 )
 
 // -- Central image hosting (System -> Images admin page) -----------------------
@@ -261,21 +262,7 @@ func canBrowseImages(u *model.User) bool {
 	if u.IsAdmin {
 		return true
 	}
-	for _, perm := range []string{
-		permSystemImages,
-		permTeahouseAnnounce,
-		permTeahouseRaffles,
-		permTeahouseAffiliates,
-		permFestivalGarapon,
-		permFestivalStampRally,
-		permSystemThemes,
-		// Both of these editors embed the shared image picker (FestivalMapFormTab
-		// needs the base plan, TeaRoomFormTab its room art), so leaving them out
-		// meant a grantee of either page got a 403 from the picker their own form
-		// depends on and could not finish the task the permission exists for.
-		permFestivalMap,
-		permTeahouseTeaRooms,
-	} {
+	for _, perm := range permissions.ImageBrowsers() {
 		if userHasPermission(u, perm) {
 			return true
 		}
@@ -336,7 +323,7 @@ type imageCategoryRenameRequest struct {
 //	Request:   {"name":"...","dir":"..."(optional)}
 //	Response:  201 {"ok": true, "category": {...}}
 func (s *Server) handleImageCategoryCreate(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permSystemImages) {
+	if !s.requirePermission(w, r, permissions.SystemImages) {
 		return
 	}
 	req, err := readJSON[imageCategoryCreateRequest](w, r)
@@ -359,7 +346,7 @@ func (s *Server) handleImageCategoryCreate(w http.ResponseWriter, r *http.Reques
 //	Request:   {"name":"...","new_dir":"..."(optional)}
 //	Response:  200 {"ok": true, "category": {...}}
 func (s *Server) handleImageCategoryRename(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permSystemImages) {
+	if !s.requirePermission(w, r, permissions.SystemImages) {
 		return
 	}
 	req, err := readJSON[imageCategoryRenameRequest](w, r)
@@ -380,7 +367,7 @@ func (s *Server) handleImageCategoryRename(w http.ResponseWriter, r *http.Reques
 //	Auth:      admin, or a user granted system-images
 //	Response:  204 No Content
 func (s *Server) handleImageCategoryDelete(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permSystemImages) {
+	if !s.requirePermission(w, r, permissions.SystemImages) {
 		return
 	}
 	if err := os.MkdirAll(s.imagesRootDir(), 0755); err != nil {
@@ -639,7 +626,7 @@ func (s *Server) handleImagesList(w http.ResponseWriter, r *http.Request) {
 //	Auth:      admin, or a user granted system-images
 //	Response:  204 No Content
 func (s *Server) handleImageDelete(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permSystemImages) {
+	if !s.requirePermission(w, r, permissions.SystemImages) {
 		return
 	}
 	dir := strings.TrimSpace(r.URL.Query().Get("dir"))
@@ -680,7 +667,7 @@ func safeImageFileName(name string) (string, bool) {
 //	Request:   multipart form with a "dir" field and one or more "files" fields
 //	Response:  {"uploaded": ["a.png"], "skipped": [{"name":"b.txt","reason":"..."}]}
 func (s *Server) handleImagesUpload(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permSystemImages) {
+	if !s.requirePermission(w, r, permissions.SystemImages) {
 		return
 	}
 	uploaded, skipped, ok := s.handleMultipartUploads(w, r,

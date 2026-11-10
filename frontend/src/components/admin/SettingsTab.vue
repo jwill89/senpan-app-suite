@@ -18,7 +18,7 @@ import MarkdownEditor from '@/components/common/MarkdownEditor.vue'
 import AdminPanel from '@/components/common/ui/AdminPanel.vue'
 import FormField from '@/components/common/ui/FormField.vue'
 import FormActions from '@/components/common/ui/FormActions.vue'
-import { BOOK_CLUBS, clubWebhookKey, FALLBACK_GOOGLE_FONTS } from '@/lib/constants'
+import { BOOK_CLUBS, FALLBACK_GOOGLE_FONTS } from '@/lib/constants'
 import { applyUploadedFonts } from '@/lib/theme'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
@@ -54,7 +54,7 @@ const fontOptions = computed(() =>
  * value is already covered by a group.
  */
 const customHeaderFont = computed(() => {
-  const f = (app.settings.header_font || '').trim()
+  const f = app.settings.headerFont.trim()
   if (!f) {
     return ''
   }
@@ -71,7 +71,13 @@ const customHeaderFont = computed(() => {
 // preview live here and reflect any uploads/deletes done on the Font Upload tab.
 // Re-applying the header font afterwards lets a saved uploaded font preview as
 // soon as its @font-face is registered (it can't render before that).
-onMounted(() => fonts.loadFonts())
+onMounted(() => {
+  void fonts.loadFonts()
+  // The integrations are an admin's alone (the server refuses anyone else).
+  if (auth.isAdmin) {
+    void app.loadIntegrations()
+  }
+})
 watch(
   () => fonts.fonts,
   () => {
@@ -93,7 +99,7 @@ watch(
         <section class="settings-section">
           <h4 class="section-heading"><font-awesome-icon :icon="['fad', 'sliders']" /> General</h4>
           <FormField label="App Title" help="Displayed in the browser tab and home page header.">
-            <input v-model="app.settings.app_title" placeholder="My App" aria-label="App title" />
+            <input v-model="app.settings.appTitle" placeholder="My App" aria-label="App title" />
           </FormField>
           <FormField
             help="Shown on the home page above the board-ID field where players join a game."
@@ -103,7 +109,7 @@ watch(
               <span class="text-muted fw-normal">(Markdown supported)</span>
             </template>
             <MarkdownEditor
-              v-model="app.settings.bingo_join_prompt"
+              v-model="app.settings.bingoJoinPrompt"
               min-height="100px"
               placeholder="Enter your unique bingo board ID to play"
             />
@@ -119,7 +125,7 @@ watch(
               :class="{ 'is-on': app.hideBingo }"
               :aria-checked="app.hideBingo"
               aria-label="Hide Bingo on the public home page"
-              @click="app.settings.hide_bingo = app.hideBingo ? '0' : '1'"
+              @click="app.settings.hideBingo = !app.settings.hideBingo"
             >
               <span class="switch-knob"></span>
             </button>
@@ -135,7 +141,7 @@ watch(
               :class="{ 'is-on': app.hideCustomCards }"
               :aria-checked="app.hideCustomCards"
               aria-label="Hide Custom Cards on the public home page"
-              @click="app.settings.hide_custom_cards = app.hideCustomCards ? '0' : '1'"
+              @click="app.settings.hideCustomCards = !app.settings.hideCustomCards"
             >
               <span class="switch-knob"></span>
             </button>
@@ -153,7 +159,7 @@ watch(
             help="How many wins before a player is flagged as a frequent winner."
           >
             <input
-              v-model="app.settings.frequent_winner_threshold"
+              v-model.number="app.settings.frequentWinnerThreshold"
               type="number"
               min="1"
               max="100"
@@ -165,7 +171,7 @@ watch(
             help="Time window to check for frequent winners (1-168 hours)."
           >
             <input
-              v-model="app.settings.frequent_winner_hours"
+              v-model.number="app.settings.frequentWinnerHours"
               type="number"
               min="1"
               max="168"
@@ -177,7 +183,7 @@ watch(
             help="How long each player must wait between triggering the It's Yoever reaction (0-3600; 0 disables the limit)."
           >
             <input
-              v-model="app.settings.yoever_cooldown_seconds"
+              v-model.number="app.settings.yoeverCooldownSeconds"
               type="number"
               min="0"
               max="3600"
@@ -189,7 +195,7 @@ watch(
             help="Gil price shown on the public Personal Card Requests page for a custom bingo card."
           >
             <input
-              v-model="app.settings.custom_card_cost"
+              v-model.number="app.settings.customCardCost"
               type="number"
               min="0"
               max="1000000000"
@@ -203,12 +209,11 @@ watch(
           <h4 class="section-heading">
             <font-awesome-icon :icon="['fad', 'font']" /> Fonts &amp; Branding
           </h4>
-          <!-- Secret settings are blanked for non-admins on GET and ignored on
-               POST, so showing the field to a system-settings grantee would only
-               offer an input that silently does nothing. -->
+          <!-- The key is one of the integrations, which only an admin reads or
+               saves (GET/PUT /settings/integrations). -->
           <FormField v-if="auth.isAdmin" label="Google Fonts API Key">
             <input
-              v-model="app.settings.google_fonts_api_key"
+              v-model="app.integrations.googleFontsApiKey"
               placeholder="Enter API key for font autocomplete"
               aria-label="Google Fonts API key"
               type="password"
@@ -229,7 +234,7 @@ watch(
             <div class="flex gap-sm">
               <select
                 id="header-font-select"
-                v-model="app.settings.header_font"
+                v-model="app.settings.headerFont"
                 aria-label="Header font"
                 class="field-input-full"
                 @change="app.previewHeaderFont()"
@@ -266,12 +271,12 @@ watch(
           </FormField>
           <div
             class="font-preview"
-            :style="{ fontFamily: '\'' + (app.settings.header_font || 'Arapey') + '\', serif' }"
+            :style="{ fontFamily: '\'' + (app.settings.headerFont || 'Arapey') + '\', serif' }"
           >
             <span class="font-preview-bingo">B I N G O</span><br />
             <span class="font-preview-numbers">1 &nbsp; 23 &nbsp; 45 &nbsp; 67</span><br />
             <span class="font-preview-title">
-              {{ app.settings.app_title || 'App Title' }}
+              {{ app.settings.appTitle || 'App Title' }}
             </span>
           </div>
         </section>
@@ -281,9 +286,8 @@ watch(
           <h4 class="section-heading">
             <font-awesome-icon :icon="['fad', 'book-open-cover']" /> Book Club Integrations
           </h4>
-          <!-- Admin-only, like the Google Fonts key above: the webhook URLs are
-               secret settings, so a non-admin is served blanks and cannot save
-               them back. -->
+          <!-- Admin-only, like the Google Fonts key above: the webhooks are
+               integrations. -->
           <template v-if="auth.isAdmin">
             <template v-for="club in BOOK_CLUBS" :key="club.slug">
               <FormField
@@ -291,7 +295,7 @@ watch(
                 help="Publishes this club's reading lists - each item posted as its own embed to this channel. Kept private; never sent to non-admin visitors."
               >
                 <input
-                  v-model="app.settings[clubWebhookKey(club.slug)]"
+                  v-model="app.integrations.bookClubWebhooks[club.slug]"
                   placeholder="https://discord.com/api/webhooks/..."
                   :aria-label="club.name + ' reading list Discord webhook URL'"
                   type="password"
@@ -305,7 +309,7 @@ watch(
             help='GraphQL endpoint for the "Pull from AniList" lookup when adding reading list items. No API key needed.'
           >
             <input
-              v-model="app.settings.anilist_api_url"
+              v-model="app.settings.aniListApiUrl"
               placeholder="https://graphql.anilist.co"
               aria-label="AniList API URL"
             />
@@ -318,7 +322,7 @@ watch(
           type="button"
           class="btn-confirm"
           :disabled="app.savingSettings"
-          @click="app.saveSettings()"
+          @click="app.saveSettings(auth.isAdmin)"
         >
           <LoadingSpinner v-if="app.savingSettings" label="Saving..." />
           <template v-else>Save Settings</template>

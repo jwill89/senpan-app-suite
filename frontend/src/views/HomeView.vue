@@ -111,10 +111,10 @@ const logoUrl = '/images/logo.png'
 <template>
   <div class="home">
     <!-- Masthead. The logo artwork includes the wordmark, so it is the page's h1
-         and `app_title` becomes its accessible name - the setting still drives the
+         and `appTitle` becomes its accessible name - the setting still drives the
          browser tab title and the player topbar. -->
     <header class="home-mast">
-      <h1><img :src="logoUrl" :alt="app.settings.app_title" class="home-logo" /></h1>
+      <h1><img :src="logoUrl" :alt="app.settings.appTitle" class="home-logo" /></h1>
     </header>
     <!-- One column of distinct rows. The primary task leads and carries the
          weight (larger title, the only input, roughly double the height); the two
@@ -129,8 +129,8 @@ const logoUrl = '/images/logo.png'
       <div v-if="showBingo" class="home-card home-card--primary">
         <h2><font-awesome-icon :icon="['fad', 'game-board-simple']" /> Join Bingo</h2>
         <!-- Admin-editable markdown prompt; plain-text fallback until parser loads -->
-        <p v-if="!markdownReady">{{ app.settings.bingo_join_prompt }}</p>
-        <MarkdownText v-else :source="app.settings.bingo_join_prompt" />
+        <p v-if="!markdownReady">{{ app.settings.bingoJoinPrompt }}</p>
+        <MarkdownText v-else :source="app.settings.bingoJoinPrompt" />
         <div class="field">
           <input
             ref="joinInput"

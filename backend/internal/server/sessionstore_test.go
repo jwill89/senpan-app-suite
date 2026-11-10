@@ -3,16 +3,16 @@ package server_test
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
 	"testing"
 
+	"app-suite/internal/api/apitest"
+	"app-suite/internal/live"
 	"app-suite/internal/server"
 	"app-suite/internal/store"
 	"app-suite/internal/store/storetest"
-	"app-suite/internal/ws"
 )
 
 // A sign-in outlives a restart, since sessions live in the database, and the
@@ -24,10 +24,11 @@ func TestSessionsOutliveARestartAndAreStoredHashed(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		ts := httptest.NewTLSServer(server.New(t.Context(), st, ws.NewHub(), t.TempDir(), nil))
+		ts := httptest.NewTLSServer(server.New(t.Context(), st, live.New(), t.TempDir(), nil))
 		jar, _ := cookiejar.New(nil)
 		client := ts.Client()
 		client.Jar = jar
+		client.Transport = apitest.Transport(t, client.Transport)
 		return &testEnv{ts: ts, client: client, store: st}
 	}
 
@@ -77,11 +78,7 @@ func TestSessionsOutliveARestartAndAreStoredHashed(t *testing.T) {
 	t.Cleanup(func() { second.ts.Close(); second.store.Close() })
 	again, _ := url.Parse(second.ts.URL)
 	second.client.Jar.SetCookies(again, cookies)
-	resp := second.get(t, "/api/auth")
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("GET /api/auth after the restart: %d", resp.StatusCode)
-	}
-	if body := decodeBody(t, resp); body["authenticated"] != true {
-		t.Fatalf("the sign-in did not survive the restart: %v", body)
+	if name := second.signedInAs(t); name != seedAdminUser {
+		t.Fatalf("the sign-in did not survive the restart (who am I = %q)", name)
 	}
 }

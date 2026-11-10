@@ -1,22 +1,25 @@
 /**
- * Auth store: account login/logout/registration + authentication state.
+ * Auth store: signing in and out, signing up, and who is signed in.
  *
  * `isAdmin` and `user` are the source of truth for the router's admin-route
  * guard and per-page permission gating. They are refreshed via `checkAuth()`
- * (GET /api/auth) on first navigation to an admin route and set directly on
- * login/logout. The actual data-loading after login is orchestrated by the
- * Admin route setup to keep this store focused.
+ * (GET /api/v1/me) on first navigation to an admin route and set directly on
+ * sign-in and sign-out. The actual data-loading after sign-in is orchestrated by
+ * the Admin route setup to keep this store focused.
  */
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { endpoints } from '@/lib/endpoints'
-import { loginWithPasskey as passkeyLogin } from '@/lib/passkeys'
-import type { User } from '@/types/api'
+import { api, unwrap, type Account } from '@/api/client'
+import { signInWithPasskey } from '@/lib/passkeys'
+
+/** What the sign-up page says once an account is asked for. */
+export const SIGN_UP_DONE =
+  'Account created. An administrator must activate it before you can log in.'
 
 export const useAuthStore = defineStore('auth', () => {
   const authError = ref('')
-  /** The logged-in account (null when not authenticated). */
-  const user = ref<User | null>(null)
+  /** The signed-in account (null when nobody is). */
+  const user = ref<Account | null>(null)
   /** Whether the current session is an authenticated admin. */
   const isAdmin = ref(false)
   /** True once checkAuth() has resolved at least once (guards initial load). */
@@ -35,16 +38,16 @@ export const useAuthStore = defineStore('auth', () => {
     if (!user.value) {
       return false
     }
-    if (user.value.is_admin) {
+    if (user.value.isAdmin) {
       return true
     }
     return user.value.permissions.includes(key)
   }
 
-  /** Applies the user payload from an auth response to the store. */
-  function setUser(u: User | null): void {
+  /** Applies the signed-in account to the store. */
+  function setUser(u: Account | null): void {
     user.value = u
-    isAdmin.value = !!u?.is_admin
+    isAdmin.value = !!u?.isAdmin
   }
 
   /**
@@ -60,37 +63,28 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
-   * Queries the server for the current auth status (and user) and caches it.
-   * Returns the resulting boolean. Used by the router guard for /admin routes.
+   * Asks the server who is signed in and caches it. Returns whether anyone is.
+   * Used by the router guard for /admin routes.
    */
   async function checkAuth(): Promise<boolean> {
     try {
-      const data = await endpoints.auth.check()
-      setUser(data.authenticated ? (data.user ?? null) : null)
+      setUser((await unwrap(api.GET('/me'))).account)
     } catch {
       setUser(null)
     } finally {
       authChecked.value = true
     }
-    return isAdmin.value || !!user.value
+    return !!user.value
   }
 
-  /**
-   * Attempts login with the given username + password.
-   * Returns true on success; sets authError and returns false on failure.
-   */
-  async function login(
-    username: string,
-    password: string,
-    turnstileToken?: string,
-  ): Promise<boolean> {
+  /** Runs a sign-in: true on success; sets authError and returns false on failure. */
+  async function signingIn(attempt: () => Promise<Account | null>): Promise<boolean> {
     authError.value = ''
     loggingIn.value = true
     try {
-      const data = await endpoints.auth.login(username, password, turnstileToken)
-      setUser(data.user)
+      setUser(await attempt())
       authChecked.value = true
-      return true
+      return !!user.value
     } catch (e) {
       authError.value = (e as Error).message
       return false
@@ -99,29 +93,25 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  /**
-   * Logs in with a passkey (discoverable WebAuthn credential). Returns true on
-   * success; sets authError and returns false on failure/cancellation.
-   */
-  async function loginWithPasskey(): Promise<boolean> {
-    authError.value = ''
-    loggingIn.value = true
-    try {
-      const data = await passkeyLogin()
-      setUser(data.user)
-      authChecked.value = true
-      return true
-    } catch (e) {
-      authError.value = (e as Error).message
-      return false
-    } finally {
-      loggingIn.value = false
-    }
+  /** Signs in with a username and password (and the Turnstile result when on). */
+  function login(username: string, password: string, turnstileToken?: string): Promise<boolean> {
+    return signingIn(async () => {
+      const me = await unwrap(
+        api.POST('/auth/login', { body: { username, password, turnstileToken } }),
+      )
+      return me.account
+    })
+  }
+
+  /** Signs in with a passkey (a discoverable WebAuthn credential). */
+  function loginWithPasskey(): Promise<boolean> {
+    return signingIn(signInWithPasskey)
   }
 
   /**
-   * Registers a new account (hidden registration page). Returns the server's
-   * confirmation message on success; sets authError and returns null on failure.
+   * Asks for an account (the hidden sign-up page). Returns the message to show on
+   * success; sets authError and returns null on failure. The server answers the same
+   * whether or not the name was free.
    */
   async function register(
     username: string,
@@ -131,8 +121,8 @@ export const useAuthStore = defineStore('auth', () => {
     authError.value = ''
     loggingIn.value = true
     try {
-      const data = await endpoints.auth.register(username, password, turnstileToken)
-      return data.message
+      await unwrap(api.POST('/auth/register', { body: { username, password, turnstileToken } }))
+      return SIGN_UP_DONE
     } catch (e) {
       authError.value = (e as Error).message
       return null
@@ -141,10 +131,10 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  /** Logs out (best-effort; ignores errors). */
+  /** Signs out (best-effort; ignores errors). */
   async function logout(): Promise<void> {
     try {
-      await endpoints.auth.logout()
+      await api.POST('/auth/logout')
     } catch {
       /* ignore */
     } finally {

@@ -4,7 +4,10 @@ import { mount, flushPromises } from '@vue/test-utils'
 
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 const config = vi.fn()
-vi.mock('@/lib/endpoints', () => ({ endpoints: { system: { config: () => config() } } }))
+vi.mock('@/api/client', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  api: { GET: async () => ({ data: await config(), response: new Response(null) }) },
+}))
 
 import RegisterView from './RegisterView.vue'
 
@@ -22,7 +25,7 @@ describe('RegisterView Turnstile', () => {
   })
 
   it('renders the challenge and disables submit until verified when a site key is set', async () => {
-    config.mockResolvedValue({ turnstile_site_key: 'site-123' })
+    config.mockResolvedValue({ turnstileSiteKey: 'site-123' })
     const wrapper = mount(RegisterView, { global: { stubs } })
     await flushPromises()
 
@@ -34,7 +37,7 @@ describe('RegisterView Turnstile', () => {
   })
 
   it('shows no challenge and leaves submit enabled when Turnstile is disabled', async () => {
-    config.mockResolvedValue({ turnstile_site_key: '' })
+    config.mockResolvedValue({ turnstileSiteKey: '' })
     const wrapper = mount(RegisterView, { global: { stubs } })
     await flushPromises()
 

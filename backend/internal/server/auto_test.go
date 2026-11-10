@@ -9,12 +9,10 @@ import (
 // calledCount reads how many numbers have been drawn in the active game.
 func calledCount(t *testing.T, env *testEnv) int {
 	t.Helper()
-	game, _ := decodeBody(t, env.get(t, "/api/game"))["game"].(map[string]any)
-	if game == nil {
-		return 0
+	if g := readGame(t, env.client, env).Game; g != nil {
+		return len(g.CalledNumbers)
 	}
-	called, _ := game["called_numbers"].([]any)
-	return len(called)
+	return 0
 }
 
 // waitForCalled polls until at least `want` numbers have been drawn, or fails.
@@ -47,43 +45,27 @@ func waitForHalftimePause(t *testing.T, env *testEnv, timeout time.Duration) {
 	}
 }
 
-// autoTestGame creates a top-row pattern (all five columns -> half-time at 35) and
-// returns its id, ready to start games from.
-func autoTestPattern(t *testing.T, env *testEnv) int {
+// autoTestPattern creates a top-row pattern (all five columns -> half-time at 35)
+// and returns its id, ready to start games from.
+func autoTestPattern(t *testing.T, env *testEnv) int64 {
 	t.Helper()
-	resp := env.postJSON(t, "/api/patterns", map[string]any{
-		"action": "create", "name": "Auto", "pattern_data": testPattern5x5(),
-	})
-	patID := decodeBody(t, resp)["pattern"].(map[string]any)["id"].(float64)
-	return int(patID)
+	return createPattern(t, env, "Auto", testPattern5x5())
 }
 
-// autoTestBColumnPattern creates a pattern that marks only the B column, so the
-// game has one active column (15 callable) and its half-time mark lands at 7 -
-// low enough that a test can reach it quickly.
-func autoTestBColumnPattern(t *testing.T, env *testEnv) int {
+// gameAuto reads the current game's auto flags.
+func gameAuto(t *testing.T, env *testEnv) (enabled bool, interval int) {
 	t.Helper()
-	grid := make([][]bool, 5)
-	for r := range grid {
-		grid[r] = make([]bool, 5)
-		grid[r][0] = true
-	}
-	resp := env.postJSON(t, "/api/patterns", map[string]any{
-		"action": "create", "name": "B Line", "pattern_data": grid,
-	})
-	return int(decodeBody(t, resp)["pattern"].(map[string]any)["id"].(float64))
-}
-
-// gameAuto reads the current game's auto flags from GET /api/game.
-func gameAuto(t *testing.T, env *testEnv) (enabled bool, interval float64) {
-	t.Helper()
-	game, _ := decodeBody(t, env.get(t, "/api/game"))["game"].(map[string]any)
-	if game == nil {
+	g := readGame(t, env.client, env).Game
+	if g == nil {
 		t.Fatal("expected an active game")
 	}
-	enabled, _ = game["auto_enabled"].(bool)
-	interval, _ = game["auto_interval"].(float64)
-	return enabled, interval
+	return g.AutoEnabled, g.AutoInterval
+}
+
+// startManual starts a game with the automatic draws off.
+func startManual(t *testing.T, env *testEnv, pattern int64) gameView {
+	t.Helper()
+	return startGame(t, env, pattern)
 }
 
 // TestGame_StartWithAuto verifies a game started with auto reports it on the
@@ -93,48 +75,40 @@ func TestGame_StartWithAuto(t *testing.T) {
 	env.loginAdmin(t)
 	patID := autoTestPattern(t, env)
 
-	resp := env.postJSON(t, "/api/game/start", map[string]any{
-		"pattern_ids": []int{patID}, "auto": true, "auto_interval": 3, // 3 -> clamped up to 5
-	})
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d; want 200", resp.StatusCode)
+	var s gameState
+	decodeInto(t, env.postJSON(t, "/api/v1/game/start", map[string]any{
+		"patternIds": []int64{patID}, "auto": true, "autoInterval": 3, // 3 -> clamped up to 5
+	}), http.StatusOK, &s)
+	if !s.Game.AutoEnabled {
+		t.Error("expected autoEnabled on the started game")
 	}
-	game, _ := decodeBody(t, resp)["game"].(map[string]any)
-	if enabled, _ := game["auto_enabled"].(bool); !enabled {
-		t.Error("expected auto_enabled=true on the started game")
-	}
-	if interval, _ := game["auto_interval"].(float64); interval != 5 {
-		t.Errorf("auto_interval = %v; want 5 (clamped)", interval)
+	if s.Game.AutoInterval != 5 {
+		t.Errorf("autoInterval = %v; want 5 (clamped)", s.Game.AutoInterval)
 	}
 }
 
 // TestGame_PatchAuto verifies the live auto controls: enabling/disabling the loop
-// and adjusting the interval, each reflected on GET /api/game.
+// and adjusting the interval, each reflected on the game.
 func TestGame_PatchAuto(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
-	patID := autoTestPattern(t, env)
-	env.postJSON(t, "/api/game/start", map[string]any{"pattern_ids": []int{patID}}).Body.Close()
+	startManual(t, env, autoTestPattern(t, env))
 
-	// Manual game starts with auto off.
 	if enabled, _ := gameAuto(t, env); enabled {
 		t.Fatal("expected auto off on a manual start")
 	}
 
-	// Turn auto on with an interval.
-	env.patchJSON(t, "/api/game", map[string]any{"auto_enabled": true, "auto_interval": 15}).Body.Close()
+	env.patchJSON(t, "/api/v1/game", map[string]any{"autoEnabled": true, "autoInterval": 15}).Body.Close()
 	if enabled, interval := gameAuto(t, env); !enabled || interval != 15 {
 		t.Errorf("after enable: (%v, %v); want (true, 15)", enabled, interval)
 	}
 
-	// Adjust the interval only (clamped).
-	env.patchJSON(t, "/api/game", map[string]any{"auto_interval": 1}).Body.Close()
+	env.patchJSON(t, "/api/v1/game", map[string]any{"autoInterval": 1}).Body.Close()
 	if _, interval := gameAuto(t, env); interval != 5 {
 		t.Errorf("after interval patch: %v; want 5 (clamped)", interval)
 	}
 
-	// Turn auto off.
-	env.patchJSON(t, "/api/game", map[string]any{"auto_enabled": false}).Body.Close()
+	env.patchJSON(t, "/api/v1/game", map[string]any{"autoEnabled": false}).Body.Close()
 	if enabled, _ := gameAuto(t, env); enabled {
 		t.Error("expected auto off after disable")
 	}
@@ -148,26 +122,27 @@ func TestGame_PatchAuto(t *testing.T) {
 func TestGame_HalftimePausesAndResumesAuto(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
-	patID := autoTestBColumnPattern(t, env) // half-time at 7
-	env.postJSON(t, "/api/game/start", map[string]any{"pattern_ids": []int{patID}}).Body.Close()
+	g := startManual(t, env, bColumnPattern(t, env)) // half-time at 7
 
 	go env.srv.RunAutoDrawScheduler(t.Context())
 
-	// Manually draw to one short of the mark (auto off, so nothing to disable).
 	for range 6 {
-		env.postJSON(t, "/api/game/draw", map[string]any{}).Body.Close()
+		drawNumber(t, env, 0)
 	}
 	if n := calledCount(t, env); n != 6 {
 		t.Fatalf("expected 6 numbers drawn before enabling auto; got %d", n)
 	}
 
 	// Enable auto -> the immediate auto draw crosses the half-time mark and pauses.
-	env.patchJSON(t, "/api/game", map[string]any{"auto_enabled": true, "auto_interval": 600}).Body.Close()
+	env.patchJSON(t, "/api/v1/game", map[string]any{"autoEnabled": true, "autoInterval": 600}).Body.Close()
 	waitForCalled(t, env, 7, 2*time.Second)
 	waitForHalftimePause(t, env, 2*time.Second)
+	if h := readGame(t, env.client, env).Game.Halftime; h == nil || !h.AutoPaused {
+		t.Errorf("the prompt waiting: %+v; want one saying the draws were paused", h)
+	}
 
 	// Decline the mini-game -> auto resumes.
-	env.postJSON(t, "/api/game/halftime", map[string]any{"minigame": false}).Body.Close()
+	decodeInto(t, env.postJSON(t, "/api/v1/game/halftime", map[string]any{"gameId": g.ID, "minigame": false}), http.StatusOK, nil)
 	if enabled, _ := gameAuto(t, env); !enabled {
 		t.Error("declining the mini-game should resume auto")
 	}
@@ -178,16 +153,14 @@ func TestGame_HalftimePausesAndResumesAuto(t *testing.T) {
 func TestGame_ManualDrawDisablesAuto(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
-	patID := autoTestPattern(t, env)
-	env.postJSON(t, "/api/game/start", map[string]any{
-		"pattern_ids": []int{patID}, "auto": true, "auto_interval": 600,
-	}).Body.Close()
+	decodeInto(t, env.postJSON(t, "/api/v1/game/start", map[string]any{
+		"patternIds": []int64{autoTestPattern(t, env)}, "auto": true, "autoInterval": 600,
+	}), http.StatusOK, nil)
 	if enabled, _ := gameAuto(t, env); !enabled {
 		t.Fatal("expected auto on after start-with-auto")
 	}
 
-	// A single manual draw takes over -> auto switches off.
-	env.postJSON(t, "/api/game/draw", map[string]any{}).Body.Close()
+	drawNumber(t, env, 0)
 	if enabled, _ := gameAuto(t, env); enabled {
 		t.Error("a manual draw should disable auto-draw")
 	}
@@ -199,15 +172,13 @@ func TestGame_ManualDrawDisablesAuto(t *testing.T) {
 func TestGame_DisablingAutoCancelsPendingDraw(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
-	patID := autoTestPattern(t, env)
-	env.postJSON(t, "/api/game/start", map[string]any{"pattern_ids": []int{patID}}).Body.Close()
+	startManual(t, env, autoTestPattern(t, env))
 
 	go env.srv.RunAutoDrawScheduler(t.Context())
 
-	// Enable auto with the shortest interval, so a second draw is imminent.
-	env.patchJSON(t, "/api/game", map[string]any{"auto_enabled": true, "auto_interval": 5}).Body.Close()
+	env.patchJSON(t, "/api/v1/game", map[string]any{"autoEnabled": true, "autoInterval": 5}).Body.Close()
 	waitForCalled(t, env, 1, 2*time.Second) // the immediate draw
-	env.patchJSON(t, "/api/game", map[string]any{"auto_enabled": false}).Body.Close()
+	env.patchJSON(t, "/api/v1/game", map[string]any{"autoEnabled": false}).Body.Close()
 	n := calledCount(t, env)
 
 	// Wait past the 5s interval - the cancelled timer must not draw again.
@@ -223,9 +194,7 @@ func TestGame_DisablingAutoCancelsPendingDraw(t *testing.T) {
 func TestGame_AutoDrawsImmediatelyOnEnable(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
-	patID := autoTestPattern(t, env)
-	// Manual start (auto off), no cards so no winner can interfere.
-	env.postJSON(t, "/api/game/start", map[string]any{"pattern_ids": []int{patID}}).Body.Close()
+	startManual(t, env, autoTestPattern(t, env))
 
 	go env.srv.RunAutoDrawScheduler(t.Context())
 
@@ -233,13 +202,9 @@ func TestGame_AutoDrawsImmediatelyOnEnable(t *testing.T) {
 		t.Fatalf("expected 0 numbers drawn before auto is on; got %d", n)
 	}
 
-	// Turn auto on with the maximum interval - only the immediate draw should land.
-	env.patchJSON(t, "/api/game", map[string]any{"auto_enabled": true, "auto_interval": 600}).Body.Close()
-
-	// First number arrives ~immediately.
+	env.patchJSON(t, "/api/v1/game", map[string]any{"autoEnabled": true, "autoInterval": 600}).Body.Close()
 	waitForCalled(t, env, 1, 2*time.Second)
 
-	// ...and it does not keep drawing (next draw is a full 600s away).
 	time.Sleep(300 * time.Millisecond)
 	if n := calledCount(t, env); n != 1 {
 		t.Errorf("expected exactly 1 draw (the immediate one); got %d", n)
@@ -255,9 +220,9 @@ func TestGame_AutoDrawsImmediatelyOnStart(t *testing.T) {
 
 	go env.srv.RunAutoDrawScheduler(t.Context())
 
-	env.postJSON(t, "/api/game/start", map[string]any{
-		"pattern_ids": []int{patID}, "auto": true, "auto_interval": 600,
-	}).Body.Close()
+	decodeInto(t, env.postJSON(t, "/api/v1/game/start", map[string]any{
+		"patternIds": []int64{patID}, "auto": true, "autoInterval": 600,
+	}), http.StatusOK, nil)
 
 	waitForCalled(t, env, 1, 2*time.Second)
 }
@@ -268,20 +233,18 @@ func TestGame_AutoDrawsImmediatelyOnStart(t *testing.T) {
 func TestGame_HalftimeMinigameKeepsAutoOff(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
-	patID := autoTestBColumnPattern(t, env) // half-time at 7
-	env.postJSON(t, "/api/game/start", map[string]any{"pattern_ids": []int{patID}}).Body.Close()
+	g := startManual(t, env, bColumnPattern(t, env)) // half-time at 7
 
 	go env.srv.RunAutoDrawScheduler(t.Context())
 
 	for range 6 {
-		env.postJSON(t, "/api/game/draw", map[string]any{}).Body.Close()
+		drawNumber(t, env, 0)
 	}
-	env.patchJSON(t, "/api/game", map[string]any{"auto_enabled": true, "auto_interval": 600}).Body.Close()
+	env.patchJSON(t, "/api/v1/game", map[string]any{"autoEnabled": true, "autoInterval": 600}).Body.Close()
 	waitForCalled(t, env, 7, 2*time.Second)
 	waitForHalftimePause(t, env, 2*time.Second)
 
-	// Choose the mini-game -> auto stays off.
-	env.postJSON(t, "/api/game/halftime", map[string]any{"minigame": true}).Body.Close()
+	decodeInto(t, env.postJSON(t, "/api/v1/game/halftime", map[string]any{"gameId": g.ID, "minigame": true}), http.StatusOK, nil)
 	if enabled, _ := gameAuto(t, env); enabled {
 		t.Error("running a mini-game should leave auto off until re-enabled")
 	}

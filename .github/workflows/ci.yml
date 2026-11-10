@@ -31,26 +31,50 @@ jobs:
     secrets:
       FONTAWESOME_TOKEN: ${{ secrets.FONTAWESOME_NPM_TOKEN }}
 
-  # frontend/src/types/api.generated.ts is generated from the Go models by tygo (pinned
-  # as a tool in backend/go.mod) and committed, as the other projects commit theirs; this
-  # fails when the committed copy is not what the generator makes now.
+  # The code generated from the schema and the API is what the generators make now
+  # (task gen): sqlc's queries
+  # (backend/internal/db), the OpenAPI document huma renders
+  # (frontend/src/api/openapi.json), the SPA's types from it (schema.d.ts), and, until
+  # every domain has moved to huma, tygo's types from the Go models.
   generated:
+    needs: frontend
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
         with:
+          submodules: true
           persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: frontend/.nvmrc
 
       - uses: actions/setup-go@v7
         with:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
 
-      - name: The API types are current
-        working-directory: backend
+      # The frontend job's node_modules, by the same key, so the Font Awesome kit isn't
+      # fetched again; the frontend job always saves it first.
+      - name: Frontend dependencies
+        uses: actions/cache/restore@v6
+        with:
+          path: frontend/node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json', 'frontend/.nvmrc', 'shared/lint/web/*.js', 'shared/lint/web/*.json', 'shared/test/a11y/*.js', 'shared/test/a11y/*.json') }}
+          fail-on-cache-miss: true
+
+      # The binary embeds the front end's build, so go run needs it.
+      - uses: actions/download-artifact@v8
+        with:
+          name: web-dist
+          path: backend/internal/web/dist
+
+      - name: Generated code is current
         run: |
-          go tool tygo generate
-          git diff --exit-code -- ../frontend/src/types/api.generated.ts
+          go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
+          cd backend && sqlc generate && go run . openapi > ../frontend/src/api/openapi.json && go tool tygo generate && cd ..
+          cd frontend && npx -y openapi-typescript@7.13.0 src/api/openapi.json -o src/api/schema.d.ts && npx prettier --write src/api/schema.d.ts src/api/openapi.json && cd ..
+          git diff --exit-code -- backend/internal/db frontend/src/api frontend/src/types/api.generated.ts
 
   # golangci-lint with backend/.golangci.yml (written from the shared template), the
   # tests under the race detector with their coverage floor (63.3% of statements when
@@ -65,6 +89,10 @@ jobs:
       download-artifact: web-dist
       download-path: backend/internal/web/dist
       coverage-floor: 63.0
+      # sqlc's generated code is left out of the count: the code that calls it is tested.
+      coverage-exclude: |
+        /internal/db/(db|models)\.go$
+        /internal/db/[^/]+\.sql\.go$
       build: go build -ldflags="-s -w" -o app-suite .
 
   # Built against Dalamud with warnings as errors (the shared analyzers, imported by
@@ -98,7 +126,7 @@ jobs:
     uses: jwill89/shared-tooling/.github/workflows/docs.yml@v2.4.0
 
   # OSV-Scanner over every lockfile. An osv-scanner.toml beside a lockfile passes over the
-  # advisories that reach only lint, test or build tooling (standards/packages.md).
+  # advisories that reach only lint, test or build tooling.
   osv:
     uses: jwill89/shared-tooling/.github/workflows/osv.yml@v2.4.0
     permissions:

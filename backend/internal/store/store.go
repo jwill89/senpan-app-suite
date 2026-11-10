@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"modernc.org/sqlite"
 	sqlite3 "modernc.org/sqlite/lib"
@@ -64,8 +65,7 @@ func readDSN(path string) string {
 	}.Encode()
 }
 
-// Store holds two pools over one SQLite file, as the standards have it
-// (database.md): every write and every transaction goes through write, a pool of
+// Store holds two pools over one SQLite file: every write and every transaction goes through write, a pool of
 // one connection, so writers queue in the app rather than on SQLite's lock; reads
 // go through read. A write commits before its response, so a read after it sees
 // it.
@@ -135,9 +135,12 @@ func open(path string) (*Store, error) {
 	return &Store{write: write, read: read}, nil
 }
 
-// DB is the write pool, for what keeps its own table in the database: the
-// session store.
+// DB is the write pool: every write and every transaction. The session store and
+// the API's sqlc queries (internal/db) use it.
 func (s *Store) DB() *sql.DB { return s.write }
+
+// ReadDB is the read pool, for the API's sqlc queries (internal/db).
+func (s *Store) ReadDB() *sql.DB { return s.read }
 
 // Close closes both pools.
 func (s *Store) Close() error { return errors.Join(s.read.Close(), s.write.Close()) }
@@ -181,4 +184,10 @@ func Interrupted(err error) bool {
 // transaction's until it ends, so a call on s.write would wait for it forever.
 func (s *Store) beginImmediate(ctx context.Context) (*sql.Tx, error) {
 	return s.write.BeginTx(ctx, nil)
+}
+
+// isUniqueViolation reports whether err is a SQLite UNIQUE-constraint failure
+// (the pure-Go driver surfaces it in the error text).
+func isUniqueViolation(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed")
 }

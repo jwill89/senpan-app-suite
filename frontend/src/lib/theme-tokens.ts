@@ -5,7 +5,7 @@
  * only retint the design tokens and never carry arbitrary CSS.
  *
  * Keep this list in sync with the `:root` block in `assets/app.css` and with
- * `themeTokenOrder` in the Go store (the server validates against the same
+ * `TokenOrder` in the Go `themes` package (the server validates against the same
  * allowlist and generates the same CSS).
  */
 

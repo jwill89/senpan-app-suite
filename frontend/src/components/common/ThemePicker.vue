@@ -7,16 +7,15 @@
  * choose from (a lone "Default" option is pointless).
  */
 import { onMounted, ref } from 'vue'
-import { endpoints } from '@/lib/endpoints'
+import { api, unwrap, type PublicStyle } from '@/api/client'
 import { useAppStore } from '@/stores/app'
-import type { PublicStyle } from '@/types/api'
 
 const app = useAppStore()
 const publicThemes = ref<PublicStyle[]>([])
 
 onMounted(async () => {
   try {
-    const data = await endpoints.styles.listPublic()
+    const data = await unwrap(api.GET('/styles/public'))
     publicThemes.value = data.styles
   } catch {
     /* silent - the picker just stays hidden if the list can't load */

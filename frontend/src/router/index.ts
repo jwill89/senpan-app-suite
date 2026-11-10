@@ -29,8 +29,8 @@
  *
  * The admin tabs are child routes of the AdminView layout, so the sidebar/topbar
  * persist while the active tab is chosen by the matched child. A global guard
- * enforces admin auth, loads admin data on first entry, and drives the shared
- * WebSocket lifecycle (connect on player/admin, disconnect when leaving).
+ * enforces admin auth and loads admin data on first entry; App.vue keeps the
+ * tab's live stream (opened on a board or in the admin area, closed when leaving).
  */
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import type { AdminTab } from '@/stores/admin'
@@ -353,7 +353,7 @@ function firstAllowedAdminRoute(auth: ReturnType<typeof useAuthStore>): string |
 //
 // Enforces admin auth for /admin routes and keeps the admin store's active
 // tab/section in sync with the matched route so the sidebar highlights it. Data
-// loading for individual admin tabs (and the shared WebSocket lifecycle) is
+// loading for individual admin tabs (and the tab's live stream) is
 // handled by the views/composable, not here, to keep the guard lightweight.
 // Drive the top progress bar: a navigation may await the async guard below and
 // then fetch the matched route's lazy chunk, so show the bar for the whole

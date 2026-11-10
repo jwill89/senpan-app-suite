@@ -172,17 +172,57 @@ describe('refreshResource (live invalidation)', () => {
     expect(users.loadUsers).toHaveBeenCalled()
   })
 
-  it('routes a bookclub signal through the bookclub store', () => {
+  it("routes a club's change through the bookclub store, viewing it or not", () => {
     const { bookclub } = stubLoaders()
     const admin = useAdminStore()
     admin.adminTab = 'bookclub-yaoi'
-    admin.refreshResource('bookclub')
-    expect(bookclub.applyExternalChange).toHaveBeenCalledWith(true)
+    admin.refreshResource('bookclub-yaoi')
+    expect(bookclub.applyExternalChange).toHaveBeenCalledWith('yaoi', true)
+    admin.refreshResource('bookclub-yuri')
+    expect(bookclub.applyExternalChange).toHaveBeenCalledWith('yuri', false)
+  })
+
+  it('reloads the themes list when viewing the themes tab', () => {
+    const { styles } = stubLoaders()
+    const admin = useAdminStore()
+    admin.adminTab = 'system-themes'
+    admin.refreshResource('themes')
+    expect(styles.loadStyles).toHaveBeenCalled()
   })
 
   it('ignores an unknown resource without throwing', () => {
     stubLoaders()
     const admin = useAdminStore()
     expect(() => admin.refreshResource('nonsense')).not.toThrow()
+  })
+})
+
+describe('refreshOpenTab (the live stream opened)', () => {
+  it('reads the open tab again', () => {
+    const { raffles } = stubLoaders()
+    const admin = useAdminStore()
+    admin.adminTab = 'teahouse-raffles'
+    admin.refreshOpenTab()
+    expect(raffles.loadRaffles).toHaveBeenCalledTimes(1)
+  })
+
+  it("reads the settings, and an admin's integrations, on the settings tab", () => {
+    const { app } = stubLoaders()
+    app.loadIntegrations = vi.fn()
+    const admin = useAdminStore()
+    admin.adminTab = 'system-settings'
+    admin.refreshOpenTab()
+    expect(app.loadSettings).toHaveBeenCalled()
+    expect(app.loadIntegrations).not.toHaveBeenCalled()
+  })
+
+  it('makes every other tab read afresh when next entered', () => {
+    const { garapons } = stubLoaders()
+    const admin = useAdminStore()
+    admin.setTabFromRoute('festival-garapon')
+    admin.setTabFromRoute('teahouse-raffles')
+    admin.refreshOpenTab()
+    admin.setTabFromRoute('festival-garapon')
+    expect(garapons.loadGarapons).toHaveBeenCalledTimes(2)
   })
 })

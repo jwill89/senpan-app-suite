@@ -2,20 +2,19 @@
  * Server-log viewer store (admin-only).
  *
  * Holds the newest-first tail of the backend's structured log. On load it
- * fetches a filtered snapshot from `GET /api/logs`; while open it also receives
- * a live feed - each server log line arrives as a `log` WebSocket message and is
- * prepended via {@link appendLive} (see useWebSocket). The in-memory list is
+ * fetches a filtered snapshot from `GET /api/v1/logs`; while open it also receives
+ * a live feed - each server log line arrives as a `log` event on the admin's live
+ * stream and is prepended via {@link appendLive} (see useLiveEvents). The in-memory list is
  * capped so a long-running session can't grow unbounded, mirroring the server's
  * own rotation/retention.
  */
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { LogEntry } from '@/types/api'
-import { endpoints } from '@/lib/endpoints'
+import { api, unwrap, type LogEntry, type LogLevel } from '@/api/client'
 import { useUiStore } from '@/stores/ui'
 
 /** Level filter: '' = all. Others are minimum severities. */
-export type LogLevelFilter = '' | 'debug' | 'info' | 'warn' | 'error'
+export type LogLevelFilter = '' | LogLevel
 
 /** A log row with a stable client-side id for the table key + expand tracking. */
 export interface LogRow extends LogEntry {
@@ -55,7 +54,7 @@ export const useLogsStore = defineStore('logs', () => {
   const level = ref<LogLevelFilter>('') // view filter (minimum level)
   const query = ref('')
   const live = ref(true) // live tail on by default; pause to freeze the view
-  const serverLevel = ref('info') // process-wide runtime level (server-side)
+  const serverLevel = ref<LogLevel>('info') // process-wide runtime level (server-side)
   const settingLevel = ref(false) // a level change is in flight
 
   /** Whether an entry passes the active level + text filters (for the live feed;
@@ -81,15 +80,21 @@ export const useLogsStore = defineStore('logs', () => {
   async function load(): Promise<void> {
     loading.value = true
     try {
-      const data = await endpoints.logs.list({
-        level: level.value,
-        q: query.value,
-        limit: MAX_ENTRIES,
-      })
+      const data = await unwrap(
+        api.GET('/logs', {
+          params: {
+            query: {
+              level: level.value || undefined,
+              q: query.value || undefined,
+              limit: MAX_ENTRIES,
+            },
+          },
+        }),
+      )
       entries.value = data.entries.map((e) => ({ ...e, _id: ++seq }))
       truncated.value = data.truncated
       file.value = data.file
-      serverLevel.value = data.level || 'info'
+      serverLevel.value = data.level
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     } finally {
@@ -101,7 +106,7 @@ export const useLogsStore = defineStore('logs', () => {
   async function setDebug(on: boolean): Promise<void> {
     settingLevel.value = true
     try {
-      const data = await endpoints.logs.setLevel(on ? 'debug' : 'info')
+      const data = await unwrap(api.PUT('/logs/level', { body: { level: on ? 'debug' : 'info' } }))
       serverLevel.value = data.level
       ui.notify(`Server log level set to ${data.level.toUpperCase()}`, 'success')
     } catch (e) {
@@ -111,7 +116,7 @@ export const useLogsStore = defineStore('logs', () => {
     }
   }
 
-  /** Prepend a live log line (from the WebSocket feed), honoring pause + filters. */
+  /** Prepend a live log line (from the live stream), honoring pause + filters. */
   function appendLive(entry: LogEntry): void {
     if (!live.value || !passesFilter(entry)) {
       return

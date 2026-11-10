@@ -22,8 +22,7 @@
     "lint:conventions": "node scripts/check-conventions.mjs",
     "lint:conventions:baseline": "node scripts/check-conventions.mjs --update-baseline",
     "analyze": "cross-env ANALYZE=true vue-tsc -b && cross-env ANALYZE=true vite build",
-    "gen:types": "cd ../backend && go tool tygo generate",
-    "gen:check": "npm run gen:types && git diff --exit-code src/types/api.generated.ts"
+    "gen:types": "cd ../backend && go tool tygo generate"
   },
   "dependencies": {
     "@awesome.me/kit-46204fb6f1": "^1.0.9",
@@ -36,6 +35,7 @@
     "html-to-image": "^1.11.13",
     "konva": "^10.9.1",
     "markdown-it": "^15.0.3",
+    "openapi-fetch": "0.17.0",
     "pinia": "^4.1.0",
     "vue": "^3.5.45",
     "vue-draggable-plus": "^0.6.1",
@@ -66,10 +66,13 @@
   "overrides": {
     "form-data": "^4.0.6",
     "js-beautify": {
-      "glob": "^13.0.0"
+      "glob": "^14.0.2"
     },
     "micromark-extension-math": {
       "katex": "^0.19.1"
+    },
+    "workbox-build": {
+      "glob": "^14.0.2"
     }
   }
 }

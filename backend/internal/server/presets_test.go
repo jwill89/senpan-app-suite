@@ -3,103 +3,109 @@ package server_test
 import (
 	"fmt"
 	"net/http"
+	"slices"
 	"testing"
 )
 
-// seedPattern creates one win pattern (in the default "Standard" category) and
-// returns its id, so preset tests have a valid pattern to reference.
-func (e *testEnv) seedPattern(t *testing.T, name string) int64 {
-	t.Helper()
-	id, err := e.store.SavePattern(t.Context(), name, [][]bool{
-		{true, false, false, false, false},
-		{false, true, false, false, false},
-		{false, false, true, false, false},
-		{false, false, false, true, false},
-		{false, false, false, false, true},
-	}, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return id
+// preset is a full preset body with the given name and patterns.
+func preset(name string, ids ...int64) map[string]any {
+	return map[string]any{"name": name, "patternIds": ids, "gameDetails": "GL HF", "auto": true, "autoInterval": 45}
 }
 
-func TestPresets_RequiresAuth(t *testing.T) {
+// The Presets page's permission guards every operation, and its grantee gets
+// through.
+func TestPresetsGuard(t *testing.T) {
 	env := newTestEnv(t)
-	if resp := env.get(t, "/api/presets"); resp.StatusCode != http.StatusUnauthorized {
-		t.Errorf("list status = %d; want 401", resp.StatusCode)
-		resp.Body.Close()
+	if got := status(env.get(t, "/api/v1/presets")); got != http.StatusUnauthorized {
+		t.Errorf("signed out: %d, want 401", got)
 	}
-	resp := env.postJSON(t, "/api/presets", map[string]any{"action": "create", "name": "X"})
-	if resp.StatusCode != http.StatusUnauthorized {
-		t.Errorf("create status = %d; want 401", resp.StatusCode)
+	addAccount(t, env, "patternsonly", "correct horse battery", []string{"bingo-patterns"})
+	env.signIn(t, "patternsonly", "correct horse battery")
+	if got := status(env.get(t, "/api/v1/presets")); got != http.StatusForbidden {
+		t.Errorf("without the page: %d, want 403", got)
 	}
-	resp.Body.Close()
+	if got := status(env.postJSON(t, "/api/v1/presets", preset("X", 1))); got != http.StatusForbidden {
+		t.Errorf("a save without the page: %d, want 403", got)
+	}
+
+	addAccount(t, env, "presetter", "correct horse battery", []string{"bingo-presets"})
+	env.signIn(t, "presetter", "correct horse battery")
+	decodeInto(t, env.postJSON(t, "/api/v1/presets", preset("Mine", 1)), http.StatusCreated, nil)
 }
 
-func TestPresets_CreateListUpdateDelete(t *testing.T) {
+// A preset is made (201, in full), listed, replaced, and deleted (204, then 404);
+// the automatic-draw interval is held within its bounds.
+func TestPresetsLifecycle(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 	pid := env.seedPattern(t, "Diagonal")
 
-	// Create.
-	resp := env.postJSON(t, "/api/presets", map[string]any{
-		"name": "Quick Game", "pattern_ids": []int64{pid}, "game_details": "GL HF",
-	})
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("create status = %d; want 201", resp.StatusCode)
+	var made map[string]any
+	decodeInto(t, env.postJSON(t, "/api/v1/presets", preset(" Quick Game ", pid)), http.StatusCreated, &made)
+	if made["name"] != "Quick Game" || fmt.Sprint(made["patternIds"]) != fmt.Sprint([]any{float64(pid)}) ||
+		made["gameDetails"] != "GL HF" || made["auto"] != true || made["autoInterval"] != float64(45) || made["createdAt"] == nil {
+		t.Errorf("made: %v", made)
 	}
-	id := int64(decodeBody(t, resp)["id"].(float64))
+	id := int64(made["id"].(float64))
+	path := fmt.Sprintf("/api/v1/presets/%d", id)
 
-	// List shows it.
-	presets := decodeBody(t, env.get(t, "/api/presets"))["presets"].([]any)
-	if len(presets) != 1 {
-		t.Fatalf("expected 1 preset, got %d", len(presets))
+	var list struct {
+		Presets []map[string]any `json:"presets"`
+	}
+	decodeInto(t, env.get(t, "/api/v1/presets"), http.StatusOK, &list)
+	if len(list.Presets) != 1 || list.Presets[0]["id"] != made["id"] {
+		t.Fatalf("list: %v", list.Presets)
 	}
 
-	// Update (PUT).
-	resp = env.putJSON(t, fmt.Sprintf("/api/presets/%d", id), map[string]any{
-		"name": "Renamed", "pattern_ids": []int64{pid},
-	})
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("update status = %d; want 200", resp.StatusCode)
+	var saved map[string]any
+	decodeInto(t, env.putJSON(t, path, map[string]any{
+		"name": "Renamed", "patternIds": []int64{pid, 99}, "gameDetails": "", "auto": false, "autoInterval": 2,
+	}), http.StatusOK, &saved)
+	if saved["name"] != "Renamed" || saved["auto"] != false || saved["gameDetails"] != "" ||
+		saved["autoInterval"] != float64(5) || len(saved["patternIds"].([]any)) != 2 {
+		t.Errorf("replaced: %v", saved)
 	}
-	resp.Body.Close()
+	decodeInto(t, env.putJSON(t, path, preset("Default interval", pid)), http.StatusOK, nil)
+	body := preset("Default interval", pid)
+	body["autoInterval"] = 0
+	decodeInto(t, env.putJSON(t, path, body), http.StatusOK, &saved)
+	if saved["autoInterval"] != float64(30) {
+		t.Errorf("an interval of 0: %v, want the default 30", saved["autoInterval"])
+	}
 
-	// Delete (DELETE -> 204).
-	resp = env.del(t, fmt.Sprintf("/api/presets/%d", id))
-	if resp.StatusCode != http.StatusNoContent {
-		t.Fatalf("delete status = %d; want 204", resp.StatusCode)
+	if got := status(env.putJSON(t, "/api/v1/presets/999", preset("Lost", pid))); got != http.StatusNotFound {
+		t.Errorf("replacing an unknown preset: %d, want 404", got)
 	}
-	resp.Body.Close()
+	if got := status(env.del(t, path)); got != http.StatusNoContent {
+		t.Fatalf("delete: %d, want 204", got)
+	}
+	if got := status(env.del(t, path)); got != http.StatusNotFound {
+		t.Errorf("deleting it again: %d, want 404", got)
+	}
 }
 
-func TestPresets_CreateValidation(t *testing.T) {
+// A blank name and no patterns are each a 422 naming the field, on a create and a
+// replace alike.
+func TestPresetsValidation(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 	pid := env.seedPattern(t, "P")
+	var made map[string]any
+	decodeInto(t, env.postJSON(t, "/api/v1/presets", preset("Fine", pid)), http.StatusCreated, &made)
+	path := fmt.Sprintf("/api/v1/presets/%d", int64(made["id"].(float64)))
 
-	// Create validation (POST /api/presets).
-	create := map[string]map[string]any{
-		"missing name": {"name": " ", "pattern_ids": []int64{pid}},
-		"no patterns":  {"name": "Has Name", "pattern_ids": []int64{}},
-	}
-	for name, body := range create {
-		t.Run(name, func(t *testing.T) {
-			resp := env.postJSON(t, "/api/presets", body)
-			if resp.StatusCode != http.StatusBadRequest {
-				t.Errorf("status = %d; want 400", resp.StatusCode)
-			}
-			resp.Body.Close()
-		})
-	}
-
-	// Update validation (PUT /api/presets/{id}): a blank name is rejected.
-	t.Run("update blank name", func(t *testing.T) {
-		resp := env.putJSON(t, fmt.Sprintf("/api/presets/%d", pid),
-			map[string]any{"name": " ", "pattern_ids": []int64{pid}})
-		if resp.StatusCode != http.StatusBadRequest {
-			t.Errorf("status = %d; want 400", resp.StatusCode)
+	for _, c := range []struct {
+		body map[string]any
+		want string
+	}{
+		{preset(" ", pid), "body.name"},
+		{preset("No Patterns"), "body.patternIds"},
+	} {
+		if at := invalid(t, env.postJSON(t, "/api/v1/presets", c.body)); !slices.Contains(at, c.want) {
+			t.Errorf("create %v: errors at %v, want %s", c.body, at, c.want)
 		}
-		resp.Body.Close()
-	})
+		if at := invalid(t, env.putJSON(t, path, c.body)); !slices.Contains(at, c.want) {
+			t.Errorf("replace %v: errors at %v, want %s", c.body, at, c.want)
+		}
+	}
 }

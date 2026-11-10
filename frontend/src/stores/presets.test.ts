@@ -1,30 +1,47 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import type { GamePreset } from '@/types/api'
+import type { GamePreset } from '@/api/client'
 
-const ep = vi.hoisted(() => ({
-  list: vi.fn(async () => ({ presets: [] as GamePreset[] })),
-  create: vi.fn(async () => ({ id: 1 })),
-  update: vi.fn(async () => ({ ok: true })),
-  del: vi.fn(async () => ({ ok: true })),
-}))
-vi.mock('@/lib/endpoints', () => ({
-  endpoints: { presets: { list: ep.list, create: ep.create, update: ep.update, delete: ep.del } },
+// The store calls the API client; only its calls are faked (unwrap is the real
+// one). Each fake answers a call's `{ data, error, response }`.
+const ok = (data: unknown, status = 200) => ({ data, response: new Response(null, { status }) })
+const api = vi.hoisted(() => ({ GET: vi.fn(), POST: vi.fn(), PUT: vi.fn(), DELETE: vi.fn() }))
+vi.mock('@/api/client', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  api,
 }))
 
 import { usePresetsStore } from './presets'
 import { useUiStore } from './ui'
 
+function preset(overrides: Partial<GamePreset> = {}): GamePreset {
+  return {
+    id: 3,
+    name: 'P',
+    patternIds: [1, 2],
+    gameDetails: 'GL',
+    auto: false,
+    autoInterval: 30,
+    createdAt: '2026-11-09T10:00:00Z',
+    ...overrides,
+  }
+}
+
 beforeEach(() => {
   setActivePinia(createPinia())
-  Object.values(ep).forEach((fn) => fn.mockClear())
+  Object.values(api).forEach((fn) => fn.mockReset())
+  api.GET.mockResolvedValue(ok({ presets: [] }))
+  api.POST.mockResolvedValue(ok(preset(), 201))
+  api.PUT.mockResolvedValue(ok(preset()))
+  api.DELETE.mockResolvedValue(ok(undefined, 204))
 })
 
 describe('loading and editor', () => {
   it('loadPresets populates the list', async () => {
-    ep.list.mockResolvedValueOnce({ presets: [{ id: 1 } as GamePreset] })
+    api.GET.mockResolvedValueOnce(ok({ presets: [preset({ id: 1 })] }))
     const s = usePresetsStore()
     await s.loadPresets()
+    expect(api.GET).toHaveBeenCalledWith('/presets')
     expect(s.presets).toHaveLength(1)
   })
 
@@ -34,19 +51,19 @@ describe('loading and editor', () => {
     expect(s.editingPreset).toEqual({
       id: 0,
       name: '',
-      pattern_ids: [],
-      game_details: '',
+      patternIds: [],
+      gameDetails: '',
       auto: false,
-      auto_interval: 30,
+      autoInterval: 30,
     })
   })
 
   it('editPreset copies values (array is cloned, not shared)', () => {
     const s = usePresetsStore()
-    const preset = { id: 3, name: 'P', pattern_ids: [1, 2], game_details: 'GL' } as GamePreset
-    s.editPreset(preset)
-    s.editingPreset!.pattern_ids.push(99)
-    expect(preset.pattern_ids).toEqual([1, 2]) // original untouched
+    const original = preset()
+    s.editPreset(original)
+    s.editingPreset!.patternIds.push(99)
+    expect(original.patternIds).toEqual([1, 2]) // original untouched
   })
 })
 
@@ -54,9 +71,9 @@ describe('savePreset', () => {
   it('rejects a blank name', async () => {
     const s = usePresetsStore()
     s.newPreset()
-    s.editingPreset!.pattern_ids = [1]
+    s.editingPreset!.patternIds = [1]
     await s.savePreset()
-    expect(ep.create).not.toHaveBeenCalled()
+    expect(api.POST).not.toHaveBeenCalled()
   })
 
   it('rejects when no patterns are selected', async () => {
@@ -64,17 +81,19 @@ describe('savePreset', () => {
     s.newPreset()
     s.editingPreset!.name = 'Has Name'
     await s.savePreset()
-    expect(ep.create).not.toHaveBeenCalled()
+    expect(api.POST).not.toHaveBeenCalled()
   })
 
   it('creates a new preset then reloads', async () => {
     const s = usePresetsStore()
     s.newPreset()
-    s.editingPreset!.name = 'Quick'
-    s.editingPreset!.pattern_ids = [5]
+    s.editingPreset!.name = ' Quick '
+    s.editingPreset!.patternIds = [5]
     await s.savePreset()
-    expect(ep.create).toHaveBeenCalledWith('Quick', [5], '', false, 30)
-    expect(ep.list).toHaveBeenCalled()
+    expect(api.POST).toHaveBeenCalledWith('/presets', {
+      body: { name: 'Quick', patternIds: [5], gameDetails: '', auto: false, autoInterval: 30 },
+    })
+    expect(api.GET).toHaveBeenCalledWith('/presets')
     expect(s.editingPreset).toBeNull()
   })
 
@@ -82,27 +101,48 @@ describe('savePreset', () => {
     const s = usePresetsStore()
     s.newPreset()
     s.editingPreset!.name = 'Auto'
-    s.editingPreset!.pattern_ids = [5]
+    s.editingPreset!.patternIds = [5]
     s.editingPreset!.auto = true
-    s.editingPreset!.auto_interval = 45
+    s.editingPreset!.autoInterval = 45
     await s.savePreset()
-    expect(ep.create).toHaveBeenCalledWith('Auto', [5], '', true, 45)
+    expect(api.POST).toHaveBeenCalledWith('/presets', {
+      body: { name: 'Auto', patternIds: [5], gameDetails: '', auto: true, autoInterval: 45 },
+    })
   })
 
-  it('updates an existing preset', async () => {
+  it('replaces an existing preset', async () => {
     const s = usePresetsStore()
-    s.editPreset({
-      id: 8,
-      name: 'Old',
-      pattern_ids: [1],
-      game_details: '',
-      auto: true,
-      auto_interval: 20,
-    } as GamePreset)
+    s.editPreset(
+      preset({
+        id: 8,
+        name: 'Old',
+        patternIds: [1],
+        gameDetails: '',
+        auto: true,
+        autoInterval: 20,
+      }),
+    )
     s.editingPreset!.name = 'New'
     await s.savePreset()
-    expect(ep.update).toHaveBeenCalledWith(8, 'New', [1], '', true, 20)
-    expect(ep.create).not.toHaveBeenCalled()
+    expect(api.PUT).toHaveBeenCalledWith('/presets/{id}', {
+      params: { path: { id: 8 } },
+      body: { name: 'New', patternIds: [1], gameDetails: '', auto: true, autoInterval: 20 },
+    })
+    expect(api.POST).not.toHaveBeenCalled()
+  })
+
+  it('keeps the editor open and says why when the save is refused', async () => {
+    const s = usePresetsStore()
+    s.editPreset(preset())
+    api.PUT.mockResolvedValueOnce({
+      error: { status: 404, detail: 'There is no such preset.' },
+      response: new Response(null, { status: 404 }),
+    })
+    const ui = useUiStore()
+    ui.notify = vi.fn()
+    await s.savePreset()
+    expect(ui.notify).toHaveBeenCalledWith('There is no such preset.', 'error')
+    expect(s.editingPreset).not.toBeNull()
   })
 })
 
@@ -111,16 +151,16 @@ describe('deletePreset', () => {
     useUiStore().confirm = vi.fn(async () => false)
     const s = usePresetsStore()
     await s.deletePreset(1)
-    expect(ep.del).not.toHaveBeenCalled()
+    expect(api.DELETE).not.toHaveBeenCalled()
   })
 
   it('deletes and clears the editor if the deleted preset was open', async () => {
     useUiStore().confirm = vi.fn(async () => true)
     const s = usePresetsStore()
-    s.editPreset({ id: 4, name: 'X', pattern_ids: [1], game_details: '' } as GamePreset)
+    s.editPreset(preset({ id: 4 }))
     await s.deletePreset(4)
-    expect(ep.del).toHaveBeenCalledWith(4)
+    expect(api.DELETE).toHaveBeenCalledWith('/presets/{id}', { params: { path: { id: 4 } } })
     expect(s.editingPreset).toBeNull()
-    expect(ep.list).toHaveBeenCalled()
+    expect(api.GET).toHaveBeenCalled()
   })
 })

@@ -18,7 +18,7 @@
  * fonts host or its origin allowlist. `applyHeaderFont()` then skips the
  * Google Fonts request for a family it knows is an uploaded one.
  */
-import type { UploadedFont } from '@/types/api'
+import type { UploadedFont } from '@/api/client'
 import { assetCssUrl } from '@/lib/assets'
 
 /**
@@ -268,7 +268,7 @@ export function applyUploadedFonts(fonts: UploadedFont[]): void {
  */
 export function applyHeaderFont(fontFamily: string | null | undefined): void {
   // Fall back to the default when the configured family carries CSS-breaking
-  // characters, so a malicious header_font can't inject CSS via the
+  // characters, so a malicious headerFont can't inject CSS via the
   // --header-font variable (the server validates it too; this is defense in
   // depth). The server rejects such values, so this only bites legacy data.
   const family = fontFamily && cssNameSafe(fontFamily) ? fontFamily : 'Arapey'

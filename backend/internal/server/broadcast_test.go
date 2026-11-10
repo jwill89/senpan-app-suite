@@ -1,258 +1,88 @@
 package server_test
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"testing"
 	"time"
 
 	"app-suite/internal/model"
-
-	"github.com/coder/websocket"
 )
 
-// -- WebSocket test helpers --------------------------------------------------
-//
-// These exercise the live-admin invalidation path end-to-end: an authenticated
-// admin opens the privileged WebSocket channel, a *public* mutation happens, and
-// the admin should receive a thin "resource_changed" signal (see
-// server.broadcastResourceChanged). The public draw/enter paths are excluded from
-// the adminMutationResource middleware, so the handlers broadcast explicitly -
-// these tests guard that wiring.
+// The pages' events end to end: a write happens, public or by staff, and the staff
+// whose pages show it hear that it changed, then read it again over REST.
 
-// dialAdminWS opens an authenticated admin WebSocket (no card id) to the test
-// server and returns the connection. The caller must already be logged in as an
-// admin - the session cookie rides on e.client's jar, and websocket.Dial reuses
-// that client (TLS pool + cookies). It then waits until the hub has registered
-// the connection so a subsequent broadcast can't race ahead of registration.
-func (e *testEnv) dialAdminWS(t *testing.T) *websocket.Conn {
+// listedCard reads the cards and answers the one with id, as a page reading them
+// again after cards_changed would.
+func listedCard(t *testing.T, env *testEnv, id string) cardSummary {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	// websocket.Dial interprets the https URL as wss.
-	conn, _, err := websocket.Dial(ctx, e.url("/api/ws"), &websocket.DialOptions{HTTPClient: e.client})
-	if err != nil {
-		t.Fatalf("dial admin ws: %v", err)
-	}
-
-	// ServeWS registers the client just after the handshake; Dial can return
-	// before that completes, so wait for the hub to see it before proceeding.
-	deadline := time.Now().Add(2 * time.Second)
-	for e.hub.ClientCount() == 0 {
-		if time.Now().After(deadline) {
-			conn.Close(websocket.StatusInternalError, "")
-			t.Fatal("admin ws never registered with hub")
+	var list struct{ Cards []cardSummary }
+	decodeInto(t, env.get(t, "/api/v1/cards"), http.StatusOK, &list)
+	for _, c := range list.Cards {
+		if c.ID == id {
+			return c
 		}
-		time.Sleep(2 * time.Millisecond)
 	}
-	return conn
+	t.Fatalf("the cards don't list %s", id)
+	return cardSummary{}
 }
 
-// dialPlayerWS opens an UNAUTHENTICATED player WebSocket for a card id - the
-// channel a visitor's board page uses. want is the hub client count to wait for
-// once this connection is registered, so a caller holding several sockets can
-// order its setup deterministically.
-func (e *testEnv) dialPlayerWS(t *testing.T, cardID string, want int) *websocket.Conn {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	// A bare client: no cookie jar, so this carries no admin session at all.
-	conn, _, err := websocket.Dial(ctx, e.url("/api/ws?id="+cardID), &websocket.DialOptions{
-		HTTPClient: e.ts.Client(),
-	})
-	if err != nil {
-		t.Fatalf("dial player ws: %v", err)
-	}
-	deadline := time.Now().Add(2 * time.Second)
-	for e.hub.ClientCount() < want {
-		if time.Now().After(deadline) {
-			conn.Close(websocket.StatusInternalError, "")
-			t.Fatalf("player ws never registered with hub (count=%d, want %d)", e.hub.ClientCount(), want)
-		}
-		time.Sleep(2 * time.Millisecond)
-	}
-	return conn
-}
-
-// expectNoCardsUpdate reads frames until the deadline and fails if a cards_update
-// arrives. Other message types are ignored - the point is the absence of this one
-// payload, not silence on the socket.
-func expectNoCardsUpdate(t *testing.T, conn *websocket.Conn, within time.Duration) {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), within)
-	defer cancel()
-	for {
-		_, data, err := conn.Read(ctx)
-		if err != nil {
-			return // deadline reached with no cards_update: the expected outcome.
-		}
-		var msg struct {
-			Type string `json:"type"`
-		}
-		if json.Unmarshal(data, &msg) == nil && msg.Type == "cards_update" {
-			t.Fatalf("player socket received cards_update: %s", data)
-		}
-	}
-}
-
-// TestCardsUpdateNotSentToPlayers pins the card roster to the admin channel.
-// broadcastCards used to call the unfiltered hub.Broadcast, which reaches every
-// socket - so any card mutation handed the full permission-gated GET /api/cards
-// payload (card ids, character names, worlds, staff notes, approval status) to
-// anonymous player connections, which register with nothing but ?id=<card>. No
-// player client renders it: the SPA discards cards_update outside the admin view.
-func TestCardsUpdateNotSentToPlayers(t *testing.T) {
+// The card list names who holds which card, so its event goes to the staff alone: a
+// board hears nothing of it.
+func TestCardsChangedNotSentToPlayers(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
-
 	if err := env.store.SaveCard(t.Context(), "PLAYR1", srvValidBoard()); err != nil {
 		t.Fatal(err)
 	}
+	player := boardStream(t, env, "PLAYR1")
+	admin := staffStream(t, env, env.client)
 
-	player := env.dialPlayerWS(t, "PLAYR1", 1)
-	defer player.Close(websocket.StatusNormalClosure, "")
-	admin := env.dialAdminWS(t)
-	defer admin.Close(websocket.StatusNormalClosure, "")
+	decodeInto(t, env.postJSON(t, "/api/v1/cards/PLAYR1/protect", map[string]any{"protected": true}), http.StatusOK, nil)
 
-	resp := env.postJSON(t, "/api/cards/PLAYR1/protect", map[string]any{"protected": true})
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("protect status = %d; want 200", resp.StatusCode)
-	}
-	resp.Body.Close()
-
-	// The admin channel still gets it - this must not regress into "nobody gets it".
-	if card := expectCardsUpdate(t, admin, "PLAYR1"); !card.Protected {
-		t.Error("admin cards_update lost protected=true")
-	}
-	expectNoCardsUpdate(t, player, 750*time.Millisecond)
+	admin.expect("cards_changed", 3*time.Second)
+	player.expectNone("cards_changed", 750*time.Millisecond)
 }
 
-// expectResourceChanged reads WS frames until it sees a "resource_changed" for
-// want (failing on a mismatched resource), or fails on timeout. Non-JSON/other
-// message types are skipped so the assertion is robust to unrelated traffic.
-func expectResourceChanged(t *testing.T, conn *websocket.Conn, want string) {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	for {
-		_, data, err := conn.Read(ctx)
-		if err != nil {
-			t.Fatalf("ws read (waiting for resource_changed %q): %v", want, err)
-		}
-		var msg struct {
-			Type     string `json:"type"`
-			Resource string `json:"resource"`
-		}
-		if json.Unmarshal(data, &msg) != nil || msg.Type != "resource_changed" {
-			continue
-		}
-		if msg.Resource != want {
-			t.Fatalf("resource_changed resource = %q; want %q", msg.Resource, want)
-		}
-		return
-	}
-}
-
-// expectCardsUpdate reads WS frames until a cards_update carrying card id, and
-// returns that entry so tests can assert on its status fields. Skips unrelated
-// message types.
-func expectCardsUpdate(t *testing.T, conn *websocket.Conn, id string) model.CardListEntry {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	for {
-		_, data, err := conn.Read(ctx)
-		if err != nil {
-			t.Fatalf("ws read (waiting for cards_update %q): %v", id, err)
-		}
-		var msg struct {
-			Type  string                `json:"type"`
-			Cards []model.CardListEntry `json:"cards"`
-		}
-		if json.Unmarshal(data, &msg) != nil || msg.Type != "cards_update" {
-			continue
-		}
-		for _, c := range msg.Cards {
-			if c.ID == id {
-				return c
-			}
-		}
-		t.Fatalf("cards_update did not contain card %q", id)
-	}
-}
-
-// -- Card status broadcasts (regression: the cards_update payload must carry the
-// full card shape, not a subset) -----------------------------------------------
-
-// TestCardProtectBroadcastsProtected guards against the cards_update broadcast
-// dropping status fields. Protecting a card must push a cards_update whose entry
-// has protected=true - a dropped field made the Protected lock lag until a manual
-// refetch, and only in one direction (the omitted field always read false, so
-// unprotect "worked" but protect didn't).
-func TestCardProtectBroadcastsProtected(t *testing.T) {
+// Protecting a card tells the staff, and the list they read again has it protected.
+func TestCardProtectTellsStaff(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
-
 	if err := env.store.SaveCard(t.Context(), "PROT01", srvValidBoard()); err != nil {
 		t.Fatal(err)
 	}
+	s := staffStream(t, env, env.client)
 
-	conn := env.dialAdminWS(t)
-	defer conn.Close(websocket.StatusNormalClosure, "")
+	decodeInto(t, env.postJSON(t, "/api/v1/cards/PROT01/protect", map[string]any{"protected": true}), http.StatusOK, nil)
 
-	resp := env.postJSON(t, "/api/cards/PROT01/protect", map[string]any{"protected": true})
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("protect status = %d; want 200", resp.StatusCode)
-	}
-	resp.Body.Close()
-
-	if card := expectCardsUpdate(t, conn, "PROT01"); !card.Protected {
-		t.Error("cards_update dropped protected=true (the lock icon would lag until a refetch)")
+	s.expect("cards_changed", 3*time.Second)
+	if !listedCard(t, env, "PROT01").Protected {
+		t.Error("the list read again doesn't have the card protected")
 	}
 }
 
-// TestCardApproveBroadcastsStatus verifies approving a pending custom card pushes a
-// cards_update carrying custom_status="approved" and protected=true, so the star +
-// lock update live rather than only after a manual refetch.
-func TestCardApproveBroadcastsStatus(t *testing.T) {
+// Approving a personal card tells the staff, and the list they read again has it
+// approved and protected.
+func TestCardApproveTellsStaff(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
+	env.seedCardRequest(t, "CUST01", srvValidBoard())
+	s := staffStream(t, env, env.client)
 
-	if err := env.store.CreateCustomCard(t.Context(), "CUST01", srvValidBoard(), "Aria", "Gilgamesh"); err != nil {
-		t.Fatal(err)
-	}
+	decodeInto(t, env.postJSON(t, "/api/v1/cards/CUST01/approve", nil), http.StatusOK, nil)
 
-	conn := env.dialAdminWS(t)
-	defer conn.Close(websocket.StatusNormalClosure, "")
-
-	resp := env.postJSON(t, "/api/cards/CUST01/approve", nil)
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("approve status = %d; want 200", resp.StatusCode)
-	}
-	resp.Body.Close()
-
-	card := expectCardsUpdate(t, conn, "CUST01")
-	if card.CustomStatus != "approved" {
-		t.Errorf("cards_update custom_status = %q; want approved", card.CustomStatus)
-	}
-	if !card.Protected {
-		t.Error("cards_update dropped protected=true for the approved custom card")
+	s.expect("cards_changed", 3*time.Second)
+	c := listedCard(t, env, "CUST01")
+	if c.CustomStatus != "approved" || !c.Protected {
+		t.Errorf("the list read again: %+v; want approved and protected", c)
 	}
 }
 
-// -- Garapon draw broadcast --------------------------------------------------
-
-// TestGarapon_DrawBroadcastsResourceChanged verifies that a public draw (which
-// goes through the token path, excluded from the adminMutationResource
-// middleware) still pushes a "garapons" invalidation so an admin viewing the
-// garapon detail refetches the draw log live.
-func TestGarapon_DrawBroadcastsResourceChanged(t *testing.T) {
+// A public garapon draw goes through the token path, which the admin-mutation rule
+// leaves out, and still tells the garapon page.
+func TestGaraponDrawTellsItsPage(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
-
-	// Seed a garapon + a drawing link directly through the store.
 	gid, err := env.store.CreateGarapon(t.Context(), &model.Garapon{
 		Title:  "Festival Drum",
 		Prizes: []model.GaraponPrize{{Name: "Grand", BallColor: "#fff", Rate: 1, IsGrand: true}},
@@ -264,99 +94,90 @@ func TestGarapon_DrawBroadcastsResourceChanged(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	s := staffStream(t, env, env.client)
 
-	conn := env.dialAdminWS(t)
-	defer conn.Close(websocket.StatusNormalClosure, "")
+	decodeInto(t, env.postJSON(t, "/api/garapon/"+player.Token+"/draw", map[string]any{}), http.StatusOK, nil)
 
-	// Public draw - note the singular "garapon" token path.
-	resp := env.postJSON(t, "/api/garapon/"+player.Token+"/draw", map[string]any{})
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("draw status = %d; want 200", resp.StatusCode)
+	if e := s.expect("resource_changed", 3*time.Second); e.str("resource") != "garapons" {
+		t.Errorf("resource_changed: %+v; want garapons", e)
 	}
-	resp.Body.Close()
-
-	expectResourceChanged(t, conn, "garapons")
 }
 
-// -- Raffle enter broadcast --------------------------------------------------
-
-// TestRaffle_EnterBroadcastsResourceChanged verifies that a public raffle sign-up
-// (the ".../enter" path, excluded from the adminMutationResource middleware)
-// pushes a "raffles" invalidation so an admin viewing the raffle detail refetches
-// the entry list live.
-func TestRaffle_EnterBroadcastsResourceChanged(t *testing.T) {
+// A public raffle sign-up (".../enter"), which the admin-mutation rule leaves out,
+// still tells the raffles page.
+func TestRaffleEnterTellsItsPage(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
-
 	rid, err := env.store.CreateRaffle(t.Context(), &model.Raffle{Title: "Prize Raffle", MaxEntries: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
+	s := staffStream(t, env, env.client)
 
-	conn := env.dialAdminWS(t)
-	defer conn.Close(websocket.StatusNormalClosure, "")
-
-	resp := env.postJSON(t, fmt.Sprintf("/api/raffles/%d/enter", rid), map[string]any{
+	decodeInto(t, env.postJSON(t, fmt.Sprintf("/api/raffles/%d/enter", rid), map[string]any{
 		"character_name": "Cloud", "world": "Gaia", "num_entries": 1,
-	})
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("enter status = %d; want 201", resp.StatusCode)
-	}
-	resp.Body.Close()
+	}), http.StatusCreated, nil)
 
-	expectResourceChanged(t, conn, "raffles")
-}
-
-// expectMessageType reads frames until one carries the given type, or fails on
-// timeout. Returns nothing - the assertion is that it arrives at all.
-func expectMessageType(t *testing.T, conn *websocket.Conn, want string, within time.Duration) {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), within)
-	defer cancel()
-	for {
-		_, data, err := conn.Read(ctx)
-		if err != nil {
-			t.Fatalf("ws read (waiting for %q): %v", want, err)
-		}
-		var msg struct {
-			Type string `json:"type"`
-		}
-		if json.Unmarshal(data, &msg) == nil && msg.Type == want {
-			return
-		}
+	if e := s.expect("resource_changed", 3*time.Second); e.str("resource") != "raffles" {
+		t.Errorf("resource_changed: %+v; want raffles", e)
 	}
 }
 
-// TestCardDeleteReachesThePlayer pins the final-message delivery guarantee that
-// DisconnectCardClients exists to provide. It queues card_deleted on the player's
-// socket and then unregisters them - but unregister also cancelled the client
-// context, and writePump selects on ctx.Done() alongside the send channel. The
-// cancelled context won the race about half the time, and even when the message
-// was picked its write deadline derived from that same dead context and failed
-// immediately, so in practice the message never went out. The player was left
-// holding a board for a card that no longer existed and silently reconnected to
-// it. The context is now released by the pumps once they are actually done.
-//
-// Run repeatedly: the original defect was a race, so a single pass proved nothing.
+// A book club's change tells that club's page alone.
+func TestBookClubChangeTellsItsClub(t *testing.T) {
+	env := newTestEnv(t)
+	yaoi := makeActiveUser(t, env, "yaoistaff", "correct horse battery", []string{"bookclub-yaoi"})
+	yuri := makeActiveUser(t, env, "yuristaff", "correct horse battery", []string{"bookclub-yuri"})
+	club := staffStream(t, env, yaoi)
+	other := staffStream(t, env, yuri)
+
+	if resp := env.postJSON(t, "/api/book-clubs/yaoi/reading-lists", map[string]any{"title": "Spring"}); status(resp) != http.StatusCreated {
+		t.Fatalf("create a reading list: %d", resp.StatusCode)
+	}
+
+	if e := club.expect("resource_changed", 3*time.Second); e.str("resource") != "bookclub-yaoi" {
+		t.Errorf("resource_changed: %+v; want bookclub-yaoi", e)
+	}
+	other.expectNone("resource_changed", 300*time.Millisecond)
+}
+
+// Deleting a card tells its board, every time, and ends its stream: the board goes
+// home rather than holding a board for a card that no longer exists.
 func TestCardDeleteReachesThePlayer(t *testing.T) {
 	for i := range 12 {
 		env := newTestEnv(t)
 		env.loginAdmin(t)
-
 		cardID := fmt.Sprintf("DEL%03d", i)
 		if err := env.store.SaveCard(t.Context(), cardID, srvValidBoard()); err != nil {
 			t.Fatal(err)
 		}
+		player := boardStream(t, env, cardID)
 
-		player := env.dialPlayerWS(t, cardID, 1)
-
-		resp := env.del(t, "/api/cards/"+cardID)
-		if resp.StatusCode != http.StatusNoContent {
+		if resp := env.del(t, "/api/v1/cards/"+cardID); status(resp) != http.StatusNoContent {
 			t.Fatalf("delete card status = %d; want 204", resp.StatusCode)
 		}
-		resp.Body.Close()
 
-		expectMessageType(t, player, "card_deleted", 3*time.Second)
-		player.Close(websocket.StatusNormalClosure, "")
+		player.expect("card_deleted", 3*time.Second)
+		player.expectEnd(time.Second)
 	}
+}
+
+// Delete all tells the boards of the cards it took, and only them: a board on a
+// protected card keeps its stream.
+func TestCardDeleteAllReachesOnlyTheirPlayers(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+	for _, id := range []string{"GONE01", "KEEP01"} {
+		if err := env.store.SaveCard(t.Context(), id, srvValidBoard()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	decodeInto(t, env.postJSON(t, "/api/v1/cards/KEEP01/protect", map[string]any{"protected": true}), http.StatusOK, nil)
+	gone := boardStream(t, env, "GONE01")
+	kept := boardStream(t, env, "KEEP01")
+
+	decodeInto(t, env.del(t, "/api/v1/cards/all"), http.StatusOK, nil)
+
+	gone.expect("card_deleted", 3*time.Second)
+	kept.expectNone("card_deleted", 500*time.Millisecond)
 }

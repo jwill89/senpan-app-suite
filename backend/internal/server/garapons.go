@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"app-suite/internal/model"
+	"app-suite/internal/permissions"
 	"app-suite/internal/store"
 )
 
@@ -26,7 +27,7 @@ import (
 //	Auth:      admin, or a user granted festival-garapon
 //	Response:  {"garapons": [...]}
 func (s *Server) handleGaraponsList(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permFestivalGarapon) {
+	if !s.requirePermission(w, r, permissions.FestivalGarapon) {
 		return
 	}
 	garapons, err := s.store.ListGarapons(r.Context())
@@ -44,7 +45,7 @@ func (s *Server) handleGaraponsList(w http.ResponseWriter, r *http.Request) {
 //	Auth:      admin, or a user granted festival-garapon
 //	Response:  {"garapon": Garapon, "players": [...], "draws": [...]}
 func (s *Server) handleGaraponDetail(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permFestivalGarapon) {
+	if !s.requirePermission(w, r, permissions.FestivalGarapon) {
 		return
 	}
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
@@ -158,7 +159,7 @@ func sanitizeGaraponPrizes(in []model.GaraponPrize) (prizes []model.GaraponPrize
 //	Auth:      admin, or a user granted festival-garapon
 //	Response:  201 {"garapon": Garapon}
 func (s *Server) handleGaraponCreate(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permFestivalGarapon) {
+	if !s.requirePermission(w, r, permissions.FestivalGarapon) {
 		return
 	}
 	req, err := readJSON[garaponWriteRequest](w, r)
@@ -205,7 +206,7 @@ func (s *Server) handleGaraponCreate(w http.ResponseWriter, r *http.Request) {
 //	Auth:      admin, or a user granted festival-garapon
 //	Response:  200 {"ok": true}
 func (s *Server) handleGaraponUpdate(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permFestivalGarapon) {
+	if !s.requirePermission(w, r, permissions.FestivalGarapon) {
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "garapon")
@@ -255,7 +256,7 @@ func (s *Server) handleGaraponUpdate(w http.ResponseWriter, r *http.Request) {
 //	Auth:      admin, or a user granted festival-garapon
 //	Response:  204 No Content
 func (s *Server) handleGaraponDelete(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permFestivalGarapon) {
+	if !s.requirePermission(w, r, permissions.FestivalGarapon) {
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "garapon")
@@ -272,7 +273,7 @@ func (s *Server) handleGaraponDelete(w http.ResponseWriter, r *http.Request) {
 // setGaraponStatus applies a status change and responds with {ok, status}. Shared
 // by the close and reopen verb handlers.
 func (s *Server) setGaraponStatus(w http.ResponseWriter, r *http.Request, status string) {
-	if !s.requirePermission(w, r, permFestivalGarapon) {
+	if !s.requirePermission(w, r, permissions.FestivalGarapon) {
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "garapon")
@@ -320,7 +321,7 @@ type garaponPlayerCreateRequest struct {
 //	Auth:      admin, or a user granted festival-garapon
 //	Response:  201 {"player": GaraponPlayer}
 func (s *Server) handleGaraponPlayerCreate(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permFestivalGarapon) {
+	if !s.requirePermission(w, r, permissions.FestivalGarapon) {
 		return
 	}
 	garaponID, ok := pathInt64(w, r, "id", "garapon")
@@ -383,7 +384,7 @@ func (s *Server) handleGaraponPlayerCreate(w http.ResponseWriter, r *http.Reques
 					player.StampCardToken = card.Token
 				}
 				// A stamp card was issued - let admins viewing the rally see it live.
-				s.broadcastResourceChanged("stamp-rallies")
+				s.resourceChanged("stamp-rallies")
 			}
 		}
 	}
@@ -396,7 +397,7 @@ func (s *Server) handleGaraponPlayerCreate(w http.ResponseWriter, r *http.Reques
 //	Auth:      admin, or a user granted festival-garapon
 //	Response:  204 No Content
 func (s *Server) handleGaraponPlayerDelete(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permFestivalGarapon) {
+	if !s.requirePermission(w, r, permissions.FestivalGarapon) {
 		return
 	}
 	garaponID, ok := pathInt64(w, r, "id", "garapon")
@@ -564,10 +565,10 @@ func (s *Server) handleGaraponDraw(w http.ResponseWriter, r *http.Request) {
 
 	// A draw mutates the admin-visible draw log + the player's used count, but this
 	// is the *public* draw path (the token is the capability), so it's excluded from
-	// the adminMutationResource middleware that invalidates admin views. Broadcast
-	// the "garapons" signal explicitly so an admin viewing the garapon detail sees
-	// the new draw appear live (the refetch re-applies the per-feature guard).
-	s.broadcastResourceChanged("garapons")
+	// the adminMutationResource middleware that invalidates admin views. Tell
+	// "garapons" here so an admin viewing the garapon detail sees the new draw
+	// appear live (the read again applies the per-feature guard).
+	s.resourceChanged("garapons")
 
 	// Exactly one draw was just recorded, so the fresh usage is player.DrawsUsed+1
 	// (its allowance is unchanged) - no need to reload the player.

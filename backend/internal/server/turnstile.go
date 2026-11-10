@@ -64,16 +64,3 @@ func (s *Server) verifyTurnstile(ctx context.Context, token, remoteIP string) bo
 	}
 	return out.Success
 }
-
-// handleConfig serves the client bootstrap config. Public - it carries only the
-// non-secret Turnstile site key (empty when the bot check is disabled), which the
-// login page reads to decide whether to render the challenge.
-//
-//	Endpoint:  GET /api/config
-//	Auth:      public
-//	Response:  {"turnstile_site_key": "..."}
-func (s *Server) handleConfig(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, struct {
-		TurnstileSiteKey string `json:"turnstile_site_key"`
-	}{TurnstileSiteKey: s.turnstileSiteKey})
-}

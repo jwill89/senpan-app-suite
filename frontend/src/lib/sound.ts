@@ -9,7 +9,7 @@
  * nothing about the player's board, so it never does the player's job for them.
  *
  * Everything is wrapped in try/catch and gated on feature support so a missing
- * AudioContext / blocked autoplay never throws into the WebSocket handler.
+ * AudioContext / blocked autoplay never throws into a live event's handler.
  */
 
 let ctx: AudioContext | null = null
@@ -115,7 +115,7 @@ let armed = false
 
 /**
  * Resumes the AudioContext on the reader's first click, tap or key press. A sound
- * that arrives on its own (a WebSocket alert) can only play once some gesture has
+ * that arrives on its own (a live event's alert) can only play once some gesture has
  * resumed the context - iOS refuses outright otherwise - so a page that may chime
  * without being touched calls this once when it mounts. Idempotent.
  */
@@ -408,7 +408,7 @@ function woodKnock(ac: AudioContext, t: number, amp: number): void {
 /**
  * Triggers a brief device vibration where supported (mobile). Skipped until the
  * page has had a tap: browsers refuse it before then anyway, and Chrome logs a
- * console error each time it is asked - which a WebSocket alert would otherwise do.
+ * console error each time it is asked - which a live event's alert would otherwise do.
  */
 export function vibrate(pattern: number | number[] = 60): void {
   try {

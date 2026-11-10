@@ -27,6 +27,8 @@ import { usePatternsStore } from './patterns'
 import { useAnnouncementsStore } from './announcements'
 import { useImagesStore } from './images'
 import { useUsersStore } from './users'
+import { useAuthStore } from './auth'
+import { useLogsStore } from './logs'
 import type { BOOK_CLUBS } from '@/lib/constants'
 import { createFreshness } from '@/lib/freshness'
 
@@ -63,8 +65,54 @@ export type AdminTab =
 // data we just loaded. Keyed by data domain (several tabs can share one key, e.g.
 // the open/closed raffle tabs, or the game/presets tabs). Mutations refresh by
 // calling the store loaders directly (bypassing this), so edits still show at
-// once; the live game/cards/patterns also stay current over WebSocket.
+// once; the live events have the game, cards and patterns read again as they change.
 const tabData = createFreshness(30_000)
+
+// The resource_changed resource each tab shows, for reading the open tab again.
+// A book club's tab is its own resource; the Game page shows the presets.
+const TAB_RESOURCE: Partial<Record<AdminTab, string>> = {
+  'bingo-game': 'presets',
+  'bingo-presets': 'presets',
+  'bingo-winners-log': 'winners-log',
+  'teahouse-announcements': 'announcements',
+  'teahouse-affiliates': 'affiliates',
+  'teahouse-tea-rooms': 'tea-rooms',
+  'teahouse-raffles': 'raffles',
+  'festival-map': 'festival-maps',
+  'festival-garapon': 'garapons',
+  'festival-stamp-rally': 'stamp-rallies',
+  'festival-ema': 'ema-boards',
+  'festival-ema-requests': 'ema-requests',
+  'atelier-fonts': 'fonts',
+  'atelier-carrd': 'carrd',
+  'system-settings': 'integrations',
+  'system-themes': 'themes',
+  'system-images': 'images',
+  'system-users': 'users',
+  'system-logs': 'logs',
+}
+
+/** The freshness keys the tabs load under, all forgotten when the live stream reopens. */
+const TAB_KEYS = [
+  'raffles',
+  'festival-maps',
+  'garapons',
+  'affiliates',
+  'tea-rooms',
+  'stamp-rallies',
+  'ema-boards',
+  'ema-requests',
+  'announcements',
+  'styles',
+  'settings',
+  'images',
+  'users',
+  'fonts',
+  'carrd',
+  'winners-log',
+  'patterns',
+  'presets',
+]
 
 export const useAdminStore = defineStore('admin', () => {
   const adminTab = ref<AdminTab>('bingo-game')
@@ -235,19 +283,19 @@ export const useAdminStore = defineStore('admin', () => {
   }
 
   /**
-   * Apply a thin "resource changed" signal pushed when another admin mutated an
-   * admin CRUD resource (see the WebSocket `resource_changed` message). If this
-   * admin is currently viewing that resource, refetch it now (the REST load
-   * re-applies the per-feature permission guard); otherwise just drop its
-   * freshness stamp so the next navigation refetches - closing the gap where a
-   * change made while you were on another tab wouldn't show on a quick return.
+   * Applies a "resource changed" live event (`resource_changed`, from another
+   * admin's change or a visitor's): if this admin is viewing that resource, it is
+   * read again now (the REST load applies the per-feature permission guard);
+   * otherwise its freshness stamp is dropped so the next navigation reads it -
+   * closing the gap where a change made while you were on another tab wouldn't
+   * show on a quick return.
    *
-   * Refetching reuses the normal list/detail loaders, which only show a spinner
+   * Reading again reuses the normal list/detail loaders, which only show a spinner
    * when there's no data yet, so a live refresh swaps rows in without a flash. The
    * editor forms live in separate store state, so a background reload never
-   * clobbers an in-progress edit. Resources with their own realtime events (the
-   * live game, cards, patterns, theme, settings) are handled in useWebSocket and
-   * never reach here.
+   * clobbers an in-progress edit. The game, cards, patterns and settings have
+   * events of their own (useLiveEvents); `themes` arrives with theme_changed, and
+   * `logs` only when the stream reopens.
    */
   function refreshResource(resource: string): void {
     const tab = adminTab.value
@@ -340,6 +388,10 @@ export const useAdminStore = defineStore('admin', () => {
         })
         break
       case 'winners-log':
+        // A game's end logs its winners on every console's behalf: the Game page's
+        // frequent winners come from the log too (one light read, debounced like
+        // the log), kept fresh for whenever the Game page shows them.
+        useGameStore().refreshFrequentWinnersSoon()
         apply('winners-log', tab === 'bingo-winners-log', () => {
           // Debounced: the server emits one of these per deleted row, so a bulk
           // delete arrives as a burst and would otherwise re-walk the whole log
@@ -387,14 +439,52 @@ export const useAdminStore = defineStore('admin', () => {
         }
         break
       }
-      case 'bookclub':
-        // Book club lists use the store's own per-club freshness, so route the
-        // signal through it (the signal isn't club-specific, so it acts on the
-        // currently-open club - cross-club staleness self-heals via the TTL).
-        useBookclubStore().applyExternalChange(tab.startsWith('bookclub-'))
+      case 'integrations':
+        // The admin's half of the Settings page.
+        if (tab === 'system-settings' && useAuthStore().isAdmin) {
+          void useAppStore().loadIntegrations()
+        }
         break
+      case 'themes':
+        apply('styles', tab === 'system-themes', () => {
+          void useStylesStore().loadStyles()
+        })
+        break
+      case 'logs':
+        if (tab === 'system-logs') {
+          void useLogsStore().load()
+        }
+        break
+      default:
+        // Book club lists use the store's own per-club freshness, so the change
+        // goes through it, for the club it names.
+        if (resource.startsWith('bookclub-')) {
+          useBookclubStore().applyExternalChange(
+            resource.slice('bookclub-'.length),
+            tab === resource,
+          )
+        }
     }
   }
 
-  return { adminTab, adminSection, setTabFromRoute, refreshResource }
+  /**
+   * Reads again what the open tab shows, and forgets every tab's freshness so the
+   * next one entered reads afresh too: the live stream has just opened, and
+   * anything may have changed while it was closed.
+   */
+  function refreshOpenTab(): void {
+    for (const key of TAB_KEYS) {
+      tabData.invalidate(key)
+    }
+    const tab = adminTab.value
+    const resource = tab.startsWith('bookclub-') ? tab : TAB_RESOURCE[tab]
+    if (tab === 'system-settings') {
+      void useAppStore().loadSettings()
+    }
+    if (resource) {
+      refreshResource(resource)
+    }
+  }
+
+  return { adminTab, adminSection, setTabFromRoute, refreshResource, refreshOpenTab }
 })

@@ -12,7 +12,9 @@ import (
 	"strings"
 	"time"
 
+	"app-suite/internal/discord"
 	"app-suite/internal/model"
+	"app-suite/internal/permissions"
 )
 
 // announcementSchedulerInterval is how often the background scheduler checks for
@@ -30,7 +32,7 @@ var validScheduleKinds = map[string]bool{"": true, "once": true, "daily": true, 
 //	Auth:      admin, or a user granted this page's permission
 //	Response:  {"types": [...]}
 func (s *Server) handleAnnouncementTypesList(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseAnnounce) {
+	if !s.requirePermission(w, r, permissions.TeahouseAnnouncements) {
 		return
 	}
 	types, err := s.store.ListAnnouncementTypes(r.Context())
@@ -56,7 +58,7 @@ func (req announcementTypeWriteRequest) validate(w http.ResponseWriter) (name, w
 	// A provided webhook URL must be a Discord webhook so the server can't be
 	// pointed at an arbitrary outbound host. Empty = this type has no webhook.
 	webhook = strings.TrimSpace(req.WebhookURL)
-	if webhook != "" && !isDiscordWebhookURL(webhook) {
+	if webhook != "" && !discord.IsWebhookURL(webhook) {
 		writeError(w, http.StatusBadRequest, "Discord webhook URLs must look like https://discord.com/api/webhooks/...")
 		return "", "", false
 	}
@@ -74,7 +76,7 @@ func (req announcementTypeWriteRequest) validate(w http.ResponseWriter) (name, w
 //	Auth:      admin, or a user granted this page's permission
 //	Response:  201 {"type": AnnouncementType}
 func (s *Server) handleAnnouncementTypeCreate(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseAnnounce) {
+	if !s.requirePermission(w, r, permissions.TeahouseAnnouncements) {
 		return
 	}
 	req, err := readJSON[announcementTypeWriteRequest](w, r)
@@ -101,7 +103,7 @@ func (s *Server) handleAnnouncementTypeCreate(w http.ResponseWriter, r *http.Req
 //	Auth:      admin, or a user granted this page's permission
 //	Response:  200 {"type": AnnouncementType}
 func (s *Server) handleAnnouncementTypeUpdate(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseAnnounce) {
+	if !s.requirePermission(w, r, permissions.TeahouseAnnouncements) {
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "type")
@@ -132,7 +134,7 @@ func (s *Server) handleAnnouncementTypeUpdate(w http.ResponseWriter, r *http.Req
 //	Auth:      admin, or a user granted this page's permission
 //	Response:  204 No Content
 func (s *Server) handleAnnouncementTypeDelete(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseAnnounce) {
+	if !s.requirePermission(w, r, permissions.TeahouseAnnouncements) {
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "type")
@@ -164,7 +166,7 @@ func (s *Server) handleAnnouncementTypeDelete(w http.ResponseWriter, r *http.Req
 //	Auth:      admin, or a user granted this page's permission
 //	Response:  {"roles": [...]}
 func (s *Server) handleAnnouncementRolesList(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseAnnounce) {
+	if !s.requirePermission(w, r, permissions.TeahouseAnnouncements) {
 		return
 	}
 	roles, err := s.store.ListAnnouncementRoles(r.Context())
@@ -206,7 +208,7 @@ func (req announcementRoleWriteRequest) validate(w http.ResponseWriter) (name, r
 //	Auth:      admin, or a user granted this page's permission
 //	Response:  201 {"role": AnnouncementRole}
 func (s *Server) handleAnnouncementRoleCreate(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseAnnounce) {
+	if !s.requirePermission(w, r, permissions.TeahouseAnnouncements) {
 		return
 	}
 	req, err := readJSON[announcementRoleWriteRequest](w, r)
@@ -233,7 +235,7 @@ func (s *Server) handleAnnouncementRoleCreate(w http.ResponseWriter, r *http.Req
 //	Auth:      admin, or a user granted this page's permission
 //	Response:  200 {"role": AnnouncementRole}
 func (s *Server) handleAnnouncementRoleUpdate(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseAnnounce) {
+	if !s.requirePermission(w, r, permissions.TeahouseAnnouncements) {
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "role")
@@ -264,7 +266,7 @@ func (s *Server) handleAnnouncementRoleUpdate(w http.ResponseWriter, r *http.Req
 //	Auth:      admin, or a user granted this page's permission
 //	Response:  204 No Content
 func (s *Server) handleAnnouncementRoleDelete(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseAnnounce) {
+	if !s.requirePermission(w, r, permissions.TeahouseAnnouncements) {
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "role")
@@ -309,7 +311,7 @@ func isDiscordSnowflake(s string) bool {
 //	Auth:      admin, or a user granted this page's permission
 //	Response:  {"announcements": [...]}
 func (s *Server) handleAnnouncementsList(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseAnnounce) {
+	if !s.requirePermission(w, r, permissions.TeahouseAnnouncements) {
 		return
 	}
 	items, err := s.store.ListAnnouncements(r.Context())
@@ -353,7 +355,7 @@ type announcementReorderRequest struct {
 //	Auth:      admin, or a user granted this page's permission
 //	Response:  201 {"announcement": Announcement}
 func (s *Server) handleAnnouncementCreate(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseAnnounce) {
+	if !s.requirePermission(w, r, permissions.TeahouseAnnouncements) {
 		return
 	}
 	req, err := readJSON[announcementWriteRequest](w, r)
@@ -380,7 +382,7 @@ func (s *Server) handleAnnouncementCreate(w http.ResponseWriter, r *http.Request
 //	Auth:      admin, or a user granted this page's permission
 //	Response:  200 {"announcement": Announcement}
 func (s *Server) handleAnnouncementUpdate(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseAnnounce) {
+	if !s.requirePermission(w, r, permissions.TeahouseAnnouncements) {
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "announcement")
@@ -425,7 +427,7 @@ func (s *Server) handleAnnouncementUpdate(w http.ResponseWriter, r *http.Request
 //	Auth:      admin, or a user granted this page's permission
 //	Response:  204 No Content
 func (s *Server) handleAnnouncementDelete(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseAnnounce) {
+	if !s.requirePermission(w, r, permissions.TeahouseAnnouncements) {
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "announcement")
@@ -445,7 +447,7 @@ func (s *Server) handleAnnouncementDelete(w http.ResponseWriter, r *http.Request
 //	Auth:      admin, or a user granted this page's permission
 //	Response:  200 {"announcement": Announcement}
 func (s *Server) handleAnnouncementSend(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseAnnounce) {
+	if !s.requirePermission(w, r, permissions.TeahouseAnnouncements) {
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "announcement")
@@ -490,7 +492,7 @@ func (s *Server) handleAnnouncementSend(w http.ResponseWriter, r *http.Request) 
 //	Auth:      admin, or a user granted this page's permission
 //	Response:  200 {"announcement": Announcement}
 func (s *Server) handleAnnouncementSkip(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseAnnounce) {
+	if !s.requirePermission(w, r, permissions.TeahouseAnnouncements) {
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "announcement")
@@ -548,7 +550,7 @@ func (s *Server) handleAnnouncementSkip(w http.ResponseWriter, r *http.Request) 
 //	Auth:      admin, or a user granted this page's permission
 //	Response:  200 {"ok": true}
 func (s *Server) handleAnnouncementsReorder(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseAnnounce) {
+	if !s.requirePermission(w, r, permissions.TeahouseAnnouncements) {
 		return
 	}
 	req, err := readJSON[announcementReorderRequest](w, r)

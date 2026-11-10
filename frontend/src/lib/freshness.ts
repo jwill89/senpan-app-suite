@@ -8,8 +8,8 @@
  *
  * It deliberately lives at the navigation layer, not inside the store loaders:
  * explicit reloads after a create/edit/delete call the loaders directly and so
- * always hit the server (edits show immediately), and the live game/cards/
- * patterns data stays current over WebSocket regardless of this gate.
+ * always hit the server (edits show immediately), and the live events have the
+ * game, cards and patterns read again as they change, regardless of this gate.
  *
  * Keys let one gate cover several independent datasets (e.g. one per admin tab,
  * or one per book club slug).

@@ -11,7 +11,7 @@ import {
   randomBoard,
   validateBoard,
   patternColumns,
-  DEFAULT_APP_SETTINGS,
+  DEFAULT_SETTINGS,
 } from './constants'
 
 // Build a 5x5 pattern grid marking the given columns (a true cell in row 0 of each).
@@ -83,13 +83,13 @@ describe('board constants', () => {
   })
 
   it('ships a default app title', () => {
-    expect(DEFAULT_APP_SETTINGS.app_title).toBeTruthy()
+    expect(DEFAULT_SETTINGS.appTitle).toBeTruthy()
   })
 })
 
 describe('patternColumns', () => {
   it('marks only the columns a pattern uses (B + O)', () => {
-    expect(patternColumns([{ pattern_data: markCols(0, 4) }])).toEqual([
+    expect(patternColumns([{ patternData: markCols(0, 4) }])).toEqual([
       true,
       false,
       false,
@@ -99,7 +99,7 @@ describe('patternColumns', () => {
   })
 
   it('unions the columns across multiple patterns', () => {
-    expect(patternColumns([{ pattern_data: markCols(0) }, { pattern_data: markCols(2) }])).toEqual([
+    expect(patternColumns([{ patternData: markCols(0) }, { patternData: markCols(2) }])).toEqual([
       true,
       false,
       true,
@@ -111,7 +111,7 @@ describe('patternColumns', () => {
   it('ignores the FREE centre - a free-only pattern is treated as all-active', () => {
     const freeOnly = Array.from({ length: 5 }, () => Array.from({ length: 5 }, () => false))
     freeOnly[2]![2] = true
-    expect(patternColumns([{ pattern_data: freeOnly }])).toEqual([true, true, true, true, true])
+    expect(patternColumns([{ patternData: freeOnly }])).toEqual([true, true, true, true, true])
   })
 
   it('reports every column active when there are no patterns', () => {

@@ -24,7 +24,7 @@ import FormActions from '@/components/common/ui/FormActions.vue'
 import DataTable, { type DataColumn } from '@/components/common/ui/DataTable.vue'
 import EmptyState from '@/components/common/ui/EmptyState.vue'
 import { usePatternsStore } from '@/stores/patterns'
-import type { PatternCategory } from '@/types/api'
+import type { PatternCategory } from '@/api/client'
 
 const patterns = usePatternsStore()
 
@@ -156,7 +156,7 @@ async function saveNew(): Promise<void> {
               @keydown.space.prevent="patterns.confirmDeletePattern(p.id)"
               >&times;</span
             >
-            <PatternMini :pattern-data="p.pattern_data" />
+            <PatternMini :pattern-data="p.patternData" />
             <input
               v-if="patterns.editingPatternId === p.id"
               v-model="patterns.editingPatternName"
@@ -178,7 +178,7 @@ async function saveNew(): Promise<void> {
             >
               {{ p.name }}
             </span>
-            <span class="text-muted text-xs">{{ p.category_name }}</span>
+            <span class="text-muted text-xs">{{ p.categoryName }}</span>
           </div>
         </div>
         <EmptyState v-else :text="`No patterns match “${patterns.patternSearchQuery}”.`" />
@@ -252,7 +252,7 @@ async function saveNew(): Promise<void> {
                 @keydown.space.prevent="patterns.confirmDeletePattern(p.id)"
                 >&times;</span
               >
-              <PatternMini :pattern-data="p.pattern_data" />
+              <PatternMini :pattern-data="p.patternData" />
               <input
                 v-if="patterns.editingPatternId === p.id"
                 v-model="patterns.editingPatternName"

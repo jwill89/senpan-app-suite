@@ -379,10 +379,9 @@ if [ -n "$db" ] && [ -f "$db" ]; then echo "db_owner=$(stat -c '%U:%G' "$db")"; 
     $steps = @(
         # The database snapshot is the way back from a migration: starting the new binary
         # migrates the live database, and the previous binary refuses a schema newer than
-        # its own, so a rollback puts the snapshot back with the binary (decided
-        # 2026-11-06, as Kindred Nights does). -Umask 077 keeps the snapshot (live
-        # accounts, tokens, webhooks) for root. The binary is the service's own account's,
-        # as the standards have it (deploy-and-ops.md), not the SSH user's.
+        # its own, so a rollback puts the snapshot back with the binary. -Umask 077
+        # keeps the snapshot (live accounts, tokens, webhooks) for root. The binary
+        # belongs to the service's own account, not the SSH user's.
         Install-ServiceBinary -AsStep -ServiceName $service -Binary $remoteBinary -Owner $serviceOwner -Database $db -Umask '077' `
             -RestoreDatabaseOnRollback -HealthUrl "http://$addr/healthz" -NoBackup:$NoBackup
         Switch-RemoteItemSet -AsStep -Root $web -Item '.htaccess' -Source 'webroot' -NoBackup:$NoBackup
@@ -407,7 +406,7 @@ if [ -n "$db" ] && [ -f "$db" ]; then echo "db_owner=$(stat -c '%U:%G' "$db")"; 
         # The reverse of the deploy: the previous .htaccess, which serves the previous
         # SPA, then the previous binary with the snapshot taken just before this deploy's
         # start, since the new binary may have migrated the schema. What was written in
-        # the seconds the new release ran is lost with it (decided 2026-11-06).
+        # the seconds the new release ran is lost with it.
         $rollback = @(
             Restore-RemoteItemSet -Root $web -Item '.htaccess' -AsScript
             Restore-ServiceBinary -ServiceName $service -Binary $remoteBinary -Owner $serviceOwner -Database $db -AsScript

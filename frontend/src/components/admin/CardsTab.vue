@@ -37,8 +37,8 @@ const router = useRouter()
 
 const columns: DataColumn[] = [
   { key: 'id', label: 'Board ID', sortable: true },
-  { key: 'player_name', label: 'Player', sortable: true },
-  { key: 'created_at', label: 'Created', sortable: true },
+  { key: 'playerName', label: 'Player', sortable: true },
+  { key: 'createdAt', label: 'Created', sortable: true },
   { key: 'status', label: 'Status', align: 'center' },
   { key: 'actions', label: '', align: 'right' },
 ]
@@ -149,20 +149,20 @@ function copyCardUrl(id: string): void {
           :filter="cards.cardSearchQuery"
           :filter-fn="cards.cardMatches"
           :page-size="cards.cardsPerPage"
-          :default-sort="{ key: 'created_at', dir: 'desc' }"
+          :default-sort="{ key: 'createdAt', dir: 'desc' }"
           @update:view="cardsView = $event"
         >
           <template #cell-id="{ row }">
             <span class="code-highlight">{{ row.id }}</span>
           </template>
-          <template #cell-player_name="{ row }">{{ row.player_name || '-' }}</template>
-          <template #cell-created_at="{ row }">
-            {{ row.created_at ? formatServerTimestamp(row.created_at) : '-' }}
+          <template #cell-playerName="{ row }">{{ row.playerName || '-' }}</template>
+          <template #cell-createdAt="{ row }">
+            {{ row.createdAt ? formatServerTimestamp(row.createdAt) : '-' }}
           </template>
           <template #cell-status="{ row }">
             <span class="status-icons">
               <span
-                v-if="row.custom_status === 'pending'"
+                v-if="row.customStatus === 'pending'"
                 class="status-pending"
                 title="Pending custom card - awaiting approval"
                 aria-label="Pending custom card"
@@ -170,7 +170,7 @@ function copyCardUrl(id: string): void {
                 <font-awesome-icon :icon="['far', 'star']" />
               </span>
               <span
-                v-else-if="row.custom_status === 'approved'"
+                v-else-if="row.customStatus === 'approved'"
                 class="status-approved"
                 title="Approved custom card"
                 aria-label="Approved custom card"
@@ -185,13 +185,13 @@ function copyCardUrl(id: string): void {
               >
                 <font-awesome-icon :icon="['fas', 'table-cells-lock']" />
               </span>
-              <span v-if="!row.custom_status && !row.protected" class="text-muted">-</span>
+              <span v-if="!row.customStatus && !row.protected" class="text-muted">-</span>
             </span>
           </template>
           <template #cell-actions="{ row }">
             <div class="row-actions">
               <button
-                v-if="row.custom_status === 'pending'"
+                v-if="row.customStatus === 'pending'"
                 type="button"
                 class="btn-confirm btn-sm"
                 aria-label="Approve custom card"

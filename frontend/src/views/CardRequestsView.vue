@@ -14,7 +14,7 @@ import BingoCardEditor from '@/components/common/BingoCardEditor.vue'
 import WorldPicker from '@/components/common/ui/WorldPicker.vue'
 import { useCardRequestsStore } from '@/stores/cardRequests'
 import { useAppStore } from '@/stores/app'
-import { endpoints } from '@/lib/endpoints'
+import { api, unwrap } from '@/api/client'
 
 const router = useRouter()
 const cr = useCardRequestsStore()
@@ -30,14 +30,14 @@ const fieldId = useId()
 onMounted(async () => {
   cr.reset()
   try {
-    turnstileSiteKey.value = (await endpoints.system.config()).turnstile_site_key
+    turnstileSiteKey.value = (await unwrap(api.GET('/config'))).turnstileSiteKey
   } catch {
     turnstileSiteKey.value = ''
   }
 })
 
 const cost = computed(() => {
-  const n = Number(app.settings.custom_card_cost || '0')
+  const n = app.settings.customCardCost
   return Number.isFinite(n) ? n : 0
 })
 

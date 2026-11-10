@@ -1,38 +1,30 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import type { User } from '@/types/api'
+import type { Account } from '@/api/client'
 
-const { check, login, logout, register } = vi.hoisted(() => ({
-  check: vi.fn(),
-  login: vi.fn(),
-  logout: vi.fn(),
-  register: vi.fn(),
+// The store calls the API client; only its calls are faked (unwrap is the real
+// one). Each fake answers a call's `{ data, error, response }`.
+const ok = (data: unknown, status = 200) => ({ data, response: new Response(null, { status }) })
+const problem = (status: number, detail: string) => ({
+  error: { status, title: 'Problem', detail },
+  response: new Response(null, { status }),
+})
+const api = vi.hoisted(() => ({ GET: vi.fn(), POST: vi.fn() }))
+vi.mock('@/api/client', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  api,
 }))
-vi.mock('@/lib/endpoints', () => ({
-  endpoints: { auth: { check, login, logout, register } },
-}))
 
-import { useAuthStore } from './auth'
+import { SIGN_UP_DONE, useAuthStore } from './auth'
 
-function user(overrides: Partial<User> = {}): User {
-  return {
-    id: 1,
-    username: 'tester',
-    is_admin: false,
-    is_active: true,
-    permissions: [],
-    created_at: '',
-    last_login_at: '',
-    ...overrides,
-  }
+function account(overrides: Partial<Account> = {}): Account {
+  return { id: 1, username: 'tester', isAdmin: false, permissions: [], ...overrides }
 }
 
 beforeEach(() => {
   setActivePinia(createPinia())
-  check.mockReset()
-  login.mockReset()
-  logout.mockReset()
-  register.mockReset()
+  api.GET.mockReset()
+  api.POST.mockReset()
 })
 
 describe('auth hasPermission', () => {
@@ -43,56 +35,75 @@ describe('auth hasPermission', () => {
 
   it('is true for any key when the user is an admin', () => {
     const auth = useAuthStore()
-    auth.user = user({ is_admin: true })
+    auth.user = account({ isAdmin: true })
     expect(auth.hasPermission('bingo-game')).toBe(true)
     expect(auth.hasPermission('system-users')).toBe(true)
   })
 
   it('matches only granted keys for non-admin users', () => {
     const auth = useAuthStore()
-    auth.user = user({ permissions: ['bingo-cards'] })
+    auth.user = account({ permissions: ['bingo-cards'] })
     expect(auth.hasPermission('bingo-cards')).toBe(true)
     expect(auth.hasPermission('system-settings')).toBe(false)
   })
 })
 
 describe('auth login', () => {
-  it('stores the returned user and sets isAdmin', async () => {
-    login.mockResolvedValue({ success: true, user: user({ is_admin: true }) })
+  it('signs in and stores the account the server answers', async () => {
+    api.POST.mockResolvedValue(ok({ account: account({ isAdmin: true }) }))
     const auth = useAuthStore()
-    const ok = await auth.login('admin', 'pw')
-    expect(ok).toBe(true)
+    const signedIn = await auth.login('admin', 'pw', 'turnstile-ok')
+    expect(signedIn).toBe(true)
     expect(auth.isAdmin).toBe(true)
     expect(auth.user?.username).toBe('tester')
-    // The third arg is the optional Turnstile token (undefined when the bot
-    // check isn't in play).
-    expect(login).toHaveBeenCalledWith('admin', 'pw', undefined)
+    expect(api.POST).toHaveBeenCalledWith('/auth/login', {
+      body: { username: 'admin', password: 'pw', turnstileToken: 'turnstile-ok' },
+    })
   })
 
-  it('captures the error message on failure', async () => {
-    login.mockRejectedValue(new Error('Invalid username or password'))
+  it("shows the server's reason when signing in fails", async () => {
+    api.POST.mockResolvedValue(problem(401, "That username and password don't match."))
     const auth = useAuthStore()
-    const ok = await auth.login('x', 'y')
-    expect(ok).toBe(false)
-    expect(auth.authError).toBe('Invalid username or password')
+    const signedIn = await auth.login('x', 'y')
+    expect(signedIn).toBe(false)
+    expect(auth.authError).toBe("That username and password don't match.")
     expect(auth.user).toBeNull()
   })
 })
 
-describe('auth checkAuth', () => {
-  it('populates the user when authenticated', async () => {
-    check.mockResolvedValue({ authenticated: true, user: user({ permissions: ['bingo-game'] }) })
+describe('auth register', () => {
+  it('says the account waits for an admin', async () => {
+    api.POST.mockResolvedValue(ok(undefined, 202))
     const auth = useAuthStore()
-    await auth.checkAuth()
+    expect(await auth.register('new', 'password123')).toBe(SIGN_UP_DONE)
+    expect(api.POST).toHaveBeenCalledWith('/auth/register', {
+      body: { username: 'new', password: 'password123', turnstileToken: undefined },
+    })
+  })
+
+  it("shows the server's reason when it refuses", async () => {
+    api.POST.mockResolvedValue(problem(429, 'Too many sign-ups from here. Try again later.'))
+    const auth = useAuthStore()
+    expect(await auth.register('new', 'password123')).toBeNull()
+    expect(auth.authError).toBe('Too many sign-ups from here. Try again later.')
+  })
+})
+
+describe('auth checkAuth', () => {
+  it('populates the user when someone is signed in', async () => {
+    api.GET.mockResolvedValue(ok({ account: account({ permissions: ['bingo-game'] }) }))
+    const auth = useAuthStore()
+    expect(await auth.checkAuth()).toBe(true)
+    expect(api.GET).toHaveBeenCalledWith('/me')
     expect(auth.hasPermission('bingo-game')).toBe(true)
     expect(auth.authChecked).toBe(true)
   })
 
-  it('clears the user when not authenticated', async () => {
-    check.mockResolvedValue({ authenticated: false, user: null })
+  it('clears the user when nobody is', async () => {
+    api.GET.mockResolvedValue(ok({ account: null }))
     const auth = useAuthStore()
-    auth.user = user()
-    await auth.checkAuth()
+    auth.user = account()
+    expect(await auth.checkAuth()).toBe(false)
     expect(auth.user).toBeNull()
     expect(auth.isAdmin).toBe(false)
   })
@@ -100,10 +111,11 @@ describe('auth checkAuth', () => {
 
 describe('auth logout', () => {
   it('clears the user even if the request fails', async () => {
-    logout.mockRejectedValue(new Error('network'))
+    api.POST.mockRejectedValue(new Error('network'))
     const auth = useAuthStore()
-    auth.user = user({ is_admin: true })
+    auth.user = account({ isAdmin: true })
     await auth.logout()
+    expect(api.POST).toHaveBeenCalledWith('/auth/logout')
     expect(auth.user).toBeNull()
     expect(auth.isAdmin).toBe(false)
   })

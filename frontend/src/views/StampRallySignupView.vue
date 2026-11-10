@@ -26,7 +26,7 @@ import MarkdownText from '@/components/common/MarkdownText.vue'
 import TurnstileWidget from '@/components/common/TurnstileWidget.vue'
 import { useStampRalliesStore } from '@/stores/stampRallies'
 import { assetUrl } from '@/lib/assets'
-import { endpoints } from '@/lib/endpoints'
+import { api, unwrap } from '@/api/client'
 import { savedRallySignup, forgetSignup, type SavedRallySignup } from '@/lib/signups'
 import WorldPicker from '@/components/common/ui/WorldPicker.vue'
 import { participantLabel } from '@/lib/participant'
@@ -113,7 +113,7 @@ async function load(): Promise<void> {
 onMounted(async () => {
   void load()
   try {
-    turnstileSiteKey.value = (await endpoints.system.config()).turnstile_site_key
+    turnstileSiteKey.value = (await unwrap(api.GET('/config'))).turnstileSiteKey
   } catch {
     turnstileSiteKey.value = '' // config probe failed -> behave as if disabled
   }

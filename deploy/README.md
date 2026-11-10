@@ -2,7 +2,7 @@
 
 This folder holds the files for the **Apache document root**: its `.htaccess`
 template and the persistent `images/`. Since 4.0.0 the app is one Go binary that
-serves the API, the WebSocket and the SPA, whose build it embeds; Apache serves only
+serves the API, its live event streams and the SPA, whose build it embeds; Apache serves only
 the document root's own folders and proxies everything else to it.
 
 ## Document root layout
@@ -75,11 +75,16 @@ server's tokenized, origin-gated endpoints - see
 4. Confirm the vhost proxies the API to the Go server (already in place):
 
    ```apache
-   ProxyPass        /api/ws ws://localhost:8080/api/ws
-   ProxyPass        /api/   http://localhost:8080/api/
+   ProxyPass        /api/   http://localhost:8080/api/ timeout=3600
    ProxyPassReverse /api/   http://localhost:8080/api
    ProxyPreserveHost On
    ```
+
+   `timeout=3600` keeps a quiet live event stream (`/api/v1/events`,
+   `/api/v1/board/{id}/events`) from being cut; the app also sends a ping on each
+   every 25 seconds. This guide sets up no compression. If the host has `mod_deflate`
+   on, it must not compress `text/event-stream`, or the events arrive in batches: add
+   `SetEnvIfNoCase Request_URI "/events$" no-gzip` to the vhost.
 
 5. Run the Go server with `-webroot` pointing at the **document root** so uploads
    land in `<DocumentRoot>/images/raffles/`:
@@ -184,7 +189,7 @@ ps -o user= -C app-suite                         # not root
   is disabled entirely (the server logs `Turnstile not configured` at boot and the
   frontend skips the widget), so a bad/rotated secret degrades to "no bot check,"
   not a lockout. The **secret** is sensitive; the **sitekey** is public (it is
-  served to browsers via `GET /api/config`). Keep the secret out of the unit's
+  served to browsers via `GET /api/v1/config`). Keep the secret out of the unit's
   inline `Environment=` (visible via `systemctl show` / `/proc/<pid>/environ`) -
   put both in a root-owned `chmod 600` file
   loaded with `EnvironmentFile=-/etc/senpan/senpan.env` (see the commented block in
@@ -290,8 +295,8 @@ The Go server writes **structured JSON** logs to **stdout** (captured by
 timberjack rotates the file **daily at local midnight**, zstd-compresses backups,
 and bounds retention (14 backups / 30 days / 100 MB safety cap). The admin
 **System -> Logs** tab and the on-box `jlv` tool both read this file;
-`GET /api/logs` tails it and every line also streams to connected admins over the
-WebSocket for a live tail, so most log inspection needs no SSH.
+`GET /api/v1/logs` tails it and every line also streams to connected admins over
+the staff event stream for a live tail, so most log inspection needs no SSH.
 
 **Required systemd setting (`LogsDirectory`).** `senpan.service` runs with
 `ProtectSystem=strict`, which mounts `/var/log` **read-only** for the service - so
@@ -438,8 +443,8 @@ systemctl stop <service> && rm -f <db>-wal <db>-shm && gunzip -c '<db folder>/ba
   root `images/` folder - both the static assets and uploaded raffle prizes.
 - Existing databases are auto-migrated (schema v10) to rewrite old
   `assets/images/raffles/...` prize paths to `images/raffles/...` on first start.
-- `/api/*` and `/api/ws` are never handled by `.htaccess`; the vhost ProxyPass
-  intercepts them first.
+- `/api/*` is never handled by `.htaccess`; the vhost ProxyPass intercepts it
+  first.
 - **PWA**: the build also emits `sw.js`, `registerSW.js`, and
   `manifest.webmanifest` at its root; the app serves them at the site's root,
   `sw.js` and `registerSW.js` with `no-store` and the manifest with `no-cache`,

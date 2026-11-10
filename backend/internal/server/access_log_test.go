@@ -24,7 +24,7 @@ func TestAccessLog_IncludesActor(t *testing.T) {
 
 	// Authenticated admin (cookie session): auth=session + the username.
 	buf.Reset()
-	resp := env.get(t, "/api/settings")
+	resp := env.get(t, "/api/v1/settings")
 	resp.Body.Close()
 	if out := buf.String(); !strings.Contains(out, `"auth":"session"`) || !strings.Contains(out, `"user":"admin"`) {
 		t.Errorf("authenticated request: want auth=session + user=admin in log; got:\n%s", out)

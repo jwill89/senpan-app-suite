@@ -4,8 +4,8 @@
  * structured JSON log, rendered through the shared DataTable.
  *
  * On mount it loads a filtered snapshot from `GET /api/logs`; while open, each
- * new server log line arrives over the shared admin WebSocket (`log` message)
- * and is prepended by the logs store. Common HTTP-request fields (method, status,
+ * new server log line arrives on the admin's live stream (`log` event) and is
+ * prepended by the logs store. Common HTTP-request fields (method, status,
  * duration, ip, path) are promoted to typed, colored columns; any other fields
  * expand to full JSON (DataTable's #detail slot). Entries are paginated with a
  * per-page control; the "Debug" toggle flips the server's runtime level live and
@@ -91,7 +91,7 @@ function fieldNum(row: LogRow, key: string): number | null {
   return null
 }
 
-/** HTTP method label - the WebSocket upgrade path reads as "WS". */
+/** HTTP method label - a line logged for the retired WebSocket path reads as "WS". */
 function methodLabel(row: LogRow): string {
   const m = fieldStr(row, 'method')
   if (!m) {

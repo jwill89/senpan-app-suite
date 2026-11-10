@@ -8,8 +8,8 @@ const flags = Object.entries(serverFlags)
 
 // The end-to-end run (`npm run test:e2e`), on shared-tooling's Playwright settings: the
 // app as production runs it - the Go binary, built from this checkout with the front
-// end's build embedded (build it first: `task test:e2e` does), serving the API, the
-// WebSocket and the SPA - started on a throwaway database and web root in the OS temp
+// end's build embedded (build it first: `task test:e2e` does), serving the API, its
+// live event streams and the SPA - started on a throwaway database and web root in the OS temp
 // folder (e2e/server/prepare.ts). Locally on Windows it drives the installed Edge.
 export default defineConfig({
   ...playwrightDefaults,

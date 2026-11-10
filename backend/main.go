@@ -1,7 +1,7 @@
 // Package main is the entry point for the App Suite server: the API and, since
 // 4.0.0, the SPA, embedded in the binary (internal/web).
 // It parses configuration flags, initializes the SQLite database,
-// creates the WebSocket hub, and starts the HTTP server.
+// creates the live events' hub, and starts the HTTP server.
 package main
 
 import (
@@ -17,12 +17,12 @@ import (
 	"syscall"
 	"time"
 
+	"app-suite/internal/api"
+	"app-suite/internal/live"
 	"app-suite/internal/logging"
-	"app-suite/internal/model"
 	"app-suite/internal/server"
 	"app-suite/internal/store"
 	"app-suite/internal/web"
-	"app-suite/internal/ws"
 )
 
 // main keeps the process's exit status truthful. run does the real work and
@@ -31,6 +31,15 @@ import (
 // rather than inside run means run's deferred cleanup (db.Close, the log closer)
 // has already completed by the time the process goes away.
 func main() {
+	// `app-suite openapi` prints the API's OpenAPI document, which
+	// frontend/src/api/openapi.json commits (task gen).
+	if len(os.Args) == 2 && os.Args[1] == "openapi" {
+		if err := openapi(); err != nil {
+			fmt.Fprintln(os.Stderr, "openapi:", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if err := run(); err != nil {
 		slog.Error("fatal", "error", err)
 		os.Exit(1)
@@ -110,7 +119,7 @@ func run() error {
 		return err
 	}
 
-	hub := ws.NewHub()
+	hub := live.New()
 	srv := server.New(ctx, db, hub, *webRoot, allowedOrigins)
 	srv.SetSite(site)
 	srv.SetTurnstile(tsSecret, tsSiteKey)
@@ -135,20 +144,11 @@ func run() error {
 		slog.Warn("DISCORD OVERRIDE: every outbound post is redirected to the override webhook")
 	}
 
-	// Live log tail: forward each JSON log line to admin WebSocket clients as a
-	// {"type":"log","entry":...} message. Gated on an admin actually watching so the
-	// parse/broadcast is skipped entirely otherwise, and lossy so a burst can't
-	// disconnect anyone. model.ParseLogEntry runs synchronously and copies out of
-	// the line, so the slog buffer is not retained.
-	logging.SetTailSink(func(line []byte) {
-		if !hub.HasAdminClients() {
-			return
-		}
-		if entry, ok := model.ParseLogEntry(line); ok {
-			hub.BroadcastLog(map[string]any{"type": "log", "entry": entry})
-		}
-	})
-	srv.SetOpenAPISpec(openAPISpec) // GET /api/docs + /api/openapi.yaml
+	// Live log tail: each JSON log line goes to the admins' event streams as a log
+	// event. Skipped entirely while no admin is listening, and lossy so a burst can't
+	// end anyone's stream. The line is parsed at once and copied out of, so the
+	// logger's buffer is not kept.
+	logging.SetTailSink(api.LogTail(hub))
 	if tsSecret != "" {
 		slog.Info("Cloudflare Turnstile bot check enabled on the login form")
 	} else {
@@ -159,10 +159,11 @@ func run() error {
 		Addr:    *addr,
 		Handler: srv,
 		// Timeouts guard against slow-client / idle-socket resource exhaustion.
-		// Deliberately NO WriteTimeout: the /api/ws WebSocket is a long-lived
-		// connection a global write deadline would sever. ReadHeaderTimeout bounds
-		// the slow-headers (Slowloris) attack; ReadTimeout bounds the full request
-		// read; IdleTimeout reaps kept-alive connections.
+		// Deliberately NO WriteTimeout: an event stream is a long-lived answer a
+		// global write deadline would sever; each event's write sets its own deadline
+		// instead. ReadHeaderTimeout bounds the slow-headers (Slowloris) attack;
+		// ReadTimeout bounds the full request read; IdleTimeout reaps kept-alive
+		// connections.
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		IdleTimeout:       120 * time.Second,
@@ -252,8 +253,9 @@ func run() error {
 		slog.Warn("tea-room lock scheduler did not stop within the shutdown deadline")
 	}
 
-	// Close all WebSocket connections first.
-	hub.Shutdown(shutdownCtx)
+	// End every event stream first: an open stream is a request the HTTP server's
+	// shutdown would otherwise wait on until its deadline.
+	hub.Close()
 
 	// Then shut down the HTTP server.
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
@@ -262,4 +264,14 @@ func run() error {
 
 	slog.Info("server stopped")
 	return fatal
+}
+
+// openapi prints the API's OpenAPI document.
+func openapi() error {
+	spec, err := api.Spec()
+	if err != nil {
+		return err
+	}
+	_, err = os.Stdout.Write(spec)
+	return err
 }

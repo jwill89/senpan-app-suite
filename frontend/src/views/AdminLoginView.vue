@@ -9,7 +9,7 @@ import { useRoute, useRouter } from 'vue-router'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import FormField from '@/components/common/ui/FormField.vue'
 import TurnstileWidget from '@/components/common/TurnstileWidget.vue'
-import { endpoints } from '@/lib/endpoints'
+import { api, unwrap } from '@/api/client'
 import { passkeysSupported } from '@/lib/passkeys'
 import { useAuthStore } from '@/stores/auth'
 
@@ -38,7 +38,7 @@ const turnstile = useTemplateRef<InstanceType<typeof TurnstileWidget>>('turnstil
 
 onMounted(async () => {
   try {
-    turnstileSiteKey.value = (await endpoints.system.config()).turnstile_site_key
+    turnstileSiteKey.value = (await unwrap(api.GET('/config'))).turnstileSiteKey
   } catch {
     turnstileSiteKey.value = '' // config probe failed -> behave as if disabled
   }

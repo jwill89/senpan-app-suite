@@ -21,7 +21,7 @@ import {
   raffleTicketCost,
 } from '@/stores/raffles'
 import { assetUrl } from '@/lib/assets'
-import { endpoints } from '@/lib/endpoints'
+import { api, unwrap } from '@/api/client'
 import { RAFFLE_LOOKUP_MIN_QUERY } from '@/lib/constants'
 import { savedRaffleSignup } from '@/lib/signups'
 import type { RaffleLookupEntry } from '@/types/api'
@@ -118,7 +118,7 @@ async function load(id: number): Promise<void> {
 onMounted(async () => {
   void load(raffleId.value)
   try {
-    turnstileSiteKey.value = (await endpoints.system.config()).turnstile_site_key
+    turnstileSiteKey.value = (await unwrap(api.GET('/config'))).turnstileSiteKey
   } catch {
     turnstileSiteKey.value = '' // config probe failed -> behave as if disabled
   }

@@ -2,11 +2,11 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { usePlayerStore } from './player'
 import { useGameStore } from './game'
-import type { BingoGameState, Card } from '@/types/api'
+import type { Card, Game } from '@/api/client'
 
-/** Minimal Card/GameState stand-ins (only the fields the store reads). */
-const fakeCard = { id: 'CARD1', board_data: [[1]] } as unknown as Card
-const fakeGame = { id: 99, called_numbers: [5, 12] } as unknown as BingoGameState
+/** Minimal Card/Game stand-ins (only the fields the store reads). */
+const fakeCard = { id: 'CARD1', boardData: [[1]] } as unknown as Card
+const fakeGame = { id: 99, calledNumbers: [5, 12] } as unknown as Game
 
 beforeEach(() => {
   localStorage.clear()
@@ -205,9 +205,9 @@ describe('secondary stamp', () => {
     const blank = [false, false, false, false, false]
     player.playerGame = {
       id: 1,
-      called_numbers: [],
-      patterns: [{ id: 1, name: 'Top Row', pattern_data: [topRow, blank, blank, blank, blank] }],
-    } as unknown as BingoGameState
+      calledNumbers: [],
+      patterns: [{ id: 1, name: 'Top Row', patternData: [topRow, blank, blank, blank, blank] }],
+    } as unknown as Game
     expect(player.isWinningPatternCell(0, 0)).toBe(true)
     expect(player.isWinningPatternCell(0, 4)).toBe(true)
     expect(player.isWinningPatternCell(1, 0)).toBe(false)
@@ -216,19 +216,19 @@ describe('secondary stamp', () => {
 
   it('treats no patterns as no pattern cells', () => {
     const player = usePlayerStore()
-    player.playerGame = { id: 1, called_numbers: [], patterns: [] } as unknown as BingoGameState
+    player.playerGame = { id: 1, calledNumbers: [], patterns: [] } as unknown as Game
     expect(player.isWinningPatternCell(0, 0)).toBe(false)
   })
 
   /** Marks the top row (row 0) as the only winning pattern of game `id`. */
-  function topRowGame(id: number): BingoGameState {
+  function topRowGame(id: number): Game {
     const topRow = [true, true, true, true, true]
     const blank = [false, false, false, false, false]
     return {
       id,
-      called_numbers: [],
-      patterns: [{ id, name: 'Top Row', pattern_data: [topRow, blank, blank, blank, blank] }],
-    } as unknown as BingoGameState
+      calledNumbers: [],
+      patterns: [{ id, name: 'Top Row', patternData: [topRow, blank, blank, blank, blank] }],
+    } as unknown as Game
   }
 
   it('keeps the pattern split after the game ends (playerGame -> null)', () => {
@@ -262,9 +262,9 @@ describe('secondary stamp', () => {
     const col0 = [true, false, false, false, false]
     player.playerGame = {
       id: 8,
-      called_numbers: [],
-      patterns: [{ id: 8, name: 'Left', pattern_data: [col0, col0, col0, col0, col0] }],
-    } as unknown as BingoGameState
+      calledNumbers: [],
+      patterns: [{ id: 8, name: 'Left', patternData: [col0, col0, col0, col0, col0] }],
+    } as unknown as Game
     expect(player.isWinningPatternCell(0, 0)).toBe(true)
     expect(player.isWinningPatternCell(0, 4)).toBe(false) // old top-row cell no longer counts
   })
@@ -272,8 +272,8 @@ describe('secondary stamp', () => {
 
 describe('game details persistence for export', () => {
   /** A minimal active game with no patterns (details are what we're testing). */
-  function activeGame(id: number): BingoGameState {
-    return { id, called_numbers: [], patterns: [] } as unknown as BingoGameState
+  function activeGame(id: number): Game {
+    return { id, calledNumbers: [], patterns: [] } as unknown as Game
   }
 
   it('falls back to the frozen details for export after the game ends', () => {
@@ -318,7 +318,7 @@ describe('game details persistence for export', () => {
 describe('live-feedback reset', () => {
   it('resetPlayer clears last-called and game-over state', () => {
     const player = usePlayerStore()
-    player.lastDrawn = { number: 12, letter: 'B', call_order: 1 }
+    player.lastDrawn = { number: 12, letter: 'B', callOrder: 1 }
     player.gameEnded = true
     player.resetPlayer()
     expect(player.lastDrawn).toBeNull()

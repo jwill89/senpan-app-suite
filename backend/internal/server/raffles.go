@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"app-suite/internal/model"
+	"app-suite/internal/permissions"
 	"app-suite/internal/store"
 )
 
@@ -19,12 +20,12 @@ import (
 
 // raffleStaff reports whether the request may see the privileged raffle view
 // (all raffles, entry lists, winner_name/paid_total aggregates). Raffle writes
-// gate on permTeahouseRaffles, so the reads align to the same permission -
+// gate on permissions.TeahouseRaffles, so the reads align to the same permission -
 // otherwise a non-admin granted teahouse-raffles could manage a raffle but not
 // see its paid totals. Admins hold every permission.
 func (s *Server) raffleStaff(r *http.Request) bool {
 	u := s.currentUser(r)
-	return u != nil && (u.IsAdmin || userHasPermission(u, permTeahouseRaffles))
+	return u != nil && (u.IsAdmin || userHasPermission(u, permissions.TeahouseRaffles))
 }
 
 // handleRafflesList returns all raffles visible to the requester.
@@ -285,7 +286,7 @@ func (req raffleWriteRequest) toRaffle(id int64) *model.Raffle {
 //	Auth:      permission:teahouse-raffles
 //	Response:  201 {"raffle": Raffle}
 func (s *Server) handleRaffleCreate(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseRaffles) {
+	if !s.requirePermission(w, r, permissions.TeahouseRaffles) {
 		return
 	}
 	req, err := readJSON[raffleWriteRequest](w, r)
@@ -326,7 +327,7 @@ func (s *Server) handleRaffleCreate(w http.ResponseWriter, r *http.Request) {
 //	Auth:      permission:teahouse-raffles
 //	Response:  200 {"raffle": Raffle}
 func (s *Server) handleRaffleUpdate(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseRaffles) {
+	if !s.requirePermission(w, r, permissions.TeahouseRaffles) {
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "raffle")
@@ -374,7 +375,7 @@ func (s *Server) handleRaffleUpdate(w http.ResponseWriter, r *http.Request) {
 //	Auth:      permission:teahouse-raffles
 //	Response:  204 No Content
 func (s *Server) handleRaffleDelete(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseRaffles) {
+	if !s.requirePermission(w, r, permissions.TeahouseRaffles) {
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "raffle")
@@ -589,10 +590,10 @@ func (s *Server) handleRaffleEnter(w http.ResponseWriter, r *http.Request) {
 	// A sign-up mutates the admin-visible entry list + counts, but this is the
 	// *public* entry path, so it's excluded from the adminMutationResource
 	// middleware (which matches the admin ".../entries" suffix, not ".../enter").
-	// Broadcast the "raffles" signal explicitly so an admin viewing the raffle
-	// detail sees the new entry appear live (the refetch re-applies the guard).
+	// Tell "raffles" here so an admin viewing the raffle detail sees the new entry
+	// appear live (the read again applies the guard).
 	// Only success reaches here - every validation/error path above returns first.
-	s.broadcastResourceChanged("raffles")
+	s.resourceChanged("raffles")
 }
 
 // -- Raffle entry lookup (public) --------------------------------------------
@@ -703,7 +704,7 @@ func validWaiver(amount float64) bool {
 //	Auth:      permission:teahouse-raffles
 //	Response:  201 {"entry": RaffleEntry}
 func (s *Server) handleRaffleEntryAdd(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseRaffles) {
+	if !s.requirePermission(w, r, permissions.TeahouseRaffles) {
 		return
 	}
 	raffleID, ok := pathInt64(w, r, "id", "raffle")
@@ -817,7 +818,7 @@ type raffleEntryPatchRequest struct {
 //	Auth:      permission:teahouse-raffles
 //	Response:  200 {"entry": RaffleEntry}
 func (s *Server) handleRaffleEntryPatch(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseRaffles) {
+	if !s.requirePermission(w, r, permissions.TeahouseRaffles) {
 		return
 	}
 	raffleID, ok := pathInt64(w, r, "id", "raffle")
@@ -874,7 +875,7 @@ func (s *Server) handleRaffleEntryPatch(w http.ResponseWriter, r *http.Request) 
 //	Auth:      permission:teahouse-raffles
 //	Response:  204 No Content
 func (s *Server) handleRaffleEntryDelete(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseRaffles) {
+	if !s.requirePermission(w, r, permissions.TeahouseRaffles) {
 		return
 	}
 	raffleID, ok := pathInt64(w, r, "id", "raffle")
@@ -950,7 +951,7 @@ func (s *Server) pickRaffleWinner(ctx context.Context, w http.ResponseWriter, ra
 //	Auth:      permission:teahouse-raffles
 //	Response:  200 {"winner": RaffleEntry}
 func (s *Server) handleRafflePickWinner(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseRaffles) {
+	if !s.requirePermission(w, r, permissions.TeahouseRaffles) {
 		return
 	}
 	raffleID, ok := pathInt64(w, r, "id", "raffle")
@@ -966,7 +967,7 @@ func (s *Server) handleRafflePickWinner(w http.ResponseWriter, r *http.Request) 
 //	Auth:      permission:teahouse-raffles
 //	Response:  200 {"winner": RaffleEntry}
 func (s *Server) handleRafflePickAnother(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseRaffles) {
+	if !s.requirePermission(w, r, permissions.TeahouseRaffles) {
 		return
 	}
 	raffleID, ok := pathInt64(w, r, "id", "raffle")
@@ -991,7 +992,7 @@ func (s *Server) handleRafflePickAnother(w http.ResponseWriter, r *http.Request)
 // one collects nothing through the app, and any raffle can simply draw no entries.
 // Without a plain close those sit open forever, still listed to the public.
 func (s *Server) setRaffleStatus(w http.ResponseWriter, r *http.Request, status string) {
-	if !s.requirePermission(w, r, permTeahouseRaffles) {
+	if !s.requirePermission(w, r, permissions.TeahouseRaffles) {
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "raffle")
@@ -1041,7 +1042,7 @@ func (s *Server) handleRaffleReopen(w http.ResponseWriter, r *http.Request) {
 //	Auth:      permission:teahouse-raffles
 //	Response:  200 {"ok": true, "status": "closed"}
 func (s *Server) handleRaffleVerifyWinner(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseRaffles) {
+	if !s.requirePermission(w, r, permissions.TeahouseRaffles) {
 		return
 	}
 	raffleID, ok := pathInt64(w, r, "id", "raffle")

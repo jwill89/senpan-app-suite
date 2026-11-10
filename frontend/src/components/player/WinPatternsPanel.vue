@@ -4,9 +4,9 @@
  * current game. Mirrors the original `.patterns-panel` block on the player view.
  */
 import PatternMini from '@/components/common/PatternMini.vue'
-import type { BingoGamePattern } from '@/types/api'
+import type { GamePattern } from '@/api/client'
 
-defineProps<{ patterns: BingoGamePattern[] }>()
+defineProps<{ patterns: GamePattern[] }>()
 </script>
 
 <template>
@@ -15,7 +15,7 @@ defineProps<{ patterns: BingoGamePattern[] }>()
     <div class="pattern-cards">
       <div v-for="(p, i) in patterns" :key="i" class="pattern-card">
         <span :title="p.name">{{ p.name }}</span>
-        <PatternMini :pattern-data="p.pattern_data" />
+        <PatternMini :pattern-data="p.patternData" />
       </div>
     </div>
   </div>

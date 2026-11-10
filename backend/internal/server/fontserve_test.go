@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"app-suite/internal/model"
 	"app-suite/internal/server"
 )
 
@@ -315,9 +314,15 @@ func TestFontFamilies_OriginsValidation(t *testing.T) {
 
 func TestFontServe_SettingsPayloadCarriesTokens(t *testing.T) {
 	env := fontEnv(t, map[string][]byte{"Header.woff": []byte("woff")})
-	resp := env.get(t, "/api/settings")
+	resp := env.get(t, "/api/v1/settings")
 	defer resp.Body.Close()
-	var out model.SettingsResponse
+	var out struct {
+		UploadedFonts []struct {
+			Name   string `json:"name"`
+			Family string `json:"family"`
+			Token  string `json:"token"`
+		} `json:"uploadedFonts"`
+	}
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		t.Fatal(err)
 	}

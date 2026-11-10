@@ -3,6 +3,7 @@ package server_test
 import (
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -103,41 +104,34 @@ func TestGameStartRejectsDeletedPatterns(t *testing.T) {
 	env.loginAdmin(t)
 
 	pid := env.seedPattern(t, "Top Row")
-	resp := env.del(t, fmt.Sprintf("/api/patterns/%d", pid))
+	resp := env.del(t, fmt.Sprintf("/api/v1/patterns/%d", pid))
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("delete pattern status = %d; want 204", resp.StatusCode)
 	}
 	resp.Body.Close()
 
-	resp = env.postJSON(t, "/api/game/start", map[string]any{"pattern_ids": []int64{pid}})
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("start with only deleted patterns status = %d; want 400", resp.StatusCode)
+	if at := invalid(t, env.postJSON(t, "/api/v1/game/start", map[string]any{"patternIds": []int64{pid}})); !slices.Contains(at, "body.patternIds") {
+		t.Errorf("start with only deleted patterns: errors at %v; want body.patternIds", at)
 	}
-	resp.Body.Close()
 
 	// No game should have been started.
-	state := decodeBody(t, env.get(t, "/api/game"))
-	if g, ok := state["game"].(map[string]any); ok && g["active"] == true {
+	if s := readGame(t, env.client, env); s.Game != nil {
 		t.Error("a game was started with no resolvable patterns")
 	}
 }
 
-// TestPlayerWebSocketRequiresARealCard pins the id check on the public channel.
-// handleWS registered a hub client for ANY non-empty ?id=, with no auth and no
-// lookup - so sockets could be parked on ids that were never real, and a player
-// whose card was deleted reconnected to it forever, since DisconnectCardClients
-// can only ever target a live id.
-func TestPlayerWebSocketRequiresARealCard(t *testing.T) {
+// TestBoardStreamRequiresARealCard pins the id check on the public stream: a stream
+// opened on an id that was never a card, or on a card since deleted, is refused, so
+// no stream is held open for it.
+func TestBoardStreamRequiresARealCard(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 
-	resp := env.get(t, "/api/ws?id=NOPE99")
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusNotFound {
-		t.Errorf("ws upgrade for a non-existent card = %d; want 404", resp.StatusCode)
+	if _, got, _ := problem(t, env.get(t, "/api/v1/board/NOPE99/events")); got != http.StatusNotFound {
+		t.Errorf("a stream for a non-existent card = %d; want 404", got)
 	}
-	if env.hub.ClientCount() != 0 {
-		t.Errorf("hub registered %d clients for a bogus card id; want 0", env.hub.ClientCount())
+	if players, _ := env.hub.Streams(); players != 0 {
+		t.Errorf("%d player streams open for a bogus card id; want 0", players)
 	}
 }
 
@@ -202,57 +196,25 @@ func TestAffiliateListReadableByMapGranteeWithoutWebhook(t *testing.T) {
 func TestPendingCardPreviewAllowedForCardsGrantee(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
-	if err := env.store.CreateCustomCard(t.Context(), "PEND01", srvValidBoard(), "Aria", "Gilgamesh"); err != nil {
-		t.Fatal(err)
-	}
+	env.seedCardRequest(t, "PEND01", srvValidBoard())
 
 	c := makeActiveUser(t, env, "cardstaff", "correct horse battery", []string{"bingo-cards"})
-	resp := getAs(t, c, env, "/api/board?id=PEND01&preview=1")
+	resp := getAs(t, c, env, "/api/v1/board/PEND01?preview=1")
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("pending-card preview for a bingo-cards grantee = %d; want 200", resp.StatusCode)
 	}
+	// The board itself too, with the game.
+	if got := status(getAs(t, c, env, "/api/v1/board/PEND01")); got != http.StatusOK {
+		t.Errorf("pending card's board for a bingo-cards grantee = %d; want 200", got)
+	}
 
 	// No session at all: still refused.
 	anon := newClient(t, env)
-	resp = getAs(t, anon, env, "/api/board?id=PEND01&preview=1")
+	resp = getAs(t, anon, env, "/api/v1/board/PEND01?preview=1")
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusForbidden {
 		t.Errorf("anonymous pending-card preview = %d; want 403", resp.StatusCode)
-	}
-}
-
-// TestGeneratedCardIDsAreUniqueWithinTheBatch pins batch-local uniqueness. The id
-// generator checked the DB, but nothing in the batch is saved until the end - so
-// two cards in one run could take the same id, and the insert then kept one of
-// them, silently handing out fewer cards than were asked for.
-func TestGeneratedCardIDsAreUniqueWithinTheBatch(t *testing.T) {
-	env := newTestEnv(t)
-	env.loginAdmin(t)
-
-	const want = 200
-	resp := env.postJSON(t, "/api/cards/generate", map[string]any{"count": want})
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("generate status = %d; want 201", resp.StatusCode)
-	}
-	body := decodeBody(t, resp)
-	cards := body["cards"].([]any)
-
-	seen := map[string]bool{}
-	for _, c := range cards {
-		id := c.(map[string]any)["id"].(string)
-		if seen[id] {
-			t.Fatalf("duplicate card id %q within one generated batch", id)
-		}
-		seen[id] = true
-	}
-	if len(seen) != want {
-		t.Errorf("generated %d distinct ids; want %d", len(seen), want)
-	}
-	// And every one of them actually reached the database.
-	list := decodeBody(t, env.get(t, "/api/cards"))["cards"].([]any)
-	if len(list) != want {
-		t.Errorf("stored %d cards; want %d - a collision was silently dropped by the insert", len(list), want)
 	}
 }
 

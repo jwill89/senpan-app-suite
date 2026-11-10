@@ -53,11 +53,11 @@ func TestPathsOutsideTheAPIGoToTheSite(t *testing.T) {
 			t.Fatalf("GET %s: %d %q, want the site", path, resp.StatusCode, body)
 		}
 	}
-	resp := env.get(t, "/api/version")
+	resp := env.get(t, "/api/v1/version")
 	body, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
 	if !strings.Contains(string(body), version.Version) {
-		t.Fatalf("GET /api/version: %q, want the API's answer", body)
+		t.Fatalf("GET /api/v1/version: %q, want the API's answer", body)
 	}
 	if resp := env.get(t, "/api/no-such-route"); resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("GET /api/no-such-route: %d, want the API's 404", resp.StatusCode)

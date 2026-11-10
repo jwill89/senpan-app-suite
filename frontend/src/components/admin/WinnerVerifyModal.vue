@@ -27,18 +27,18 @@ const game = useGameStore()
     </p>
     <div class="flex-center">
       <BingoBoard
-        :board="game.winnerPreview.card.board_data"
+        :board="game.winnerPreview.card.boardData"
         mode="preview"
         preview
         :is-cell-match="game.isWinnerCellMatch"
       />
     </div>
     <div
-      v-if="game.winnerPreview.card.player_name || game.winnerPreview.card.details"
+      v-if="game.winnerPreview.card.playerName || game.winnerPreview.card.details"
       class="mt-12 text-center"
     >
-      <p v-if="game.winnerPreview.card.player_name" style="font-weight: 600">
-        {{ game.winnerPreview.card.player_name }}
+      <p v-if="game.winnerPreview.card.playerName" style="font-weight: 600">
+        {{ game.winnerPreview.card.playerName }}
       </p>
       <p v-if="game.winnerPreview.card.details" class="text-muted text-sm">
         {{ game.winnerPreview.card.details }}

@@ -11,10 +11,11 @@ import (
 	"strings"
 	"testing"
 
+	"app-suite/internal/api/apitest"
+	"app-suite/internal/live"
 	"app-suite/internal/server"
 	"app-suite/internal/store"
 	"app-suite/internal/store/storetest"
-	"app-suite/internal/ws"
 )
 
 // pngBytes is a minimal payload whose leading bytes sniff as image/png, so it
@@ -508,13 +509,14 @@ func newTestEnvWithWebRoot(t *testing.T, webRoot string) *testEnv {
 	}
 	t.Cleanup(func() { st.Close() })
 
-	srv := server.New(t.Context(), st, ws.NewHub(), webRoot, nil)
+	srv := server.New(t.Context(), st, live.New(), webRoot, nil)
 	ts := httptest.NewTLSServer(srv)
 	t.Cleanup(ts.Close)
 
 	jar, _ := cookiejar.New(nil)
 	client := ts.Client()
 	client.Jar = jar
+	client.Transport = apitest.Transport(t, client.Transport)
 	return &testEnv{ts: ts, client: client, store: st, srv: srv}
 }
 

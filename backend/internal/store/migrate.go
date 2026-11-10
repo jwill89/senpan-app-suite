@@ -13,7 +13,7 @@ import (
 	"app-suite/internal/auth"
 )
 
-// Migrations, as the standards have them (database.md): goose runs the numbered SQL
+// Migrations: goose runs the numbered SQL
 // files in migrations/ at start, on the write pool, each in its own transaction
 // unless it says otherwise, and each also sets PRAGMA user_version to its own
 // number, so user_version always equals goose's version.

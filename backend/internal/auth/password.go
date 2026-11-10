@@ -1,8 +1,8 @@
-// Package auth provides password hashing and verification using argon2id.
-// It lives in its own package (depending only on golang.org/x/crypto) so both
-// the store layer (seeding the bootstrap admin) and the server layer
-// (login / register / change-password) can hash and verify without an import
-// cycle.
+// Package auth holds the accounts' rules that need no request: argon2id password
+// hashing and verification, the account limits and the reserved bootstrap account,
+// personal access tokens, and what a signed-in session carries. The store (seeding
+// the bootstrap admin), the API's operations (signing in, accounts) and the server's
+// session layer (who a request is) share it.
 package auth
 
 import (

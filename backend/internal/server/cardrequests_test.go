@@ -6,342 +6,72 @@ import (
 	"testing"
 )
 
-// srvValidBoard returns a fresh structurally valid 5x5 bingo board (centre = FREE).
-func srvValidBoard() [][]int {
-	return [][]int{
-		{1, 16, 31, 46, 61},
-		{2, 17, 32, 47, 62},
-		{3, 18, 0, 48, 63},
-		{4, 19, 34, 49, 64},
-		{5, 20, 35, 50, 65},
-	}
-}
-
-func TestCardRequestPublicFlow(t *testing.T) {
-	env := newTestEnv(t)
-
-	// A valid request is accepted and stored as pending.
-	resp := env.postJSON(t, "/api/cards/request", map[string]any{
-		"character_name": "Aria Nightsong",
-		"world":          "Gilgamesh",
-		"card_id":        "tst001", // lower-case -> normalised to TST001
-		"board_data":     srvValidBoard(),
-	})
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("valid request = %d; want 201", resp.StatusCode)
-	}
-	got := decodeBody(t, resp)
-	if got["id"] != "TST001" || got["status"] != "pending" {
-		t.Fatalf("response = %v; want id=TST001 status=pending", got)
-	}
-
-	// A pending card is stored but NOT playable on the public board.
-	resp = env.get(t, "/api/board?id=TST001")
-	if resp.StatusCode != http.StatusForbidden {
-		t.Errorf("pending board join = %d; want 403", resp.StatusCode)
-	}
-	resp.Body.Close()
-
-	// A taken ID is rejected (different board so only the ID collides).
-	dupIDBoard := srvValidBoard()
-	dupIDBoard[0][0] = 6
-	resp = env.postJSON(t, "/api/cards/request", map[string]any{
-		"character_name": "X", "world": "Gilgamesh", "card_id": "TST001", "board_data": dupIDBoard,
-	})
-	if resp.StatusCode != http.StatusConflict {
-		t.Errorf("duplicate id = %d; want 409", resp.StatusCode)
-	}
-	resp.Body.Close()
-
-	// A board identical to an existing card is rejected (different ID).
-	resp = env.postJSON(t, "/api/cards/request", map[string]any{
-		"character_name": "X", "world": "Gilgamesh", "card_id": "NEW999", "board_data": srvValidBoard(),
-	})
-	if resp.StatusCode != http.StatusConflict {
-		t.Errorf("duplicate board = %d; want 409", resp.StatusCode)
-	}
-	resp.Body.Close()
-
-	// Structurally invalid board (99 out of the B range) is rejected.
-	badBoard := srvValidBoard()
-	badBoard[0][0] = 99
-	resp = env.postJSON(t, "/api/cards/request", map[string]any{
-		"character_name": "X", "world": "Gilgamesh", "card_id": "BAD001", "board_data": badBoard,
-	})
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("invalid board = %d; want 400", resp.StatusCode)
-	}
-	resp.Body.Close()
-
-	// Bad card ID (too long) is rejected.
-	resp = env.postJSON(t, "/api/cards/request", map[string]any{
-		"character_name": "X", "world": "Gilgamesh", "card_id": "TOOLONG9", "board_data": srvValidBoard(),
-	})
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("bad id = %d; want 400", resp.StatusCode)
-	}
-	resp.Body.Close()
-
-	// Missing character/world is rejected.
-	resp = env.postJSON(t, "/api/cards/request", map[string]any{
-		"character_name": "", "world": "", "card_id": "OKID12", "board_data": srvValidBoard(),
-	})
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("missing fields = %d; want 400", resp.StatusCode)
-	}
-	resp.Body.Close()
-}
-
-func TestCardApproveAndProtect(t *testing.T) {
-	env := newTestEnv(t)
-
-	// Submit a pending custom card (public).
-	env.postJSON(t, "/api/cards/request", map[string]any{
-		"character_name": "Aria", "world": "Gilgamesh", "card_id": "CUST01", "board_data": srvValidBoard(),
-	}).Body.Close()
-
-	// Approve requires the bingo-cards permission.
-	resp := env.postJSON(t, "/api/cards/CUST01/approve", nil)
-	if resp.StatusCode != http.StatusUnauthorized {
-		t.Errorf("approve unauth = %d; want 401", resp.StatusCode)
-	}
-	resp.Body.Close()
-
-	env.loginAdmin(t)
-
-	// Approve the pending card -> approved + protected.
-	resp = env.postJSON(t, "/api/cards/CUST01/approve", nil)
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("approve = %d; want 200", resp.StatusCode)
-	}
-	resp.Body.Close()
-	card, err := env.store.GetCard(t.Context(), "CUST01")
-	if err != nil || card == nil {
-		t.Fatal("card missing after approve")
-	}
-	if card.CustomStatus != "approved" || !card.Protected {
-		t.Errorf("approved card = status %q protected %v; want approved/true", card.CustomStatus, card.Protected)
-	}
-
-	// An approved card is now playable.
-	resp = env.get(t, "/api/board?id=CUST01")
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("approved board join = %d; want 200", resp.StatusCode)
-	}
-	resp.Body.Close()
-
-	// Re-approving a non-pending card is a no-op (404).
-	resp = env.postJSON(t, "/api/cards/CUST01/approve", nil)
-	if resp.StatusCode != http.StatusNotFound {
-		t.Errorf("re-approve = %d; want 404", resp.StatusCode)
-	}
-	resp.Body.Close()
-
-	// Protect toggles a normal card.
-	if err := env.store.SaveCard(t.Context(), "NORM01", srvValidBoard()); err != nil {
-		t.Fatal(err)
-	}
-	resp = env.postJSON(t, "/api/cards/NORM01/protect", map[string]any{"protected": true})
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("protect = %d; want 200", resp.StatusCode)
-	}
-	resp.Body.Close()
-	if c, _ := env.store.GetCard(t.Context(), "NORM01"); c == nil || !c.Protected {
-		t.Error("card should be Protected after protect")
-	}
-
-	// Protecting a missing card -> 404.
-	resp = env.postJSON(t, "/api/cards/NOPE99/protect", map[string]any{"protected": true})
-	if resp.StatusCode != http.StatusNotFound {
-		t.Errorf("protect missing = %d; want 404", resp.StatusCode)
-	}
-	resp.Body.Close()
-}
-
-func TestDeleteAllSparesProtected(t *testing.T) {
-	env := newTestEnv(t)
-	env.loginAdmin(t)
-
-	for _, id := range []string{"AAA111", "BBB222"} {
-		if err := env.store.SaveCard(t.Context(), id, srvValidBoard()); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := env.store.SaveCard(t.Context(), "KEEP01", srvValidBoard()); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := env.store.SetCardProtected(t.Context(), "KEEP01", true); err != nil {
-		t.Fatal(err)
-	}
-
-	resp := env.del(t, "/api/cards/all")
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("delete all = %d; want 200", resp.StatusCode)
-	}
-	got := decodeBody(t, resp)
-	if got["deleted"].(float64) != 2 {
-		t.Errorf("deleted = %v; want 2", got["deleted"])
-	}
-	if c, _ := env.store.GetCard(t.Context(), "KEEP01"); c == nil {
-		t.Error("protected card should survive Delete All")
-	}
-	if c, _ := env.store.GetCard(t.Context(), "AAA111"); c != nil {
-		t.Error("unprotected card should have been deleted")
-	}
-}
-
 func TestPublicStylesEndpoints(t *testing.T) {
 	env := newTestEnv(t)
+	env.loginAdmin(t)
+	theme := func(name string, public bool) int64 {
+		var made map[string]any
+		decodeInto(t, env.postJSON(t, "/api/v1/styles", map[string]any{
+			"name": name, "tokens": map[string]string{"page-bg": "#08191f"}, "boardFlourish": "", "numberFlourish": "", "isPublic": public,
+		}), http.StatusCreated, &made)
+		return int64(made["id"].(float64))
+	}
+	pubID, privID := theme("Ocean Public", true), theme("Secret", false)
 
-	pubID, err := env.store.CreateStyle(t.Context(), "Ocean Public", map[string]string{"page-bg": "#08191f"}, "", "", true)
-	if err != nil {
-		t.Fatal(err)
+	var list map[string]any
+	decodeInto(t, env.get(t, "/api/v1/styles/public"), http.StatusOK, &list)
+	styles, _ := list["styles"].([]any)
+	if len(styles) != 1 || styles[0].(map[string]any)["name"] != "Ocean Public" {
+		t.Fatalf("public styles = %v; want only Ocean Public", styles)
 	}
-	privID, err := env.store.CreateStyle(t.Context(), "Secret", map[string]string{"page-bg": "#111"}, "", "", false)
-	if err != nil {
-		t.Fatal(err)
+	var css map[string]any
+	decodeInto(t, env.get(t, fmt.Sprintf("/api/v1/styles/public/%d", pubID)), http.StatusOK, &css)
+	if css["css"] != ":root{--page-bg:#08191f;}" {
+		t.Errorf("public theme css = %v", css["css"])
 	}
-
-	// The public list contains only the Public theme.
-	resp := env.get(t, "/api/styles/public")
-	styles, ok := decodeBody(t, resp)["styles"].([]any)
-	if !ok || len(styles) != 1 {
-		t.Fatalf("public list = %v; want 1 style", styles)
+	if resp := env.get(t, fmt.Sprintf("/api/v1/styles/public/%d", privID)); resp.StatusCode != http.StatusNotFound {
+		t.Errorf("private theme: %d; want 404", resp.StatusCode)
 	}
-	if styles[0].(map[string]any)["name"] != "Ocean Public" {
-		t.Errorf("public style = %v; want Ocean Public", styles[0])
-	}
-
-	// Public CSS: 200 for the Public theme, 404 for the Private one (can't fetch by id).
-	resp = env.get(t, fmt.Sprintf("/api/styles/public/%d", pubID))
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("public css = %d; want 200", resp.StatusCode)
-	}
-	css, _ := decodeBody(t, resp)["css"].(string)
-	if css == "" {
-		t.Error("public css should be non-empty")
-	}
-	resp = env.get(t, fmt.Sprintf("/api/styles/public/%d", privID))
-	if resp.StatusCode != http.StatusNotFound {
-		t.Errorf("private css by id = %d; want 404", resp.StatusCode)
-	}
-	resp.Body.Close()
 }
 
+// The custom card cost reaches the public settings as a number of gil, and a cost
+// out of range is refused.
 func TestCustomCardCostSetting(t *testing.T) {
 	env := newTestEnv(t)
-
-	// Public GET exposes the setting (with its default).
-	settings, ok := decodeBody(t, env.get(t, "/api/settings"))["settings"].(map[string]any)
-	if !ok {
-		t.Fatal("settings missing from response")
-	}
-	if _, present := settings["custom_card_cost"]; !present {
-		t.Error("custom_card_cost missing from public settings")
-	}
-
 	env.loginAdmin(t)
-
-	// Valid value saves.
-	resp := env.postJSON(t, "/api/settings", map[string]any{"settings": map[string]string{"custom_card_cost": "5000000"}})
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("valid cost = %d; want 200", resp.StatusCode)
+	if s := siteSettings(t, env); s["customCardCost"] != float64(0) {
+		t.Fatalf("default cost = %v; want 0", s["customCardCost"])
 	}
-	resp.Body.Close()
-
-	// Non-numeric and negative values are rejected.
-	for _, bad := range []string{"abc", "-5"} {
-		resp = env.postJSON(t, "/api/settings", map[string]any{"settings": map[string]string{"custom_card_cost": bad}})
-		if resp.StatusCode != http.StatusBadRequest {
-			t.Errorf("cost %q = %d; want 400", bad, resp.StatusCode)
+	decodeInto(t, saveSettings(t, env, map[string]any{"customCardCost": 5000000}), http.StatusOK, nil)
+	if s := siteSettings(t, env); s["customCardCost"] != float64(5000000) {
+		t.Fatalf("cost = %v; want 5000000", s["customCardCost"])
+	}
+	for _, bad := range []any{-1, 1000000001, "lots"} {
+		resp := saveSettings(t, env, map[string]any{"customCardCost": bad})
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Errorf("cost %v: %d; want 422", bad, resp.StatusCode)
 		}
 		resp.Body.Close()
 	}
 }
 
-// TestHideBingoSetting covers the "Hide Bingo" flag: it reaches the public
-// settings (the home page has to read it without logging in), defaults to off,
-// and only ever stores "0" or "1" - anything else would read as truthy in one
-// place and falsy in another, and this flag decides whether a whole feature
-// appears on the page.
-func TestHideBingoSetting(t *testing.T) {
+// The two hide flags are true or false, reach the public settings, and refuse
+// anything else.
+func TestHideSettings(t *testing.T) {
 	env := newTestEnv(t)
-
-	settings, ok := decodeBody(t, env.get(t, "/api/settings"))["settings"].(map[string]any)
-	if !ok {
-		t.Fatal("settings missing from response")
-	}
-	if settings["hide_bingo"] != "0" {
-		t.Errorf("hide_bingo = %v; want \"0\" (bingo visible unless switched off)", settings["hide_bingo"])
-	}
-
 	env.loginAdmin(t)
-
-	for _, good := range []string{"1", "0"} {
-		resp := env.postJSON(t, "/api/settings", map[string]any{"settings": map[string]string{"hide_bingo": good}})
-		if resp.StatusCode != http.StatusOK {
-			t.Errorf("hide_bingo %q = %d; want 200", good, resp.StatusCode)
+	for _, field := range []string{"hideBingo", "hideCustomCards"} {
+		if s := siteSettings(t, env); s[field] != false {
+			t.Fatalf("%s default = %v; want false", field, s[field])
+		}
+		decodeInto(t, saveSettings(t, env, map[string]any{field: true}), http.StatusOK, nil)
+		if s := siteSettings(t, env); s[field] != true {
+			t.Fatalf("%s after a save = %v; want true", field, s[field])
+		}
+		resp := saveSettings(t, env, map[string]any{field: "1"})
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Errorf("%s = \"1\": %d; want 422", field, resp.StatusCode)
 		}
 		resp.Body.Close()
-	}
-
-	for _, bad := range []string{"true", "yes", "2", ""} {
-		resp := env.postJSON(t, "/api/settings", map[string]any{"settings": map[string]string{"hide_bingo": bad}})
-		if resp.StatusCode != http.StatusBadRequest {
-			t.Errorf("hide_bingo %q = %d; want 400", bad, resp.StatusCode)
-		}
-		resp.Body.Close()
-	}
-
-	// The saved flag comes back on the public read.
-	env.postJSON(t, "/api/settings", map[string]any{"settings": map[string]string{"hide_bingo": "1"}}).Body.Close()
-	settings, _ = decodeBody(t, env.get(t, "/api/settings"))["settings"].(map[string]any)
-	if settings["hide_bingo"] != "1" {
-		t.Errorf("hide_bingo = %v; want \"1\" after saving", settings["hide_bingo"])
-	}
-}
-
-// TestHideCustomCardsSetting covers the narrower "Hide Custom Cards" flag, which
-// takes the Custom Card request off the home page while bingo itself stays up.
-// Same public read and same strict "0"/"1" storage as hide_bingo, and the two
-// are independent - setting one must not move the other.
-func TestHideCustomCardsSetting(t *testing.T) {
-	env := newTestEnv(t)
-
-	settings, ok := decodeBody(t, env.get(t, "/api/settings"))["settings"].(map[string]any)
-	if !ok {
-		t.Fatal("settings missing from response")
-	}
-	if settings["hide_custom_cards"] != "0" {
-		t.Errorf("hide_custom_cards = %v; want \"0\" (custom cards visible unless switched off)", settings["hide_custom_cards"])
-	}
-
-	env.loginAdmin(t)
-
-	for _, good := range []string{"1", "0"} {
-		resp := env.postJSON(t, "/api/settings", map[string]any{"settings": map[string]string{"hide_custom_cards": good}})
-		if resp.StatusCode != http.StatusOK {
-			t.Errorf("hide_custom_cards %q = %d; want 200", good, resp.StatusCode)
-		}
-		resp.Body.Close()
-	}
-
-	for _, bad := range []string{"true", "yes", "2", ""} {
-		resp := env.postJSON(t, "/api/settings", map[string]any{"settings": map[string]string{"hide_custom_cards": bad}})
-		if resp.StatusCode != http.StatusBadRequest {
-			t.Errorf("hide_custom_cards %q = %d; want 400", bad, resp.StatusCode)
-		}
-		resp.Body.Close()
-	}
-
-	// Hiding the custom card section leaves bingo alone - that separation is the
-	// whole reason this flag exists alongside hide_bingo.
-	env.postJSON(t, "/api/settings", map[string]any{"settings": map[string]string{"hide_custom_cards": "1"}}).Body.Close()
-	settings, _ = decodeBody(t, env.get(t, "/api/settings"))["settings"].(map[string]any)
-	if settings["hide_custom_cards"] != "1" {
-		t.Errorf("hide_custom_cards = %v; want \"1\" after saving", settings["hide_custom_cards"])
-	}
-	if settings["hide_bingo"] != "0" {
-		t.Errorf("hide_bingo = %v; want \"0\" (untouched by hide_custom_cards)", settings["hide_bingo"])
 	}
 }

@@ -1,10 +1,15 @@
 package store_test
 
 import (
-	"fmt"
+	"database/sql"
+	"encoding/json"
+	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
+	"app-suite/internal/db"
 	"app-suite/internal/model"
 	"app-suite/internal/store"
 	"app-suite/internal/store/storetest"
@@ -36,36 +41,21 @@ func TestCardSaveAndGet(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	card, err := s.GetCard(t.Context(), "ABC123")
+	// Kept as the compact JSON the API writes, so the same numbers are the same text.
+	card, err := db.New(s.ReadDB()).GetCard(t.Context(), "ABC123")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if card == nil {
-		t.Fatal("expected card, got nil")
-	}
-	if card.ID != "ABC123" {
-		t.Errorf("ID = %q; want ABC123", card.ID)
-	}
-	if len(card.BoardData) != 5 {
-		t.Fatalf("board rows = %d; want 5", len(card.BoardData))
-	}
-	if card.BoardData[0][0] != 1 {
-		t.Errorf("board[0][0] = %d; want 1", card.BoardData[0][0])
-	}
-	if card.BoardData[2][2] != 0 {
-		t.Errorf("board[2][2] = %d; want 0", card.BoardData[2][2])
+	if card.ID != "ABC123" || card.BoardData != "[[1,16,31,46,61],[2,17,32,47,62],[3,18,0,48,63],[4,19,34,49,64],[5,20,35,50,65]]" {
+		t.Errorf("card = %+v", card)
 	}
 }
 
 func TestCardGetNotFound(t *testing.T) {
 	s := newTestStore(t)
 
-	card, err := s.GetCard(t.Context(), "ZZZZZZ")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if card != nil {
-		t.Error("expected nil for missing card")
+	if _, err := db.New(s.ReadDB()).GetCard(t.Context(), "ZZZZZZ"); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("a missing card: %v, want no rows", err)
 	}
 }
 
@@ -94,128 +84,32 @@ func TestCardExists(t *testing.T) {
 	}
 }
 
-func TestCardSaveBatch(t *testing.T) {
+// The cards a game checks for winners: every one but the personal cards waiting for
+// approval, by id.
+func TestCardListPlayable(t *testing.T) {
 	s := newTestStore(t)
+	q := db.New(s.DB())
 
 	board := [][]int{{1, 16, 31, 46, 61}, {2, 17, 32, 47, 62}, {3, 18, 0, 48, 63}, {4, 19, 34, 49, 64}, {5, 20, 35, 50, 65}}
-	batch := []store.CardBatchEntry{
-		{ID: "CARD01", Board: board},
-		{ID: "CARD02", Board: board},
-		{ID: "CARD03", Board: board},
-	}
-	if err := s.SaveCardsBatch(t.Context(), batch); err != nil {
-		t.Fatal(err)
-	}
-
-	ids, err := s.ListCardIDs(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(ids) != 3 {
-		t.Errorf("expected 3 card IDs, got %d", len(ids))
-	}
-}
-
-func TestCardListCards(t *testing.T) {
-	s := newTestStore(t)
-
-	board := [][]int{{1, 16, 31, 46, 61}, {2, 17, 32, 47, 62}, {3, 18, 0, 48, 63}, {4, 19, 34, 49, 64}, {5, 20, 35, 50, 65}}
-	if err := s.SaveCard(t.Context(), "AAA111", board); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.SaveCard(t.Context(), "BBB222", board); err != nil {
-		t.Fatal(err)
-	}
-
-	cards, err := s.ListCards(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(cards) != 2 {
-		t.Fatalf("expected 2 cards, got %d", len(cards))
-	}
-	// Sorted by ID
-	if cards[0].ID != "AAA111" {
-		t.Errorf("first card ID = %q; want AAA111", cards[0].ID)
-	}
-	if len(cards[0].BoardData) != 5 {
-		t.Error("expected decoded board data")
-	}
-}
-
-func TestCardListIDs(t *testing.T) {
-	s := newTestStore(t)
-
-	board := [][]int{{1, 16, 31, 46, 61}, {2, 17, 32, 47, 62}, {3, 18, 0, 48, 63}, {4, 19, 34, 49, 64}, {5, 20, 35, 50, 65}}
-	if err := s.SaveCard(t.Context(), "AAA111", board); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.SaveCard(t.Context(), "BBB222", board); err != nil {
-		t.Fatal(err)
-	}
-
-	ids, err := s.ListCardIDs(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(ids) != 2 {
-		t.Fatalf("expected 2 IDs, got %d", len(ids))
-	}
-	if ids[0] != "AAA111" || ids[1] != "BBB222" {
-		t.Errorf("unexpected IDs: %v", ids)
-	}
-}
-
-func TestCardDelete(t *testing.T) {
-	s := newTestStore(t)
-
-	board := [][]int{{1, 16, 31, 46, 61}, {2, 17, 32, 47, 62}, {3, 18, 0, 48, 63}, {4, 19, 34, 49, 64}, {5, 20, 35, 50, 65}}
-	if err := s.SaveCard(t.Context(), "DEL001", board); err != nil {
-		t.Fatal(err)
-	}
-
-	deleted, err := s.DeleteCard(t.Context(), "DEL001")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !deleted {
-		t.Error("expected true for deleted card")
-	}
-
-	// Delete again - should return false
-	deleted, err = s.DeleteCard(t.Context(), "DEL001")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if deleted {
-		t.Error("expected false for already-deleted card")
-	}
-}
-
-func TestCardDeleteAll(t *testing.T) {
-	s := newTestStore(t)
-
-	board := [][]int{{1, 16, 31, 46, 61}, {2, 17, 32, 47, 62}, {3, 18, 0, 48, 63}, {4, 19, 34, 49, 64}, {5, 20, 35, 50, 65}}
-	for _, id := range []string{"DA0001", "DA0002", "DA0003"} {
+	for _, id := range []string{"BBB222", "AAA111"} {
 		if err := s.SaveCard(t.Context(), id, board); err != nil {
 			t.Fatal(err)
 		}
 	}
+	if err := q.CreateCardRequest(t.Context(), db.CreateCardRequestParams{ID: "PEND01", BoardData: "[]", PlayerName: "Aria", World: "Gilgamesh"}); err != nil {
+		t.Fatal(err)
+	}
 
-	deleted, err := s.DeleteAllCards(t.Context())
+	cards, err := q.ListPlayableCards(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(deleted) != 3 {
-		t.Errorf("expected 3 deleted, got %d", len(deleted))
+	if len(cards) != 2 || cards[0].ID != "AAA111" || cards[1].ID != "BBB222" {
+		t.Fatalf("playable cards = %+v; want AAA111, BBB222", cards)
 	}
-
-	ids, err := s.ListCardIDs(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(ids) != 0 {
-		t.Errorf("expected 0 cards, got %d", len(ids))
+	names, err := q.ListCardPlayerNames(t.Context(), []string{"PEND01", "AAA111", "NOPE99"})
+	if err != nil || len(names) != 2 {
+		t.Errorf("player names = %+v, %v; want PEND01's and AAA111's", names, err)
 	}
 }
 
@@ -243,7 +137,7 @@ func TestPatternSaveAndList(t *testing.T) {
 		t.Errorf("expected positive ID, got %d", id)
 	}
 
-	patterns, err := s.ListPatterns(t.Context())
+	patterns, err := db.New(s.ReadDB()).ListPatterns(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -253,8 +147,9 @@ func TestPatternSaveAndList(t *testing.T) {
 	if patterns[0].Name != "Top Row" {
 		t.Errorf("name = %q; want Top Row", patterns[0].Name)
 	}
-	if len(patterns[0].PatternData) != 5 {
-		t.Error("expected decoded 5-row pattern data")
+	var grid [][]bool
+	if err := json.Unmarshal([]byte(patterns[0].PatternData), &grid); err != nil || len(grid) != 5 {
+		t.Errorf("pattern data %q, want a 5-row grid", patterns[0].PatternData)
 	}
 	if patterns[0].SortOrder != 1 {
 		t.Errorf("sort_order = %d; want 1", patterns[0].SortOrder)
@@ -268,12 +163,12 @@ func TestPatternAutoIncrementSortOrder(t *testing.T) {
 	_, _ = s.SavePattern(t.Context(), "Pat B", testPattern(), 1)
 	_, _ = s.SavePattern(t.Context(), "Pat C", testPattern(), 1)
 
-	patterns, _ := s.ListPatterns(t.Context())
+	patterns, _ := db.New(s.ReadDB()).ListPatterns(t.Context())
 	if len(patterns) != 3 {
 		t.Fatalf("expected 3, got %d", len(patterns))
 	}
 	for i, p := range patterns {
-		if p.SortOrder != i+1 {
+		if p.SortOrder != int64(i+1) {
 			t.Errorf("pattern %d: sort_order = %d; want %d", i, p.SortOrder, i+1)
 		}
 	}
@@ -286,19 +181,22 @@ func TestPatternGetByIDs(t *testing.T) {
 	_, _ = s.SavePattern(t.Context(), "B", testPattern(), 1)
 	idC, _ := s.SavePattern(t.Context(), "C", testPattern(), 1)
 
-	got, err := s.GetPatternsByIDs(t.Context(), []int{int(idA), int(idC)})
+	got, err := db.New(s.ReadDB()).ListPatternsByIDs(t.Context(), []int64{idC, idA, 999})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 2 {
-		t.Fatalf("expected 2 patterns, got %d", len(got))
+	if len(got) != 2 || got[0].ID != idA || got[1].ID != idC {
+		t.Fatalf("patterns = %+v; want A and C", got)
 	}
 }
 
 func TestPatternGetByIDs_Empty(t *testing.T) {
 	s := newTestStore(t)
+	if _, err := s.SavePattern(t.Context(), "A", testPattern(), 1); err != nil {
+		t.Fatal(err)
+	}
 
-	got, err := s.GetPatternsByIDs(t.Context(), nil)
+	got, err := db.New(s.ReadDB()).ListPatternsByIDs(t.Context(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -307,303 +205,92 @@ func TestPatternGetByIDs_Empty(t *testing.T) {
 	}
 }
 
-func TestPatternRename(t *testing.T) {
+// A grid is found again by the JSON it is kept as, which the API's duplicate check
+// relies on: SavePattern and the API encode it the same way.
+func TestPatternFoundByGrid(t *testing.T) {
 	s := newTestStore(t)
+	q := db.New(s.ReadDB())
 
-	id, _ := s.SavePattern(t.Context(), "Old Name", testPattern(), 1)
-
-	renamed, err := s.RenamePattern(t.Context(), int(id), "New Name")
-	if err != nil {
+	pat := testPattern()
+	if _, err := s.SavePattern(t.Context(), "Original", pat, 1); err != nil {
 		t.Fatal(err)
 	}
-	if !renamed {
-		t.Error("expected true for renamed pattern")
+	same, _ := json.Marshal(pat)
+	dup, err := q.FindPatternByGrid(t.Context(), string(same))
+	if err != nil || dup.Name != "Original" {
+		t.Fatalf("the same grid: %+v, %v; want Original", dup, err)
 	}
 
-	patterns, _ := s.ListPatterns(t.Context())
-	if patterns[0].Name != "New Name" {
-		t.Errorf("name = %q; want New Name", patterns[0].Name)
-	}
-}
-
-func TestPatternRename_NotFound(t *testing.T) {
-	s := newTestStore(t)
-
-	renamed, err := s.RenamePattern(t.Context(), 9999, "X")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if renamed {
-		t.Error("expected false for non-existent pattern")
-	}
-}
-
-func TestPatternDelete(t *testing.T) {
-	s := newTestStore(t)
-
-	id, _ := s.SavePattern(t.Context(), "To Delete", testPattern(), 1)
-
-	deleted, err := s.DeletePattern(t.Context(), int(id))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !deleted {
-		t.Error("expected true for deleted pattern")
-	}
-
-	deleted, _ = s.DeletePattern(t.Context(), int(id))
-	if deleted {
-		t.Error("expected false for already-deleted pattern")
-	}
-}
-
-func TestPatternMove(t *testing.T) {
-	s := newTestStore(t)
-
-	_, _ = s.SavePattern(t.Context(), "A", testPattern(), 1)
-	idB, _ := s.SavePattern(t.Context(), "B", testPattern(), 1)
-	_, _ = s.SavePattern(t.Context(), "C", testPattern(), 1)
-
-	// Move B up -> order should be B, A, C
-	moved, err := s.MovePattern(t.Context(), int(idB), "up")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !moved {
-		t.Error("expected true for move up")
-	}
-
-	patterns, _ := s.ListPatterns(t.Context())
-	if patterns[0].Name != "B" || patterns[1].Name != "A" || patterns[2].Name != "C" {
-		names := make([]string, len(patterns))
-		for i, p := range patterns {
-			names[i] = p.Name
-		}
-		t.Errorf("unexpected order after move up: %v", names)
-	}
-}
-
-func TestPatternMove_Down(t *testing.T) {
-	s := newTestStore(t)
-
-	_, _ = s.SavePattern(t.Context(), "A", testPattern(), 1)
-	idB, _ := s.SavePattern(t.Context(), "B", testPattern(), 1)
-	_, _ = s.SavePattern(t.Context(), "C", testPattern(), 1)
-
-	// Move B down -> order should be A, C, B
-	moved, err := s.MovePattern(t.Context(), int(idB), "down")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !moved {
-		t.Error("expected true for move down")
-	}
-
-	patterns, _ := s.ListPatterns(t.Context())
-	if patterns[0].Name != "A" || patterns[1].Name != "C" || patterns[2].Name != "B" {
-		names := make([]string, len(patterns))
-		for i, p := range patterns {
-			names[i] = p.Name
-		}
-		t.Errorf("unexpected order after move down: %v", names)
-	}
-}
-
-func TestPatternMove_Boundary(t *testing.T) {
-	s := newTestStore(t)
-
-	idA, _ := s.SavePattern(t.Context(), "A", testPattern(), 1)
-
-	// Moving the only pattern up - should be a no-op
-	moved, err := s.MovePattern(t.Context(), int(idA), "up")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if moved {
-		t.Error("expected false when at boundary")
-	}
-}
-
-func TestPatternMove_NotFound(t *testing.T) {
-	s := newTestStore(t)
-
-	moved, err := s.MovePattern(t.Context(), 9999, "up")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if moved {
-		t.Error("expected false for non-existent pattern")
+	pat[4][0] = true
+	other, _ := json.Marshal(pat)
+	if _, err := q.FindPatternByGrid(t.Context(), string(other)); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("another grid: %v, want no rows", err)
 	}
 }
 
 // -- Game operations ---------------------------------------------------------
 
-func TestGameCreateAndGetActive(t *testing.T) {
+// A game's rows: made active with no winners, its patterns and calls read back in
+// order, its winners kept, and ended once.
+func TestGameQueries(t *testing.T) {
 	s := newTestStore(t)
+	q := db.New(s.DB())
+	ctx := t.Context()
 
-	id, err := s.CreateGame(t.Context())
+	if _, err := q.GetActiveGame(ctx); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("no game yet: %v, want no rows", err)
+	}
+	created, err := q.CreateGame(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if id <= 0 {
-		t.Errorf("expected positive ID, got %d", id)
+	game, err := q.GetActiveGame(ctx)
+	if err != nil || game.ID != created.ID || game.Status != "active" || game.WinnersCache != "[]" || game.CreatedAt == nil {
+		t.Fatalf("the active game = %+v, %v", game, err)
 	}
 
-	game, err := s.GetActiveGame(t.Context())
-	if err != nil {
+	for _, p := range []db.AddGamePatternParams{
+		{GameID: created.ID, PatternID: 7, PatternName: "Bottom Row", PatternData: "[]"},
+		{GameID: created.ID, PatternID: 2, PatternName: "Top Row", PatternData: "[]"},
+	} {
+		if err := q.AddGamePattern(ctx, p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	patterns, err := q.ListGamePatterns(ctx, created.ID)
+	if err != nil || len(patterns) != 2 || patterns[0].PatternName != "Top Row" {
+		t.Errorf("patterns = %+v, %v; want Top Row first (by id)", patterns, err)
+	}
+
+	for i, n := range []int64{42, 7, 65} {
+		if err := q.AddCalledNumber(ctx, db.AddCalledNumberParams{GameID: created.ID, Number: n, CallOrder: int64(i + 1)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The same number twice in a game is refused.
+	if err := q.AddCalledNumber(ctx, db.AddCalledNumberParams{GameID: created.ID, Number: 7, CallOrder: 4}); err == nil {
+		t.Error("a number called twice was taken")
+	}
+	numbers, err := q.ListCalledNumbers(ctx, created.ID)
+	if err != nil || len(numbers) != 3 || numbers[0] != 42 || numbers[1] != 7 || numbers[2] != 65 {
+		t.Errorf("called = %v, %v; want 42, 7, 65", numbers, err)
+	}
+
+	if err := q.SetWinnersCache(ctx, db.SetWinnersCacheParams{WinnersCache: `["WIN001"]`, ID: created.ID}); err != nil {
 		t.Fatal(err)
 	}
-	if game == nil {
-		t.Fatal("expected active game")
-	}
-	if game.ID != id {
-		t.Errorf("ID = %d; want %d", game.ID, id)
-	}
-	if game.Status != "active" {
-		t.Errorf("status = %q; want active", game.Status)
-	}
-	if game.WinnersCache != "[]" {
-		t.Errorf("winners_cache = %q; want []", game.WinnersCache)
-	}
-}
-
-func TestGameGetActive_None(t *testing.T) {
-	s := newTestStore(t)
-
-	game, err := s.GetActiveGame(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if game != nil {
-		t.Error("expected nil when no active game")
-	}
-}
-
-func TestGameEnd(t *testing.T) {
-	s := newTestStore(t)
-
-	id, _ := s.CreateGame(t.Context())
-	if err := s.EndGame(t.Context(), id); err != nil {
-		t.Fatal(err)
+	if game, _ := q.GetActiveGame(ctx); game.WinnersCache != `["WIN001"]` {
+		t.Errorf("winners = %q", game.WinnersCache)
 	}
 
-	game, err := s.GetActiveGame(t.Context())
-	if err != nil {
-		t.Fatal(err)
+	if n, err := q.EndGame(ctx, created.ID); err != nil || n != 1 {
+		t.Fatalf("end: %d, %v", n, err)
 	}
-	if game != nil {
-		t.Error("expected nil after ending game")
+	if n, _ := q.EndGame(ctx, created.ID); n != 0 {
+		t.Errorf("ending it again changed %d rows", n)
 	}
-}
-
-func TestGamePatterns(t *testing.T) {
-	s := newTestStore(t)
-
-	gameID, _ := s.CreateGame(t.Context())
-
-	pat := testPattern()
-	if err := s.AddGamePattern(t.Context(), gameID, 1, "Top Row", pat); err != nil {
-		t.Fatal(err)
-	}
-
-	patterns, err := s.GetGamePatterns(t.Context(), gameID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(patterns) != 1 {
-		t.Fatalf("expected 1 game pattern, got %d", len(patterns))
-	}
-	if patterns[0].Name != "Top Row" {
-		t.Errorf("name = %q; want Top Row", patterns[0].Name)
-	}
-	if len(patterns[0].PatternData) != 5 {
-		t.Error("expected decoded 5-row pattern data")
-	}
-}
-
-func TestCalledNumbers(t *testing.T) {
-	s := newTestStore(t)
-
-	gameID, _ := s.CreateGame(t.Context())
-
-	if err := s.AddCalledNumber(t.Context(), gameID, 42, 1); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.AddCalledNumber(t.Context(), gameID, 7, 2); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.AddCalledNumber(t.Context(), gameID, 65, 3); err != nil {
-		t.Fatal(err)
-	}
-
-	nums, err := s.GetCalledNumbers(t.Context(), gameID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(nums) != 3 {
-		t.Fatalf("expected 3 numbers, got %d", len(nums))
-	}
-	// Should be ordered by call_order
-	if nums[0] != 42 || nums[1] != 7 || nums[2] != 65 {
-		t.Errorf("unexpected order: %v", nums)
-	}
-}
-
-func TestWinnersCache(t *testing.T) {
-	s := newTestStore(t)
-
-	gameID, _ := s.CreateGame(t.Context())
-
-	if err := s.UpdateWinnersCache(t.Context(), gameID, []string{"WIN001", "WIN002"}); err != nil {
-		t.Fatal(err)
-	}
-
-	game, _ := s.GetActiveGame(t.Context())
-	if game.WinnersCache != `["WIN001","WIN002"]` {
-		t.Errorf("winners_cache = %q", game.WinnersCache)
-	}
-}
-
-func TestWinnersCache_Nil(t *testing.T) {
-	s := newTestStore(t)
-
-	gameID, _ := s.CreateGame(t.Context())
-
-	if err := s.UpdateWinnersCache(t.Context(), gameID, nil); err != nil {
-		t.Fatal(err)
-	}
-
-	game, _ := s.GetActiveGame(t.Context())
-	if game.WinnersCache != "[]" {
-		t.Errorf("winners_cache = %q; want []", game.WinnersCache)
-	}
-}
-
-func TestCalledNumbers_Empty(t *testing.T) {
-	s := newTestStore(t)
-
-	gameID, _ := s.CreateGame(t.Context())
-
-	nums, err := s.GetCalledNumbers(t.Context(), gameID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(nums) != 0 {
-		t.Errorf("expected empty, got %v", nums)
-	}
-}
-
-func TestGamePatterns_Empty(t *testing.T) {
-	s := newTestStore(t)
-
-	gameID, _ := s.CreateGame(t.Context())
-
-	patterns, err := s.GetGamePatterns(t.Context(), gameID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(patterns) != 0 {
-		t.Errorf("expected empty, got %d", len(patterns))
+	if _, err := q.GetActiveGame(ctx); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("after the end: %v, want no rows", err)
 	}
 }
 
@@ -1036,319 +723,104 @@ func TestSettingsGetSet(t *testing.T) {
 
 // -- Style operations ----------------------------------------------------------
 
-func TestStyleCRUD(t *testing.T) {
-	s := newTestStore(t)
-
-	id, err := s.CreateStyle(t.Context(), "Dark Theme", map[string]string{"page-bg": "#000", "accent": "#fff"}, "images/flourishes/a.svg", "images/flourishes/b.svg", false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if id <= 0 {
-		t.Errorf("expected positive ID, got %d", id)
-	}
-
-	style, err := s.GetStyle(t.Context(), id)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if style.Name != "Dark Theme" {
-		t.Errorf("name = %q; want Dark Theme", style.Name)
-	}
-	// Tokens round-trip, and the CSS is generated from them in canonical order.
-	if style.Tokens["page-bg"] != "#000" || style.Tokens["accent"] != "#fff" {
-		t.Errorf("tokens = %v", style.Tokens)
-	}
-	if style.CSSContent != ":root{--page-bg:#000;--accent:#fff;}" {
-		t.Errorf("generated css = %q", style.CSSContent)
-	}
-	// Flourishes round-trip.
-	if style.BoardFlourish != "images/flourishes/a.svg" || style.NumberFlourish != "images/flourishes/b.svg" {
-		t.Errorf("flourishes = %q / %q", style.BoardFlourish, style.NumberFlourish)
-	}
-	// New themes default to Private, and are absent from the public list.
-	if style.IsPublic {
-		t.Error("new theme should default to Private (is_public=false)")
-	}
-	if pubs, _ := s.ListPublicStyles(t.Context()); len(pubs) != 0 {
-		t.Errorf("private theme leaked into public list: %v", pubs)
-	}
-	if ps, _ := s.GetPublicStyle(t.Context(), id); ps != nil {
-		t.Error("GetPublicStyle returned a Private theme")
-	}
-
-	// Update (also clears the flourishes and marks the theme Public).
-	if err := s.UpdateStyle(t.Context(), id, "Light Theme", map[string]string{"page-bg": "#fff"}, "", "", true); err != nil {
-		t.Fatal(err)
-	}
-	style, _ = s.GetStyle(t.Context(), id)
-	if style.Name != "Light Theme" {
-		t.Errorf("name after update = %q", style.Name)
-	}
-	if style.BoardFlourish != "" || style.NumberFlourish != "" {
-		t.Errorf("flourishes after clear = %q / %q", style.BoardFlourish, style.NumberFlourish)
-	}
-	// Now Public: it appears in the public list and GetPublicStyle returns it.
-	if !style.IsPublic {
-		t.Error("theme should be Public after update")
-	}
-	if pubs, _ := s.ListPublicStyles(t.Context()); len(pubs) != 1 || pubs[0].ID != id {
-		t.Errorf("public list after publish = %v", pubs)
-	}
-	if ps, _ := s.GetPublicStyle(t.Context(), id); ps == nil {
-		t.Error("GetPublicStyle should return a Public theme")
-	}
-
-	// List
-	styles, err := s.ListStyles(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(styles) != 1 {
-		t.Errorf("expected 1 style, got %d", len(styles))
-	}
-
-	// Delete
-	deleted, err := s.DeleteStyle(t.Context(), id)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !deleted {
-		t.Error("expected deleted=true")
-	}
-	style, _ = s.GetStyle(t.Context(), id)
-	if style != nil {
-		t.Error("expected nil after delete")
-	}
-}
-
-func TestStyleGetNotFound(t *testing.T) {
-	s := newTestStore(t)
-
-	style, err := s.GetStyle(t.Context(), 9999)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if style != nil {
-		t.Error("expected nil")
-	}
-}
-
-func TestActiveStyleCSS(t *testing.T) {
-	s := newTestStore(t)
-
-	// No active style
-	css, err := s.GetActiveStyleCSS(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if css != "" {
-		t.Errorf("expected empty CSS, got %q", css)
-	}
-
-	// Create and activate
-	id, _ := s.CreateStyle(t.Context(), "Test", map[string]string{"highlight": "red"}, "images/flourishes/board.svg", "images/flourishes/num.svg", false)
-	_ = s.SetSetting(t.Context(), "active_style_id", fmt.Sprintf("%d", id))
-
-	css, err = s.GetActiveStyleCSS(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if css != ":root{--highlight:red;}" {
-		t.Errorf("active CSS = %q", css)
-	}
-
-	// The active style carries its flourishes (used by the active endpoint/broadcast).
-	active, err := s.GetActiveStyle(t.Context())
-	if err != nil || active == nil {
-		t.Fatalf("GetActiveStyle: %v / %v", active, err)
-	}
-	if active.BoardFlourish != "images/flourishes/board.svg" || active.NumberFlourish != "images/flourishes/num.svg" {
-		t.Errorf("active flourishes = %q / %q", active.BoardFlourish, active.NumberFlourish)
-	}
-}
-
 // -- Winners log operations --------------------------------------------------
+
+// addWinners writes entries to the winners log, as a game's end does.
+func addWinners(t *testing.T, s *store.Store, entries ...db.AddWinnerParams) {
+	t.Helper()
+	q := db.New(s.DB())
+	for _, e := range entries {
+		if err := q.AddWinner(t.Context(), e); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
 
 func TestWinnersLogInsertAndList(t *testing.T) {
 	s := newTestStore(t)
 
-	entries := []model.WinnersLogEntry{
-		{CardID: "AAA111", PlayerName: "Alice", GameDetails: "Round 1", WinningPatterns: `["Top Row"]`},
-		{CardID: "BBB222", PlayerName: "Bob", GameDetails: "Round 1", WinningPatterns: `["Full Card"]`},
-	}
-	if err := s.InsertWinnersLog(t.Context(), entries); err != nil {
-		t.Fatal(err)
-	}
+	addWinners(t, s,
+		db.AddWinnerParams{CardID: "AAA111", PlayerName: "Alice", GameDetails: "Round 1", WinningPatterns: `["Top Row"]`},
+		db.AddWinnerParams{CardID: "BBB222", PlayerName: "Bob", GameDetails: "Round 1", WinningPatterns: `["Full Card"]`},
+	)
 
-	results, total, err := s.ListWinnersLog(t.Context(), 10, 0, "logged_at", "DESC")
+	q := db.New(s.ReadDB())
+	if total, err := q.CountWinners(t.Context()); err != nil || total != 2 {
+		t.Errorf("total = %d, %v; want 2", total, err)
+	}
+	results, err := q.ListWinners(t.Context(), db.ListWinnersParams{Sort: "cardId", Dir: "asc", PageSize: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if total != 2 {
-		t.Errorf("total = %d; want 2", total)
-	}
-	if len(results) != 2 {
-		t.Errorf("results = %d; want 2", len(results))
+	if len(results) != 2 || results[0].CardID != "AAA111" || results[1].PlayerName != "Bob" ||
+		results[0].WinningPatterns != `["Top Row"]` || results[0].LoggedAt == nil {
+		t.Errorf("results = %+v, %+v", results[0], results[1])
 	}
 }
 
-func TestWinnersLogPagination(t *testing.T) {
+// The log sorts by each of its columns, either way, and pages by size and offset.
+func TestWinnersLogSortsAndPages(t *testing.T) {
 	s := newTestStore(t)
-
-	entries := make([]model.WinnersLogEntry, 5)
-	for i := range entries {
-		entries[i] = model.WinnersLogEntry{
-			CardID: fmt.Sprintf("C%05d", i), PlayerName: "P", WinningPatterns: "[]",
+	addWinners(t, s,
+		db.AddWinnerParams{CardID: "C00002", PlayerName: "Alice", GameDetails: "b", WinningPatterns: "[]"},
+		db.AddWinnerParams{CardID: "C00000", PlayerName: "Cyra", GameDetails: "c", WinningPatterns: "[]"},
+		db.AddWinnerParams{CardID: "C00001", PlayerName: "Bob", GameDetails: "a", WinningPatterns: "[]"},
+	)
+	q := db.New(s.ReadDB())
+	cards := func(sort, dir string, size, skip int64) string {
+		t.Helper()
+		rows, err := q.ListWinners(t.Context(), db.ListWinnersParams{Sort: sort, Dir: dir, PageSize: size, Skip: skip})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, r := range rows {
+			out = append(out, r.CardID[5:])
+		}
+		return strings.Join(out, "")
+	}
+	for _, c := range []struct {
+		sort, dir string
+		want      string
+	}{
+		{"cardId", "asc", "012"}, {"cardId", "desc", "210"},
+		{"playerName", "asc", "210"}, {"gameDetails", "desc", "021"},
+		// Logged in the same second, so the order they came in breaks the tie.
+		{"loggedAt", "asc", "201"}, {"loggedAt", "desc", "102"},
+	} {
+		if got := cards(c.sort, c.dir, 10, 0); got != c.want {
+			t.Errorf("%s %s: %s, want %s", c.sort, c.dir, got, c.want)
 		}
 	}
-	_ = s.InsertWinnersLog(t.Context(), entries)
-
-	results, total, err := s.ListWinnersLog(t.Context(), 2, 0, "logged_at", "DESC")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if total != 5 {
-		t.Errorf("total = %d; want 5", total)
-	}
-	if len(results) != 2 {
-		t.Errorf("page size = %d; want 2", len(results))
-	}
-
-	// Second page
-	results, total, err = s.ListWinnersLog(t.Context(), 2, 2, "logged_at", "DESC")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if total != 5 {
-		t.Errorf("total = %d; want 5", total)
-	}
-	if len(results) != 2 {
-		t.Errorf("page 2 size = %d; want 2", len(results))
+	if got := cards("cardId", "asc", 2, 1); got != "12" {
+		t.Errorf("a page of 2 from the second: %s, want 12", got)
 	}
 }
 
-func TestWinnersLogDelete(t *testing.T) {
-	s := newTestStore(t)
-
-	entries := []model.WinnersLogEntry{
-		{CardID: "AAA111", PlayerName: "Alice", WinningPatterns: "[]"},
-		{CardID: "BBB222", PlayerName: "Bob", WinningPatterns: "[]"},
-		{CardID: "CCC333", PlayerName: "Cara", WinningPatterns: "[]"},
-	}
-	if err := s.InsertWinnersLog(t.Context(), entries); err != nil {
-		t.Fatal(err)
-	}
-
-	// Delete one by id (read an id back from the list).
-	rows, _, err := s.ListWinnersLog(t.Context(), 10, 0, "logged_at", "DESC")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if deleted, err := s.DeleteWinnerLogEntry(t.Context(), rows[0].ID); err != nil || !deleted {
-		t.Fatalf("DeleteWinnerLogEntry = %v, err=%v; want true", deleted, err)
-	}
-	if _, total, _ := s.ListWinnersLog(t.Context(), 10, 0, "logged_at", "DESC"); total != 2 {
-		t.Errorf("total after single delete = %d; want 2", total)
-	}
-
-	// Deleting a non-existent id reports false, no error.
-	if deleted, err := s.DeleteWinnerLogEntry(t.Context(), 999999); err != nil || deleted {
-		t.Errorf("DeleteWinnerLogEntry(missing) = %v, err=%v; want false, nil", deleted, err)
-	}
-
-	// Delete-all clears the log and reports how many rows went.
-	n, err := s.DeleteAllWinnersLog(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n != 2 {
-		t.Errorf("DeleteAllWinnersLog count = %d; want 2", n)
-	}
-	if _, total, _ := s.ListWinnersLog(t.Context(), 10, 0, "logged_at", "DESC"); total != 0 {
-		t.Errorf("total after delete-all = %d; want 0", total)
-	}
-}
-
+// A frequent winner has at least the wins asked for since a time; a card issued to
+// nobody never is one.
 func TestFrequentWinners(t *testing.T) {
 	s := newTestStore(t)
-
-	// Insert 3 wins for Alice (should appear as frequent with minWins=3)
-	entries := []model.WinnersLogEntry{
-		{CardID: "A1", PlayerName: "Alice", WinningPatterns: "[]"},
-		{CardID: "A2", PlayerName: "Alice", WinningPatterns: "[]"},
-		{CardID: "A3", PlayerName: "Alice", WinningPatterns: "[]"},
-		{CardID: "B1", PlayerName: "Bob", WinningPatterns: "[]"},
-	}
-	_ = s.InsertWinnersLog(t.Context(), entries)
-
-	frequent, err := s.FrequentWinners(t.Context(), 3, 12)
+	addWinners(t, s,
+		db.AddWinnerParams{CardID: "A1", PlayerName: "Alice", WinningPatterns: "[]"},
+		db.AddWinnerParams{CardID: "A2", PlayerName: "Alice", WinningPatterns: "[]"},
+		db.AddWinnerParams{CardID: "A3", PlayerName: "Alice", WinningPatterns: "[]"},
+		db.AddWinnerParams{CardID: "B1", PlayerName: "Bob", WinningPatterns: "[]"},
+		db.AddWinnerParams{CardID: "N1", WinningPatterns: "[]"}, db.AddWinnerParams{CardID: "N2", WinningPatterns: "[]"},
+		db.AddWinnerParams{CardID: "N3", WinningPatterns: "[]"},
+	)
+	q := db.New(s.ReadDB())
+	since := time.Now().UTC().Add(-time.Hour).Format(time.RFC3339)
+	frequent, err := q.ListFrequentWinners(t.Context(), db.ListFrequentWinnersParams{Since: &since, MinWins: 3})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(frequent) != 1 {
-		t.Fatalf("expected 1 frequent winner, got %d", len(frequent))
+	if len(frequent) != 1 || frequent[0].PlayerName != "Alice" || frequent[0].WinCount != 3 {
+		t.Fatalf("frequent winners = %+v; want Alice with 3", frequent)
 	}
-	if frequent[0].PlayerName != "Alice" {
-		t.Errorf("frequent winner = %q; want Alice", frequent[0].PlayerName)
-	}
-	if frequent[0].WinCount != 3 {
-		t.Errorf("win count = %d; want 3", frequent[0].WinCount)
-	}
-}
-
-func TestDuplicatePatternDetection(t *testing.T) {
-	s := newTestStore(t)
-
-	pat := testPattern()
-	_, _ = s.SavePattern(t.Context(), "Original", pat, 1)
-
-	dup, err := s.FindDuplicatePattern(t.Context(), pat)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if dup == nil {
-		t.Fatal("expected duplicate detected")
-	}
-	if dup.Name != "Original" {
-		t.Errorf("dup name = %q; want Original", dup.Name)
-	}
-
-	// Different pattern should not be duplicate
-	pat2 := testPattern()
-	pat2[4][0] = true // modify one cell
-	dup, err = s.FindDuplicatePattern(t.Context(), pat2)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if dup != nil {
-		t.Error("expected no duplicate for different pattern")
-	}
-}
-
-// TestWinnersLogPagePastEndReportsTotal pins the count on an over-shot page. The
-// total rides along on each row via COUNT(*) OVER(), so a page past the last entry
-// returned no rows and left total at 0 - telling the client the log was empty and
-// collapsing its pager, when it had merely scrolled past the end.
-func TestWinnersLogPagePastEndReportsTotal(t *testing.T) {
-	s := newTestStore(t)
-	if err := s.InsertWinnersLog(t.Context(), []model.WinnersLogEntry{
-		{CardID: "AAA111", PlayerName: "Alice", GameDetails: "Round 1", WinningPatterns: `["Top Row"]`},
-		{CardID: "BBB222", PlayerName: "Bob", GameDetails: "Round 1", WinningPatterns: `["Full Card"]`},
-		{CardID: "CCC333", PlayerName: "Cyra", GameDetails: "Round 1", WinningPatterns: `["Line"]`},
-	}); err != nil {
-		t.Fatalf("InsertWinnersLog: %v", err)
-	}
-
-	// A page well past the end: no rows, but the total must still be the truth.
-	entries, total, err := s.ListWinnersLog(t.Context(), 10, 100, "logged_at", "DESC")
-	if err != nil {
-		t.Fatalf("ListWinnersLog: %v", err)
-	}
-	if len(entries) != 0 {
-		t.Fatalf("entries = %d; want 0 on a page past the end", len(entries))
-	}
-	if total != 3 {
-		t.Errorf("total = %d; want 3 (a page past the end must still report the real count)", total)
+	later := time.Now().UTC().Add(time.Hour).Format(time.RFC3339)
+	if frequent, _ = q.ListFrequentWinners(t.Context(), db.ListFrequentWinnersParams{Since: &later, MinWins: 1}); len(frequent) != 0 {
+		t.Errorf("since a time after every win: %+v", frequent)
 	}
 }
 

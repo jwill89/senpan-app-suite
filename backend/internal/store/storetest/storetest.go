@@ -1,8 +1,7 @@
 // Package storetest gives a test a database of its own with every migration
 // applied. The migrations run once for the test binary and each test gets a copy
 // of the result: under the race detector migrating takes seconds (migration 73
-// rebuilds 31 tables in pure-Go SQLite) and copying milliseconds. Kindred Nights'
-// dbtest is the model.
+// rebuilds 31 tables in pure-Go SQLite) and copying milliseconds.
 package storetest
 
 import (

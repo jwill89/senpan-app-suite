@@ -7,26 +7,28 @@ using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using SenpanCompanion.Api;
+using SenpanCompanion.Core;
 using SenpanCompanion.Services;
 
 namespace SenpanCompanion.Windows;
 
 /// <summary>
-/// Raffle operator panel: pick an open raffle, add entrants (with nearby-player
-/// quick-fill), toggle paid status, and draw a winner (pick -> confirm, or pick
-/// again). Matches the website's admin raffle entry flow; raffle creation stays on
-/// the website by design. Raffles aren't broadcast over the WebSocket, so Refresh
-/// re-pulls both the list and the open raffle's detail.
+/// Raffle operator panel: pick a raffle, add entrants (with nearby-player quick-fill),
+/// record payments, and draw a winner (pick -> confirm, or pick again). Matches the
+/// website's admin raffle entry flow; raffle creation stays on the website by design.
+/// The winner being confirmed is the server's, so a pick made on any console shows
+/// here, and confirming or redrawing names it. A raffles change from anywhere marks the
+/// page stale; Refresh re-pulls the list and the open raffle on demand.
 /// </summary>
 internal sealed class RaffleTab : TabBase
 {
-    private readonly ApiClient api;
+    private readonly SenpanApi api;
     private readonly NearbyPlayers nearby;
 
     private List<Raffle> raffles = new();
     private long selectedRaffleId;
-    private RaffleDetailResponse? detail;
-    private RaffleEntry? pendingWinner;
+    private RaffleDetail? detail;
+    private List<RaffleEntry> entries = new();
 
     private string charName = string.Empty;
     private string world = string.Empty;
@@ -38,26 +40,52 @@ internal sealed class RaffleTab : TabBase
     private int payTickets = 1;
     private int payWaived;
 
-    public RaffleTab(ApiClient api, NearbyPlayers nearby)
+    public RaffleTab(SenpanApi api, NearbyPlayers nearby)
     {
         this.api = api;
         this.nearby = nearby;
     }
 
-    /// <summary>Reloads the raffle list and, if one is open, its detail.</summary>
+    /// <summary>Reloads the raffle list and, if one is open, its detail and entries.</summary>
     protected override async Task LoadAsync()
     {
         var selected = this.selectedRaffleId;
         var rafflesRes = await this.api.ListRafflesAsync();
-        var detailRes = selected != 0 ? await this.api.GetRaffleAsync(selected) : null;
+        (RaffleDetail Detail, List<RaffleEntry> Entries)? opened = selected != 0 ? await this.ReadRaffleAsync(selected) : null;
         await Apply(() =>
         {
-            this.raffles = rafflesRes.Raffles;
+            this.raffles = rafflesRes.Raffles.ToList();
             // Only if the selection has not moved on while this was in flight.
-            if (detailRes != null && this.selectedRaffleId == selected)
-                this.detail = detailRes;
+            if (opened is { } read && this.selectedRaffleId == selected)
+                (this.detail, this.entries) = read;
         });
     }
+
+    private async Task<(RaffleDetail Detail, List<RaffleEntry> Entries)> ReadRaffleAsync(long id)
+    {
+        var detail = await this.api.GetRaffleAsync(id);
+        var entries = await this.api.ListRaffleEntriesAsync(id);
+        return (detail, entries.Entries.ToList());
+    }
+
+    /// <summary>Reads the raffle again after a change, keeping it only if it is still the one shown.</summary>
+    private async Task ReloadRaffleAsync(long id)
+    {
+        var (detail, entries) = await this.ReadRaffleAsync(id);
+        await Apply(() =>
+        {
+            if (this.selectedRaffleId != id)
+                return;
+            this.detail = detail;
+            this.entries = entries;
+        });
+    }
+
+    /// <summary>The winner picked and not yet confirmed, from any console; null for none.</summary>
+    private RaffleEntry? PendingWinner =>
+        this.detail is { Raffle: { Status: RaffleStatus.Open, WinnerEntryId: { } id } }
+            ? this.entries.FirstOrDefault(e => e.Id == id)
+            : null;
 
     public void Draw()
     {
@@ -81,7 +109,7 @@ internal sealed class RaffleTab : TabBase
         this.DrawAddEntry();
 
         Ui.Section(FontAwesomeIcon.Users, "Entrants");
-        this.DrawEntries(this.detail);
+        this.DrawEntries(this.detail.Raffle);
 
         Ui.Section(FontAwesomeIcon.Trophy, "Draw a winner");
         this.DrawWinnerControls();
@@ -90,7 +118,7 @@ internal sealed class RaffleTab : TabBase
     private void DrawRafflePicker()
     {
         var current = this.raffles.FirstOrDefault(r => r.Id == this.selectedRaffleId);
-        var preview = current != null ? $"{current.Title} ({current.Status})" : "Select raffle...";
+        var preview = current != null ? $"{current.Title} ({StatusWord(current.Status)})" : "Select raffle...";
 
         ImGui.SetNextItemWidth(280);
         if (!ImGui.BeginCombo("##rafflepick", preview))
@@ -98,7 +126,7 @@ internal sealed class RaffleTab : TabBase
         foreach (var raffle in this.raffles)
         {
             var selected = raffle.Id == this.selectedRaffleId;
-            if (ImGui.Selectable($"{raffle.Title} ({raffle.Status})##r{raffle.Id}", selected))
+            if (ImGui.Selectable($"{raffle.Title} ({StatusWord(raffle.Status)})##r{raffle.Id}", selected))
                 this.LoadRaffle(raffle.Id);
         }
         ImGui.EndCombo();
@@ -107,37 +135,26 @@ internal sealed class RaffleTab : TabBase
     private void LoadRaffle(long id)
     {
         this.selectedRaffleId = id;
-        this.pendingWinner = null;
-        // Clear the previous raffle's detail immediately, and only write back a
-        // fetch that still matches the selection - the pattern LoadRally and
-        // LoadGarapon already use. Without both, picking a raffle while another
-        // load was in flight left selectedRaffleId on the NEW raffle while the
-        // header, entrant table and winner controls still rendered the OLD one, so
-        // "Add entrant" and "Pick a winner" acted on a raffle that was not on
-        // screen. TabBase.Run's busy gate silently drops the second fetch, which is
-        // what made the mismatch stick.
+        // Clear the previous raffle's detail immediately, and only write back a fetch
+        // that still matches the selection, so "Add entrant" and "Pick a winner" never
+        // act on a raffle that isn't on screen.
         this.detail = null;
-        this.Run(async () =>
-        {
-            var d = await this.api.GetRaffleAsync(id);
-            await Apply(() =>
-            {
-                if (this.selectedRaffleId == id)
-                    this.detail = d;
-            });
-        });
+        this.entries = new List<RaffleEntry>();
+        this.Run(() => this.ReloadRaffleAsync(id));
     }
 
-    private static void DrawRaffleHeader(RaffleDetailResponse d)
+    private static string StatusWord(RaffleStatus status) => status == RaffleStatus.Open ? "open" : "closed";
+
+    private static void DrawRaffleHeader(RaffleDetail d)
     {
         ImGui.Text($"{d.Raffle.Title}");
         ImGui.SameLine();
-        ImGui.TextDisabled($"- {d.Raffle.Status}, {d.TotalEntries} entr{(d.TotalEntries == 1 ? "y" : "ies")}");
+        ImGui.TextDisabled($"- {StatusWord(d.Raffle.Status)}, {d.TotalEntries} entr{(d.TotalEntries == 1 ? "y" : "ies")}");
 
         var costs = DescribeCost(d.Raffle);
         if (costs.Length > 0)
             ImGui.TextDisabled($"{costs}  *  Max per person: {d.Raffle.MaxEntries}");
-        else if (!d.Raffle.AcceptsSignups)
+        else if (!d.Raffle.AcceptsSignups())
             ImGui.TextDisabled($"Details only - players sign up elsewhere  *  Max per person: {d.Raffle.MaxEntries}");
     }
 
@@ -147,22 +164,23 @@ internal sealed class RaffleTab : TabBase
     /// </summary>
     private static string DescribeCost(Raffle raffle)
     {
-        if (string.Equals(raffle.EntryMode, "custom", StringComparison.OrdinalIgnoreCase))
+        if (raffle.EntryMode == RaffleEntryMode.Custom)
         {
             return raffle.TierCosts.Count == 0
                 ? string.Empty
-                : "Cost per entry: " + string.Join(" / ", raffle.TierCosts.Select(c => c.ToString("0.##", CultureInfo.InvariantCulture)));
+                : "Cost per entry: " + string.Join(" / ", raffle.TierCosts.Select(Gil));
         }
 
-        return raffle.AcceptsSignups && raffle.CostPerEntry > 0
-            ? $"Cost per entry: {raffle.CostPerEntry:0.##}"
+        return raffle.AcceptsSignups() && raffle.CostPerEntry > 0
+            ? $"Cost per entry: {Gil(raffle.CostPerEntry)}"
             : string.Empty;
     }
 
+    private static string Gil(long amount) => amount.ToString("N0", CultureInfo.InvariantCulture);
+
     private void DrawAddEntry()
     {
-        var open = string.Equals(this.detail?.Raffle.Status, "open", StringComparison.OrdinalIgnoreCase);
-        if (!open)
+        if (this.detail?.Raffle.Status != RaffleStatus.Open)
         {
             UiText.WrappedDisabled("This raffle is closed - entries can't be added.");
             return;
@@ -172,7 +190,7 @@ internal sealed class RaffleTab : TabBase
         // entirely, so nobody is signed up through the app. Say why, rather than
         // offering a form that would quietly create an entrant this raffle never
         // meant to collect. (Entrants for one are recorded on the website.)
-        if (this.detail != null && !this.detail.Raffle.AcceptsSignups)
+        if (!this.detail.Raffle.AcceptsSignups())
         {
             UiText.WrappedDisabled(
                 "This raffle is details only - players enter it outside the app, so there is " +
@@ -201,17 +219,19 @@ internal sealed class RaffleTab : TabBase
         if (Ui.PrimaryButton("Add entrant"))
         {
             var id = this.selectedRaffleId;
-            var name = this.charName.Trim();
-            var w = this.world.Trim();
-            var n = Math.Max(1, this.numEntries);
-            var paid = this.markPaidOnAdd;
+            var entry = new RaffleEntryInput
+            {
+                CharacterName = this.charName.Trim(),
+                World = this.world.Trim(),
+                NumEntries = Math.Max(1, this.numEntries),
+                Paid = this.markPaidOnAdd,
+            };
             this.Run(async () =>
             {
-                await this.api.AddRaffleEntryAsync(id, name, w, n, paid);
-                var d = await this.api.GetRaffleAsync(id);
+                await this.api.AddRaffleEntryAsync(id, entry);
+                await this.ReloadRaffleAsync(id);
                 await Apply(() =>
                 {
-                    this.detail = d;
                     this.charName = string.Empty;
                     this.world = string.Empty;
                     this.numEntries = 1;
@@ -222,9 +242,9 @@ internal sealed class RaffleTab : TabBase
             ImGui.EndDisabled();
     }
 
-    private void DrawEntries(RaffleDetailResponse d)
+    private void DrawEntries(Raffle raffle)
     {
-        if (d.Entries.Count == 0)
+        if (this.entries.Count == 0)
         {
             ImGui.TextDisabled("No entries yet.");
             return;
@@ -244,7 +264,7 @@ internal sealed class RaffleTab : TabBase
         ImGui.TableSetupColumn("##actions", ImGuiTableColumnFlags.WidthFixed, 70);
         ImGui.TableHeadersRow();
 
-        foreach (var entry in d.Entries)
+        foreach (var entry in this.entries)
         {
             ImGui.TableNextRow();
             ImGui.TableNextColumn();
@@ -255,7 +275,7 @@ internal sealed class RaffleTab : TabBase
             // Entries merge per character+world, so an entrant who settled up and
             // then bought more tickets is only PARTLY paid - show both numbers
             // rather than a bare total that hides the outstanding ones.
-            if (entry.PartiallyPaid)
+            if (entry.PaymentState == RaffleEntryPaymentState.Partial)
             {
                 ImGui.TextUnformatted($"{entry.PaidEntries} / {entry.NumEntries}");
                 Ui.ItemTooltip($"{entry.PaidEntries} of {entry.NumEntries} tickets settled");
@@ -266,7 +286,7 @@ internal sealed class RaffleTab : TabBase
             }
 
             ImGui.TableNextColumn();
-            this.DrawPaymentCell(d.Raffle, entry);
+            this.DrawPaymentCell(raffle, entry);
 
             ImGui.TableNextColumn();
             if (Ui.DangerIconButton($"e{entry.Id}", FontAwesomeIcon.Trash, "Delete entrant"))
@@ -276,8 +296,7 @@ internal sealed class RaffleTab : TabBase
                 this.Run(async () =>
                 {
                     await this.api.DeleteRaffleEntryAsync(id, entryId);
-                    var d2 = await this.api.GetRaffleAsync(id);
-                    await Apply(() => this.detail = d2);
+                    await this.ReloadRaffleAsync(id);
                 });
             }
         }
@@ -294,11 +313,12 @@ internal sealed class RaffleTab : TabBase
     /// </summary>
     private void DrawPaymentCell(Raffle raffle, RaffleEntry entry)
     {
-        var (label, color) = entry.Paid
-            ? ("Paid", Ui.SuccessColor)
-            : entry.PartiallyPaid
-                ? ("Partial", Ui.WarnColor)
-                : ("Unpaid", Ui.InfoColor);
+        var (label, color) = entry.PaymentState switch
+        {
+            RaffleEntryPaymentState.Paid => ("Paid", Ui.SuccessColor),
+            RaffleEntryPaymentState.Partial => ("Partial", Ui.WarnColor),
+            _ => ("Unpaid", Ui.InfoColor),
+        };
 
         ImGui.PushStyleColor(ImGuiCol.Text, color);
         var open = ImGui.SmallButton($"{label}##pay{entry.Id}");
@@ -318,7 +338,7 @@ internal sealed class RaffleTab : TabBase
     /// </summary>
     private void OpenPaymentPopup(RaffleEntry entry)
     {
-        this.payTickets = Math.Max(1, entry.NumEntries);
+        this.payTickets = (int)Math.Max(1, entry.NumEntries);
         this.payWaived = 0;
         ImGui.OpenPopup(PaymentPopupId(entry));
     }
@@ -334,12 +354,12 @@ internal sealed class RaffleTab : TabBase
         Ui.Help($"{entry.NumEntries} ticket{(entry.NumEntries == 1 ? string.Empty : "s")}"
                 + (entry.PaidEntries > 0 ? $"  -  {entry.PaidEntries} already settled" : string.Empty));
 
-        var charges = raffle.AcceptsSignups && (raffle.CostPerEntry > 0 || raffle.TierCosts.Count > 0);
+        var charges = raffle.Charges();
         if (charges)
         {
             var outstanding = raffle.EntryCost(entry.NumEntries) - raffle.EntryCost(entry.PaidEntries);
-            Ui.Help($"Outstanding: {Math.Max(0, outstanding):0.##}"
-                    + (entry.AmountWaived > 0 ? $"  -  {entry.AmountWaived:0.##} waived so far" : string.Empty));
+            Ui.Help($"Outstanding: {Gil(Math.Max(0, outstanding))}"
+                    + (entry.AmountWaived > 0 ? $"  -  {Gil(entry.AmountWaived)} waived so far" : string.Empty));
         }
 
         ImGui.Separator();
@@ -350,7 +370,7 @@ internal sealed class RaffleTab : TabBase
         {
             ImGui.SetNextItemWidth(120);
             if (ImGui.InputInt("Tickets paid for", ref this.payTickets))
-                this.payTickets = Math.Clamp(this.payTickets, 1, entry.NumEntries);
+                this.payTickets = (int)Math.Clamp(this.payTickets, 1, entry.NumEntries);
             if (this.payTickets < entry.NumEntries)
                 Ui.Help($"Leaves {entry.NumEntries - this.payTickets} outstanding.");
         }
@@ -367,7 +387,9 @@ internal sealed class RaffleTab : TabBase
 
         if (Ui.PrimaryButton("Mark paid"))
         {
-            this.Settle(entry.Id, true, this.payTickets, this.payWaived);
+            // Every ticket unless fewer were typed: a part payment names its count.
+            long? tickets = this.payTickets < entry.NumEntries ? this.payTickets : null;
+            this.Settle(entry.Id, new RaffleSettlement { PaidEntries = tickets, Waived = this.payWaived });
             ImGui.CloseCurrentPopup();
         }
         if (entry.PaidEntries > 0)
@@ -377,7 +399,7 @@ internal sealed class RaffleTab : TabBase
             {
                 // Clearing resets the whole row - settled tickets AND waived gil -
                 // which is also the only way to walk a settlement back.
-                this.Settle(entry.Id, false, 0, 0);
+                this.Settle(entry.Id, null);
                 ImGui.CloseCurrentPopup();
             }
         }
@@ -388,47 +410,54 @@ internal sealed class RaffleTab : TabBase
         ImGui.EndPopup();
     }
 
-    /// <summary>Sends one settlement and re-pulls the raffle so the table reflects it.</summary>
-    private void Settle(long entryId, bool paid, int tickets, int waived)
+    /// <summary>Records one settlement, or clears the entry's when <paramref name="settlement"/>
+    /// is null, then re-reads the raffle so the table reflects it.</summary>
+    private void Settle(long entryId, RaffleSettlement? settlement)
     {
         var id = this.selectedRaffleId;
         this.Run(async () =>
         {
-            await this.api.MarkRaffleEntryPaidAsync(id, entryId, paid, tickets, waived);
-            var d = await this.api.GetRaffleAsync(id);
-            await Apply(() => this.detail = d);
+            if (settlement != null)
+                await this.api.SettleRaffleEntryAsync(id, entryId, settlement);
+            else
+                await this.api.UnsettleRaffleEntryAsync(id, entryId);
+            await this.ReloadRaffleAsync(id);
         });
     }
 
     private void DrawWinnerControls()
     {
-        if (this.pendingWinner != null)
+        if (this.detail?.Raffle.Status == RaffleStatus.Closed)
+        {
+            ImGui.TextDisabled(this.detail.WinnerEntry is { } won
+                ? $"Closed. Winner: {won.CharacterName} @ {won.World}"
+                : "Closed without a winner.");
+            return;
+        }
+
+        if (this.PendingWinner is { } pending)
         {
             UiText.WrappedColored(new Vector4(0.3f, 0.9f, 0.4f, 1f),
-                $"Drawn winner: {this.pendingWinner.CharacterName} @ {this.pendingWinner.World}");
+                $"Drawn winner: {pending.CharacterName} @ {pending.World}");
 
+            var id = this.selectedRaffleId;
             if (Ui.PrimaryButton("Confirm winner"))
             {
-                var id = this.selectedRaffleId;
+                var confirm = new RaffleWinnerConfirm { WinnerEntryId = pending.Id };
                 this.Run(async () =>
                 {
-                    await this.api.VerifyRaffleWinnerAsync(id);
-                    var d = await this.api.GetRaffleAsync(id);
-                    await Apply(() =>
-                    {
-                        this.detail = d;
-                        this.pendingWinner = null;
-                    });
+                    await this.api.VerifyRaffleWinnerAsync(id, confirm);
+                    await this.ReloadRaffleAsync(id);
                 });
             }
             ImGui.SameLine();
             if (Ui.Button("Draw another"))
             {
-                var id = this.selectedRaffleId;
+                var choice = new RaffleWinnerChoice { Replaces = pending.Id };
                 this.Run(async () =>
                 {
-                    var w = (await this.api.PickAnotherRaffleWinnerAsync(id)).Winner;
-                    await Apply(() => this.pendingWinner = w);
+                    await this.api.PickAnotherRaffleWinnerAsync(id, choice);
+                    await this.ReloadRaffleAsync(id);
                 });
             }
             return;
@@ -439,14 +468,14 @@ internal sealed class RaffleTab : TabBase
             var id = this.selectedRaffleId;
             this.Run(async () =>
             {
-                var w = (await this.api.PickRaffleWinnerAsync(id)).Winner;
-                await Apply(() => this.pendingWinner = w);
+                await this.api.PickRaffleWinnerAsync(id);
+                await this.ReloadRaffleAsync(id);
             });
         }
         ImGui.SameLine();
         // A details-only raffle collects nothing through the app, so every entry is
         // eligible; anything that charges draws on tickets that were settled.
-        ImGui.TextDisabled(this.detail?.Raffle.AcceptsSignups == false
+        ImGui.TextDisabled(this.detail?.Raffle.AcceptsSignups() == false
             ? "Draws from every entrant."
             : "Draws on paid tickets only.");
     }

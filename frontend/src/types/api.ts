@@ -1,18 +1,9 @@
 /**
- * API types barrel.
- *
- * Re-exports the tygo-generated types from `api.generated.ts` and adds the types that
- * are intentionally frontend-only: the admin *form* models and a couple of UI
- * enums/constants. The operations and the live events take their types from the
- * generated API schema (`@/api/client`, `@/lib/feed`).
- *
- * Regenerate the domain + envelope types with `npm run gen:types` after changing
- * any Go `model` struct.
+ * The types that are intentionally frontend-only: the admin *form* models and a
+ * couple of UI enums/constants. The operations and the live events take their types
+ * from the generated API schema (`@/api/client`, `@/lib/feed`).
  */
 import type { Placement } from '@/api/client'
-
-// -- Domain models (generated from the Go `model` package) --------------------
-export type { LogEntry } from './api.generated'
 
 // -- Form models (frontend-only) ----------------------------------------------
 

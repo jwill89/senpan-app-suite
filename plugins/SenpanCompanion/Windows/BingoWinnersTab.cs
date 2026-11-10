@@ -1,37 +1,38 @@
-using System;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Text.Json;
+using System.Linq;
 using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
+using Newtonsoft.Json;
 using SenpanCompanion.Api;
+using SenpanCompanion.Core;
 
 namespace SenpanCompanion.Windows;
 
 /// <summary>
 /// Bingo Winners tab: the winners log (most recent first) with player, card, time,
-/// and winning patterns, plus per-entry delete. Read-through to GET /api/winners-log;
-/// gated server-side by the bingo-winners-log permission. There is intentionally no
-/// "clear all", so the log can't be wiped from in-game.
+/// and winning patterns, plus per-entry delete. Read-through to GET /api/v1/winners-log;
+/// gated server-side by the bingo-winners-log permission, and read again when a game
+/// ends or the log changes anywhere. There is intentionally no "clear all", so the log
+/// can't be wiped from in-game.
 /// </summary>
 internal sealed class BingoWinnersTab : TabBase
 {
     private const int PageSize = 200;
 
-    private readonly ApiClient api;
+    private readonly SenpanApi api;
 
     private List<WinnersLogEntry> entries = new();
-    private int total;
+    private long total;
 
-    public BingoWinnersTab(ApiClient api) => this.api = api;
+    public BingoWinnersTab(SenpanApi api) => this.api = api;
 
     protected override async Task LoadAsync()
     {
-        var res = await this.api.WinnersLogAsync(1, PageSize);
+        var res = await this.api.ListWinnersAsync(1, PageSize, Sort.LoggedAt, Dir.Desc);
         await Apply(() =>
         {
-            this.entries = res.Entries;
+            this.entries = res.Entries.ToList();
             this.total = res.Total;
         });
     }
@@ -71,7 +72,7 @@ internal sealed class BingoWinnersTab : TabBase
         {
             ImGui.TableNextRow();
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted(FormatTime(e.LoggedAt));
+            ImGui.TextUnformatted(Times.Local(e.LoggedAt));
             ImGui.TableNextColumn();
             ImGui.TextUnformatted(string.IsNullOrEmpty(e.PlayerName) ? "-" : e.PlayerName);
             ImGui.TableNextColumn();
@@ -84,7 +85,7 @@ internal sealed class BingoWinnersTab : TabBase
                 var id = e.Id;
                 this.Run(async () =>
                 {
-                    await this.api.DeleteWinnersLogEntryAsync(id);
+                    await this.api.DeleteWinnerAsync(id);
                     await this.LoadAsync();
                 });
             }
@@ -93,23 +94,14 @@ internal sealed class BingoWinnersTab : TabBase
         ImGui.EndTable();
     }
 
-    private static string FormatTime(string ts)
-    {
-        if (string.IsNullOrWhiteSpace(ts))
-            return "-";
-        var normalized = ts.Contains('T') ? ts : ts.Replace(' ', 'T') + "Z";
-        return DateTimeOffset.TryParse(normalized, out var dto)
-            ? dto.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)
-            : ts;
-    }
-
+    // The winning patterns are kept as a JSON array of their names.
     private static string FormatPatterns(string json)
     {
         if (string.IsNullOrWhiteSpace(json))
             return string.Empty;
         try
         {
-            var names = JsonSerializer.Deserialize<string[]>(json);
+            var names = JsonConvert.DeserializeObject<string[]>(json);
             return names != null ? string.Join(", ", names) : json;
         }
         catch (JsonException)

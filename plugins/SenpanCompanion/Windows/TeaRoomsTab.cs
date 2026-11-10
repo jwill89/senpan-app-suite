@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
@@ -19,12 +20,12 @@ namespace SenpanCompanion.Windows;
 /// (subtitle, image, hashtags, Discord posting, reordering) stays on the website.
 ///
 /// A lock either waits on a person, as locks always did, or carries an unlock time
-/// the server lifts it at. The expiry arrives back as a `tea_room_unlocked` push,
+/// the server lifts it at. The expiry arrives back as a `tea_room_unlocked` event,
 /// which this panel turns into an in-game alert - so an operator learns a room is
 /// free while looking at the game, not at this window.
 ///
-/// Rooms aren't otherwise pushed over the WebSocket, so a Refresh button re-pulls
-/// the list. Each toggle hits PATCH /api/tea-rooms/{id} (gated by the
+/// A tea-rooms change from anywhere marks the list stale, and the Refresh button
+/// re-pulls it on demand. Each toggle hits PATCH /api/v1/tea-rooms/{id} (gated by the
 /// teahouse-tea-rooms permission) and swaps the returned room back into the list in
 /// place.
 /// </summary>
@@ -45,7 +46,7 @@ internal sealed class TeaRoomsTab : TabBase, IDisposable
         ("+4h", TimeSpan.FromHours(4)),
     };
 
-    private readonly ApiClient api;
+    private readonly SenpanApi api;
     private readonly LiveConnection live;
     private readonly Session session;
 
@@ -56,26 +57,21 @@ internal sealed class TeaRoomsTab : TabBase, IDisposable
     private string lockUntil = string.Empty;
     private string lockError = string.Empty;
 
-    public TeaRoomsTab(ApiClient api, LiveConnection live, Session session)
+    public TeaRoomsTab(SenpanApi api, LiveConnection live, Session session)
     {
         this.api = api;
         this.live = live;
         this.session = session;
         this.live.TeaRoomUnlocked += this.OnTeaRoomUnlocked;
-        this.live.Reconnected += this.OnReconnected;
     }
 
-    public void Dispose()
-    {
-        this.live.TeaRoomUnlocked -= this.OnTeaRoomUnlocked;
-        this.live.Reconnected -= this.OnReconnected;
-    }
+    public void Dispose() => this.live.TeaRoomUnlocked -= this.OnTeaRoomUnlocked;
 
     /// <summary>Reloads the full room list (the server preserves the admin order).</summary>
     protected override async Task LoadAsync()
     {
         var res = await this.api.ListTeaRoomsAsync();
-        await Apply(() => this.rooms = res.TeaRooms);
+        await Apply(() => this.rooms = res.TeaRooms.ToList());
     }
 
     public void Draw()
@@ -166,7 +162,7 @@ internal sealed class TeaRoomsTab : TabBase, IDisposable
         if (room.Locked)
         {
             if (ImGui.SmallButton($"Unlock##lock{room.Id}"))
-                this.SetLock(room.Id, false, string.Empty);
+                this.SetLock(room.Id, false, null);
             Ui.ItemTooltip("Unlock this room now");
             ImGui.SameLine();
             ImGui.TextDisabled(LockText(room));
@@ -245,9 +241,9 @@ internal sealed class TeaRoomsTab : TabBase, IDisposable
     /// is refused here: the server would take it, expire the lock on its next sweep
     /// and alert everyone about a room that was never really locked.
     /// </summary>
-    private bool TryBuildLockUntil(out string until, out string error)
+    private bool TryBuildLockUntil(out DateTimeOffset? until, out string error)
     {
-        until = string.Empty;
+        until = null;
         error = string.Empty;
 
         var text = this.lockUntil.Trim();
@@ -266,27 +262,27 @@ internal sealed class TeaRoomsTab : TabBase, IDisposable
             return false;
         }
 
-        until = DateTime.SpecifyKind(local, DateTimeKind.Local).ToUniversalTime()
-            .ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
+        until = new DateTimeOffset(DateTime.SpecifyKind(local, DateTimeKind.Local)).ToUniversalTime();
         return true;
     }
 
-    private void SetOpen(long id, bool open) => this.Run(async () =>
-    {
-        var res = await this.api.SetTeaRoomOpenAsync(id, open);
-        await Apply(() => this.ReplaceRoom(res.TeaRoom));
-    });
+    private void SetOpen(long id, bool open) => this.Change(id, new TeaRoomChanges { Open = open });
 
-    private void SetDiscounted(long id, bool discounted) => this.Run(async () =>
-    {
-        var res = await this.api.SetTeaRoomDiscountedAsync(id, discounted);
-        await Apply(() => this.ReplaceRoom(res.TeaRoom));
-    });
+    private void SetDiscounted(long id, bool discounted) => this.Change(id, new TeaRoomChanges { Discounted = discounted });
 
-    private void SetLock(long id, bool locked, string until) => this.Run(async () =>
+    /// <summary>
+    /// Locks or unlocks a room. Locking sets the lock afresh, so a lock after an earlier
+    /// timed one never inherits its leftover time: until <paramref name="until"/> when one
+    /// is given, otherwise until somebody unlocks the room. Unlocking clears the time.
+    /// </summary>
+    private void SetLock(long id, bool locked, DateTimeOffset? until) =>
+        this.Change(id, new TeaRoomChanges { Locked = locked, LockedUntil = locked ? until : null });
+
+    // A PATCH changes only what it sends, and answers the saved room.
+    private void Change(long id, TeaRoomChanges changes) => this.Run(async () =>
     {
-        var res = await this.api.SetTeaRoomLockAsync(id, locked, until);
-        await Apply(() => this.ReplaceRoom(res.TeaRoom));
+        var saved = await this.api.ChangeTeaRoomAsync(id, changes);
+        await Apply(() => this.ReplaceRoom(saved));
     });
 
     /// <summary>
@@ -301,7 +297,7 @@ internal sealed class TeaRoomsTab : TabBase, IDisposable
         if (i >= 0)
         {
             this.rooms[i].Locked = false;
-            this.rooms[i].LockedUntil = string.Empty;
+            this.rooms[i].LockedUntil = null;
         }
         if (this.session.Has(Perms.TeahouseTeaRooms))
         {
@@ -355,19 +351,9 @@ internal sealed class TeaRoomsTab : TabBase, IDisposable
         Plugin.ChatGui.Print($"[Senpan] {message}");
     }
 
-    /// <summary>
-    /// The socket came back after a drop. Locks may have expired while it was down -
-    /// the pushes that said so are gone - so the list on screen can claim a room is
-    /// still locked when it isn't. Mark it stale and let the per-frame EnsureLoaded
-    /// re-pull it, as the bingo page does.
-    /// </summary>
-    private void OnReconnected() => this.MarkStale();
-
     /// <summary>Swaps the server's saved room back into the list in place (matched by id).</summary>
-    private void ReplaceRoom(TeaRoom? saved)
+    private void ReplaceRoom(TeaRoom saved)
     {
-        if (saved == null)
-            return;
         var i = this.rooms.FindIndex(r => r.Id == saved.Id);
         if (i >= 0)
             this.rooms[i] = saved;

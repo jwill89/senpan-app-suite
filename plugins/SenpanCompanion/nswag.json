@@ -1,0 +1,68 @@
+{
+  "runtime": "Net100",
+  "documentGenerator": {
+    "fromDocument": {
+      "url": "../../frontend/src/api/openapi.json"
+    }
+  },
+  "codeGenerators": {
+    "openApiToCSharpClient": {
+      "output": "Api/SenpanApi.g.cs",
+      "namespace": "SenpanCompanion.Api",
+      "className": "SenpanApi",
+      "newLineBehavior": "LF",
+      "includedOperationIds": [
+        "get-me",
+        "list-cards",
+        "create-card",
+        "delete-card",
+        "delete-all-cards",
+        "approve-card",
+        "protect-card",
+        "get-board",
+        "list-patterns",
+        "list-presets",
+        "list-winners",
+        "list-frequent-winners",
+        "delete-winner",
+        "get-game",
+        "update-game",
+        "start-game",
+        "draw-number",
+        "answer-halftime",
+        "end-game",
+        "list-raffles",
+        "get-raffle",
+        "list-raffle-entries",
+        "add-raffle-entry",
+        "delete-raffle-entry",
+        "settle-raffle-entry",
+        "unsettle-raffle-entry",
+        "pick-raffle-winner",
+        "pick-another-raffle-winner",
+        "verify-raffle-winner",
+        "list-garapons",
+        "get-garapon",
+        "create-garapon-player",
+        "list-stamp-rallies",
+        "get-stamp-rally",
+        "create-stamp-rally-card",
+        "update-stamp-rally-stamp",
+        "list-stamp-rally-logs",
+        "list-tea-rooms",
+        "change-tea-room"
+      ],
+      "operationGenerationMode": "SingleClientFromOperationId",
+      "injectHttpClient": true,
+      "useBaseUrl": false,
+      "generateClientInterfaces": false,
+      "generateOptionalParameters": true,
+      "generateNullableReferenceTypes": true,
+      "generateOptionalPropertiesAsNullable": true,
+      "generateDataAnnotations": false,
+      "arrayType": "System.Collections.Generic.IReadOnlyList",
+      "arrayInstanceType": "System.Collections.Generic.List",
+      "responseArrayType": "System.Collections.Generic.IReadOnlyList"
+    }
+  }
+}

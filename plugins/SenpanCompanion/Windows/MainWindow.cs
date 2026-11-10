@@ -25,7 +25,7 @@ public sealed class MainWindow : Window, IDisposable
 {
     private readonly Plugin plugin;
     private readonly Configuration config;
-    private readonly ApiClient api;
+    private readonly SenpanApi api;
     private readonly LiveConnection live;
     private readonly Session session;
     private readonly CardCache cardCache;
@@ -75,7 +75,7 @@ public sealed class MainWindow : Window, IDisposable
     private bool settingsTesting;
     private bool settingsPrimed;
 
-    public MainWindow(Plugin plugin, Configuration config, ApiClient api, LiveConnection live, NearbyPlayers nearby, ChatSender chat, RollTracker rollTracker, TimedMacroRunner timedMacroRunner)
+    public MainWindow(Plugin plugin, Configuration config, SenpanApi api, LiveConnection live, NearbyPlayers nearby, ChatSender chat, RollTracker rollTracker, TimedMacroRunner timedMacroRunner)
         : base("Senpan Admin Companion###SenpanMain")
     {
         this.plugin = plugin;
@@ -84,7 +84,7 @@ public sealed class MainWindow : Window, IDisposable
         this.live = live;
         this.session = new Session(api);
         this.cardCache = new CardCache(api, live);
-        this.game = new BingoGameTab(api, config, live, this.cardCache);
+        this.game = new BingoGameTab(api, live, this.cardCache);
         this.cards = new BingoCardsTab(api, nearby, config, chat, this.cardCache);
         this.winnersLog = new BingoWinnersTab(api);
         this.teaRooms = new TeaRoomsTab(api, live, this.session);
@@ -93,6 +93,10 @@ public sealed class MainWindow : Window, IDisposable
         this.stampRally = new StampRallyTab(api, nearby, config, chat);
         this.rolls = new RollsTab(rollTracker);
         this.timedMacros = new TimedMacrosTab(config, timedMacroRunner);
+        this.live.Opened += this.OnStreamOpened;
+        this.live.Resync += this.MarkAllStale;
+        this.live.ResourceChanged += this.OnResourceChanged;
+        this.live.GameEnded += this.OnGameEnded;
         this.SizeConstraints = new WindowSizeConstraints
         {
             // The sidebar + content split needs more horizontal room than the old
@@ -121,6 +125,10 @@ public sealed class MainWindow : Window, IDisposable
 
     public void Dispose()
     {
+        this.live.Opened -= this.OnStreamOpened;
+        this.live.Resync -= this.MarkAllStale;
+        this.live.ResourceChanged -= this.OnResourceChanged;
+        this.live.GameEnded -= this.OnGameEnded;
         this.game.Dispose();
         // The Tea Rooms page listens for expiring locks whether or not it is on
         // screen, so it holds live-event subscriptions to let go of.
@@ -386,7 +394,9 @@ public sealed class MainWindow : Window, IDisposable
         ImGui.SameLine(0, ImGui.GetStyle().ItemInnerSpacing.X * 1.5f);
         ImGui.TextColored(color, connected ? "Live" : "Offline");
         ImGui.SameLine();
-        ImGui.TextDisabled(connected ? "receiving live updates" : "connecting...");
+        ImGui.TextDisabled(connected ? "receiving live updates"
+            : this.live.Refused ? "the server refused this token - see Settings"
+            : this.config.AutoConnect ? "connecting..." : "auto-connect is off");
         ImGui.Separator();
     }
 
@@ -630,6 +640,18 @@ public sealed class MainWindow : Window, IDisposable
         this.config.Save();
         this.plugin.OnConnectionSettingsChanged();
         this.session.MarkStale();
+        this.MarkAllStale();
+        // Re-arm the "jump to first accessible page" once permissions reload - a new
+        // token may grant or revoke access to the current page.
+        this.navInitialized = false;
+        this.settingsStatus = SenpanApi.ApiBase(this.config.ServerUrl) == null
+            ? "Saved, but the server URL must be an https:// address (plain http only for this PC)."
+            : "Saved.";
+    }
+
+    /// <summary>Every page reads its data again when next shown.</summary>
+    private void MarkAllStale()
+    {
         this.cardCache.MarkStale();
         this.game.MarkStale();
         this.winnersLog.MarkStale();
@@ -637,11 +659,47 @@ public sealed class MainWindow : Window, IDisposable
         this.raffle.MarkStale();
         this.garapon.MarkStale();
         this.stampRally.MarkStale();
-        // Re-arm the "jump to first accessible page" once permissions reload - a new
-        // token may grant or revoke access to the current page.
-        this.navInitialized = false;
-        this.settingsStatus = "Saved.";
     }
+
+    /// <summary>
+    /// The stream opened, first or again after a drop: what was missed while it was down
+    /// is replayed, but the game and the cards are read again regardless, as the website
+    /// does, since End Game must log the winners the server holds.
+    /// </summary>
+    private void OnStreamOpened()
+    {
+        this.game.MarkStale();
+        this.cardCache.MarkStale();
+    }
+
+    /// <summary>A page's records changed somewhere; the page reads them again when next shown.</summary>
+    private void OnResourceChanged(string resource)
+    {
+        switch (resource)
+        {
+            case "raffles":
+                this.raffle.MarkStale();
+                break;
+            case "garapons":
+                this.garapon.MarkStale();
+                break;
+            case "stamp-rallies":
+                this.stampRally.MarkStale();
+                break;
+            case "tea-rooms":
+                this.teaRooms.MarkStale();
+                break;
+            case "winners-log":
+                this.winnersLog.MarkStale();
+                break;
+            case "presets":
+                this.game.MarkStale();
+                break;
+        }
+    }
+
+    // Ending a game writes the winners log.
+    private void OnGameEnded(long? gameId) => this.winnersLog.MarkStale();
 
     private void TestSettings()
     {
@@ -651,12 +709,12 @@ public sealed class MainWindow : Window, IDisposable
         {
             try
             {
-                var res = await this.api.CheckAuthAsync();
-                if (res is { Authenticated: true, User: not null })
+                var account = (await this.api.GetMeAsync()).Account;
+                if (account != null)
                 {
-                    var who = res.User.IsAdmin
-                        ? $"{res.User.Username} (admin)"
-                        : $"{res.User.Username} - permissions: {string.Join(", ", res.User.Permissions)}";
+                    var who = account.IsAdmin
+                        ? $"{account.Username} (admin)"
+                        : $"{account.Username} - permissions: {string.Join(", ", account.Permissions)}";
                     this.settingsStatus = $"Connected as {who}.";
                 }
                 else
@@ -666,7 +724,7 @@ public sealed class MainWindow : Window, IDisposable
             }
             catch (Exception ex)
             {
-                this.settingsStatus = $"Connection failed: {ex.Message}";
+                this.settingsStatus = $"Connection failed: {Core.Problems.Say(ex)}";
             }
             finally
             {

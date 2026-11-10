@@ -2,7 +2,7 @@
 //
 // Since 4.0.0 the SPA and the API are one app, built into one binary, with one
 // version: frontend/package.json's, which CI tags as v<version> and the deploy
-// ships. Version repeats it here because the API reports it (GET /api/version,
+// ships. Version repeats it here because the API reports it (GET /api/v1/version,
 // GET /healthz) and the committed OpenAPI document names it; a test fails if the
 // two differ, so a release changes both, with its CHANGELOG.md section.
 //
@@ -14,4 +14,4 @@
 package version
 
 // Version is the app's current semantic version, frontend/package.json's.
-const Version = "4.1.0"
+const Version = "5.0.0"

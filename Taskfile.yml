@@ -42,14 +42,14 @@ tasks:
   # CI's generated job runs the same and fails on a difference. The binary embeds the
   # front end's build, so go run needs it.
   gen:
-    desc: Regenerate sqlc's queries, the API's OpenAPI document and the SPA's types from it (and tygo's, until every domain is on huma), after a query or API change; commit the result
+    desc: Regenerate sqlc's queries, the API's OpenAPI document, and the SPA's types and the plugin's client from it, after a query or API change; commit the result
     deps: [build:web]
     cmds:
       - cd backend && sqlc generate
       - cd backend && go run . openapi > ../frontend/src/api/openapi.json
       - cd frontend && npx -y openapi-typescript@7.13.0 src/api/openapi.json -o src/api/schema.d.ts
       - cd frontend && npx prettier --write src/api/schema.d.ts src/api/openapi.json
-      - cd frontend && npm run gen:types
+      - cd plugins && dotnet tool restore && dotnet nswag run SenpanCompanion/nswag.json
 
   # The SPA's build, written where the Go binary embeds it (backend/internal/web/dist):
   # every Go build, test, lint and scan compiles it in, so each depends on this. Once

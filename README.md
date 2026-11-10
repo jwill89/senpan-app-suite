@@ -37,7 +37,8 @@ it embeds: one binary, one version.
   pure-Go `modernc.org/sqlite`) - `alexedwards/scs` sessions -
   argon2id + `go-webauthn` passkeys - structured JSON logging (`slog` +
   `timberjack` rotation)
-- **Tooling:** tygo (Go->TS type generation) - ESLint + Stylelint + Prettier -
+- **Tooling:** openapi-typescript (the SPA's types) and NSwag (the plugin's client),
+  both from the API's OpenAPI document - ESLint + Stylelint + Prettier -
   golangci-lint - GitHub Actions CI - Dependabot. The lint configs, the CI workflows
   and the deploy module come from
   [shared-tooling](https://github.com/jwill89/shared-tooling), a git submodule at
@@ -76,10 +77,12 @@ Open <http://localhost:5173>. The admin area is at `/admin/login`. A fresh datab
 seeds a bootstrap **`admin` / `admin`** account - change its password after first
 login.
 
-> **Note:** `frontend/src/types/api.generated.ts` is generated from the Go models
-> by tygo and **committed**. After changing a Go model type, run
-> `npm run gen:types` (needs Go) and commit the result with the change; CI's
-> `generated` job fails when the committed copy is stale.
+> **Note:** the API's OpenAPI document (`frontend/src/api/openapi.json`), the SPA's
+> types from it (`schema.d.ts`) and the plugin's client
+> (`plugins/SenpanCompanion/Api/SenpanApi.g.cs`) are generated and **committed**.
+> After an API change, run `task gen` (needs Go, Node and the .NET SDK) and commit
+> the result with the change; CI's `generated` job fails when a committed copy is
+> stale.
 
 ## Versioning
 
@@ -98,7 +101,6 @@ shows both, and flags an open tab whose server now runs a different version.
 | Command (in `frontend/`)     | Purpose                                            |
 | ---------------------------- | -------------------------------------------------- |
 | `npm run dev`                | Dev server (HMR), proxies `/api` -> `:8080`         |
-| `npm run gen:types`          | Regenerate TS types from Go models (needs Go)      |
 | `npm run test`               | Vitest unit/component tests (one-shot)             |
 | `npm run test:watch`         | Vitest watch mode                                  |
 | `npm run test:coverage`      | Tests with v8 coverage, failing below the floor (CI) |

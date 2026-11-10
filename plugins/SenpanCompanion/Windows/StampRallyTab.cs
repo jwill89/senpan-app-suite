@@ -7,39 +7,42 @@ using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using SenpanCompanion.Api;
+using SenpanCompanion.Core;
 using SenpanCompanion.Services;
 
 namespace SenpanCompanion.Windows;
 
 /// <summary>
 /// Stamp Rally operator panel. One object backs two sidebar pages that share the
-/// picked rally + its detail (GET /api/stamp-rallies/{id} returns the stalls and
+/// picked rally + its detail (GET /api/v1/stamp-rallies/{id} returns the stalls and
 /// issued cards; the collected log is a separate GET .../logs):
 /// <list type="bullet">
 /// <item><see cref="DrawManage"/> - issue a participant card (nearby-player
 /// quick-fill, optional /tell, copy link) and pause/resume individual stalls.</item>
 /// <item><see cref="DrawLog"/> - the event-wide collected-stamp log.</item>
 /// </list>
-/// Rallies aren't pushed over the WebSocket, so a Refresh button re-pulls the list,
-/// the detail, and the log.
+/// A stamp-rallies change from anywhere marks the page stale, and the Refresh button
+/// re-pulls the list, the detail, and the log on demand.
 /// </summary>
 internal sealed class StampRallyTab : TabBase
 {
-    private readonly ApiClient api;
+    private const string DefaultStall = "Senpan Tea House";
+
+    private readonly SenpanApi api;
     private readonly NearbyPlayers nearby;
     private readonly Configuration config;
     private readonly ChatSender chat;
 
     private List<StampRally> rallies = new();
     private long selectedRallyId;
-    private StampRallyDetailResponse? detail;
+    private StampRallyDetail? detail;
     private List<StampRallyLogEntry> logs = new();
 
     private string newParticipantName = string.Empty;
     private string pendingTellName = string.Empty;
     private string pendingTellWorld = string.Empty;
 
-    public StampRallyTab(ApiClient api, NearbyPlayers nearby, Configuration config, ChatSender chat)
+    public StampRallyTab(SenpanApi api, NearbyPlayers nearby, Configuration config, ChatSender chat)
     {
         this.api = api;
         this.nearby = nearby;
@@ -53,10 +56,10 @@ internal sealed class StampRallyTab : TabBase
         var selected = this.selectedRallyId;
         var listRes = await this.api.ListStampRalliesAsync();
         var detailRes = selected != 0 ? await this.api.GetStampRallyAsync(selected) : null;
-        var logsRes = selected != 0 ? await this.api.StampRallyLogsAsync(selected) : null;
+        var logsRes = selected != 0 ? await this.api.ListStampRallyLogsAsync(selected) : null;
         await Apply(() =>
         {
-            this.rallies = listRes.StampRallies;
+            this.rallies = listRes.StampRallies.ToList();
             // Install only if the selection hasn't moved on (guards a stale fetch from
             // overwriting a newer selection's detail/log).
             if (this.selectedRallyId == selected)
@@ -64,7 +67,7 @@ internal sealed class StampRallyTab : TabBase
                 if (detailRes != null)
                     this.detail = detailRes;
                 if (logsRes != null)
-                    this.logs = logsRes.Logs;
+                    this.logs = logsRes.Logs.ToList();
             }
         });
     }
@@ -86,7 +89,7 @@ internal sealed class StampRallyTab : TabBase
         ImGui.Separator();
         DrawHeader(d);
 
-        var open = string.Equals(d.StampRally.Status, "open", StringComparison.OrdinalIgnoreCase);
+        var open = d.StampRally.Status == StampRallyStatus.Open;
         Ui.Section(FontAwesomeIcon.Plus, "Issue a card");
         if (open)
             this.DrawIssueCardForm();
@@ -138,7 +141,11 @@ internal sealed class StampRallyTab : TabBase
 
         this.Run(async () =>
         {
-            var created = (await this.api.CreateStampRallyCardAsync(id, name, pickedWorld)).Card;
+            var created = await this.api.CreateStampRallyCardAsync(id, new StampRallyCardInput
+            {
+                ParticipantName = name,
+                World = pickedWorld,
+            });
             var d = await this.api.GetStampRallyAsync(id);
             await Apply(() =>
             {
@@ -161,7 +168,7 @@ internal sealed class StampRallyTab : TabBase
         });
     }
 
-    private void DrawCards(List<StampRallyCard> cards)
+    private void DrawCards(IReadOnlyList<StampRallyCard> cards)
     {
         if (cards.Count == 0)
         {
@@ -202,10 +209,10 @@ internal sealed class StampRallyTab : TabBase
         ImGui.EndTable();
     }
 
-    private void DrawStalls(List<StampRallyStamp> stamps)
+    private void DrawStalls(IReadOnlyList<StampRallyStamp> stamps)
     {
         var active = stamps.Count(s => !s.Paused);
-        var games = stamps.Count(s => IsGame(s.StampType));
+        var games = stamps.Count(s => s.StampType == StampRallyStampStampType.Game);
         ImGui.TextDisabled($"{active}/{stamps.Count} stall(s) active  *  {stamps.Count - games} food, {games} game");
         if (stamps.Count == 0)
         {
@@ -230,9 +237,9 @@ internal sealed class StampRallyTab : TabBase
         {
             ImGui.TableNextRow();
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted(StallName(s.AffiliateName));
+            ImGui.TextUnformatted(StallName(s));
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted(StampTypeName(s.StampType));
+            ImGui.TextUnformatted(s.StampType == StampRallyStampStampType.Game ? "Game" : "Food");
             ImGui.TableNextColumn();
             if (s.Paused)
                 ImGui.TextColored(new Vector4(0.85f, 0.55f, 0.2f, 1f), "Paused");
@@ -253,7 +260,7 @@ internal sealed class StampRallyTab : TabBase
             return;
         this.Run(async () =>
         {
-            await this.api.SetStampPausedAsync(id, stampId, paused);
+            await this.api.UpdateStampRallyStampAsync(id, stampId, new StampRallyStampChanges { Paused = paused });
             var d = await this.api.GetStampRallyAsync(id);
             await Apply(() =>
             {
@@ -305,11 +312,11 @@ internal sealed class StampRallyTab : TabBase
             ImGui.TableNextColumn();
             ImGui.TextUnformatted(string.IsNullOrEmpty(e.ParticipantName) ? "-" : e.ParticipantName);
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted(StallName(e.StallName));
+            ImGui.TextUnformatted(string.IsNullOrWhiteSpace(e.StallName) ? DefaultStall : e.StallName);
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted(StampTypeName(e.StampType));
+            ImGui.TextUnformatted(e.StampType == StampRallyLogEntryStampType.Game ? "Game" : "Food");
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted(FormatTime(e.StampedAt));
+            ImGui.TextUnformatted(Times.Local(e.StampedAt));
         }
 
         ImGui.EndTable();
@@ -328,7 +335,7 @@ internal sealed class StampRallyTab : TabBase
     private void DrawRallyPicker()
     {
         var current = this.rallies.FirstOrDefault(r => r.Id == this.selectedRallyId);
-        var preview = current != null ? $"{current.Title} ({current.Status})" : "Select stamp rally...";
+        var preview = current != null ? $"{current.Title} ({StatusWord(current.Status)})" : "Select stamp rally...";
 
         // Lock selection while a load/action is in flight so the picked rally and the
         // loaded detail/log can't diverge (see the same guard on the Garapon picker).
@@ -344,7 +351,7 @@ internal sealed class StampRallyTab : TabBase
         {
             foreach (var r in this.rallies)
             {
-                if (ImGui.Selectable($"{r.Title} ({r.Status})##sr{r.Id}", r.Id == this.selectedRallyId))
+                if (ImGui.Selectable($"{r.Title} ({StatusWord(r.Status)})##sr{r.Id}", r.Id == this.selectedRallyId))
                     this.LoadRally(r.Id);
             }
             ImGui.EndCombo();
@@ -361,25 +368,25 @@ internal sealed class StampRallyTab : TabBase
         this.Run(async () =>
         {
             var d = await this.api.GetStampRallyAsync(id);
-            var l = await this.api.StampRallyLogsAsync(id);
+            var l = await this.api.ListStampRallyLogsAsync(id);
             await Apply(() =>
             {
                 if (this.selectedRallyId == id)
                 {
                     this.detail = d;
-                    this.logs = l.Logs;
+                    this.logs = l.Logs.ToList();
                 }
             });
         });
     }
 
-    private static void DrawHeader(StampRallyDetailResponse d)
+    private static void DrawHeader(StampRallyDetail d)
     {
         var completed = d.Cards.Count(c => c.Completed);
         var active = d.StampRally.Stamps.Count(s => !s.Paused);
         ImGui.Text(d.StampRally.Title);
         ImGui.SameLine();
-        ImGui.TextDisabled($"- {d.StampRally.Status}");
+        ImGui.TextDisabled($"- {StatusWord(d.StampRally.Status)}");
         ImGui.TextDisabled($"{d.Cards.Count} card(s), {completed} completed  *  {active}/{d.StampRally.Stamps.Count} stall(s) active");
         ImGui.TextDisabled(CompletionText(d.StampRally));
     }
@@ -400,30 +407,20 @@ internal sealed class StampRallyTab : TabBase
         ImGui.EndCombo();
     }
 
-    /// <summary>A stall with no affiliate is the Senpan Tea House default.</summary>
-    private static string StallName(string affiliateName)
-        => string.IsNullOrWhiteSpace(affiliateName) ? "Senpan Tea House" : affiliateName;
+    /// <summary>The one name the card, the log and the map use: the stall's title on a
+    /// festival plan, else its affiliate, else the Tea House.</summary>
+    private static string StallName(StampRallyStamp stamp)
+    {
+        if (!string.IsNullOrWhiteSpace(stamp.StallName))
+            return stamp.StallName;
+        return string.IsNullOrWhiteSpace(stamp.AffiliateName) ? DefaultStall : stamp.AffiliateName;
+    }
 
-    /// <summary>Anything that isn't explicitly a game stamp is a food stamp (matching
-    /// the server, where every stamp written before types existed is food).</summary>
-    private static bool IsGame(string stampType)
-        => string.Equals(stampType, "game", StringComparison.OrdinalIgnoreCase);
-
-    private static string StampTypeName(string stampType) => IsGame(stampType) ? "Game" : "Food";
+    private static string StatusWord(StampRallyStatus status) => status == StampRallyStatus.Open ? "open" : "closed";
 
     /// <summary>One line describing what finishes a card on this rally.</summary>
     private static string CompletionText(StampRally r)
-        => string.Equals(r.CompletionMode, "counts", StringComparison.OrdinalIgnoreCase)
+        => r.CompletionMode == StampRallyCompletionMode.Counts
             ? $"Completes at {r.RequiredFood} food + {r.RequiredGame} game stamp(s)"
             : "Completes when every stamp is collected";
-
-    private static string FormatTime(string ts)
-    {
-        if (string.IsNullOrWhiteSpace(ts))
-            return "-";
-        var normalized = ts.Contains('T') ? ts : ts.Replace(' ', 'T') + "Z";
-        return DateTimeOffset.TryParse(normalized, out var dto)
-            ? dto.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)
-            : ts;
-    }
 }

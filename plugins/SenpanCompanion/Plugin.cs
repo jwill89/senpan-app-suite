@@ -1,7 +1,9 @@
 using System;
+using System.Net.Http;
 using Dalamud.Game.Command;
 using Dalamud.Interface.Windowing;
 using Dalamud.IoC;
+using Dalamud.Networking.Http;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using SenpanCompanion.Api;
@@ -13,7 +15,7 @@ namespace SenpanCompanion;
 /// <summary>
 /// Senpan Companion: a second UI over the Senpan App Suite server. It is purely an
 /// API client - the server stays the single source of truth, and every action here
-/// still broadcasts to the website via the server's WebSocket.
+/// reaches the website through the server's live event stream.
 /// </summary>
 public sealed class Plugin : IDalamudPlugin
 {
@@ -40,7 +42,9 @@ public sealed class Plugin : IDalamudPlugin
     public WindowSystem WindowSystem { get; } = new("SenpanCompanion");
 
     private readonly Configuration config;
-    private readonly ApiClient api;
+    private readonly HappyEyeballsCallback happyEyeballs = new();
+    private readonly HttpClient http;
+    private readonly SenpanApi api;
     private readonly LiveConnection live;
     private readonly ChatSender chat;
     private readonly RollTracker rollTracker;
@@ -57,8 +61,15 @@ public sealed class Plugin : IDalamudPlugin
             this.config.Save();
         }
 
-        this.api = new ApiClient(this.config, Log);
-        this.live = new LiveConnection(this.config, Log, Framework);
+        // HappyEyeballs improves IPv6/dual-stack connect behavior (Dalamud guidance). The
+        // timeout covers a call until its answer's headers arrive, so the live stream
+        // stays open past it.
+        this.http = new HttpClient(new SocketsHttpHandler { ConnectCallback = this.happyEyeballs.ConnectCallback })
+        {
+            Timeout = TimeSpan.FromSeconds(15),
+        };
+        this.api = new SenpanApi(this.http, () => SenpanApi.ApiBase(this.config.ServerUrl), this.config.GetToken);
+        this.live = new LiveConnection(this.api, this.config, Log, Framework);
         var nearby = new NearbyPlayers(ObjectTable);
         this.chat = new ChatSender(Framework, Log);
         // Roll tracking is server-independent - it starts watching chat as soon as the
@@ -98,10 +109,11 @@ public sealed class Plugin : IDalamudPlugin
         // After the window and the macro runner, the two things that send.
         this.chat.Dispose();
         this.live.Dispose();
-        this.api.Dispose();
+        this.http.Dispose();
+        this.happyEyeballs.Dispose();
     }
 
-    /// <summary>Reconnect (or stop) the live WebSocket after the server URL/token changes.</summary>
+    /// <summary>Reopens (or stops) the live stream after the server address or token changes.</summary>
     public void OnConnectionSettingsChanged()
     {
         if (this.config.AutoConnect)

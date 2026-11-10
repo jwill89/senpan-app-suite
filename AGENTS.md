@@ -81,8 +81,7 @@ immediately**. See **Authentication & authorization** below.
 |       |   +-- freshness.ts          <- createFreshness(): keyed time-gate so re-entered admin tabs skip redundant refetches (snappy navigation)
 |       |   \-- constants.ts          <- stamp shapes/colors, column helpers, fallback fonts, BOOK_CLUBS registry, DEFAULT_SETTINGS
 |       +-- types/
-|       |   +-- api.generated.ts      <- tygo-generated from the few Go model types left - committed, DO NOT EDIT (run `npm run gen:types`); goes with tygo in phase 10
-|       |   \-- api.ts                <- re-exports + hand-written request/response envelopes
+|       |   \-- api.ts                <- the form models and UI enums the SPA alone uses (every API type comes from api/)
 |       +-- stores/                   <- Pinia stores (ui, app, auth, users, player, game, yoever, cards, cardRequests, patterns, presets, styles, raffles, affiliates, teaRooms, garapons, stampRallies, festivalMaps, festivalDashboard, ema, images, fonts, bookclub, carrd, announcements, logs, admin)
 |       +-- composables/
 |       |   +-- useLiveEvents.ts      <- opens the board's or the staff's stream and hands each event to the stores
@@ -103,10 +102,9 @@ immediately**. See **Authentication & authorization** below.
 +-- deploy/                           <- Apache deploy artifacts (the web root's .htaccess template + persistent images/ + README)
 +-- backend/                          <- Go backend
 |   +-- main.go                       <- Entry point: flags, DB init, the embedded SPA, server start
-|   +-- tygo.yaml                     <- Go->TS type generation config (run `npm run gen:types`)
 |   +-- sqlc.yaml                     <- sqlc 1.31.1: internal/db/queries/*.sql against schema.sql -> internal/db (`task gen`)
 |   +-- schema.sql                    <- the schema the migrations build (cmd/schema-gen), committed: sqlc reads it, a test holds it to the migrations
-|   +-- go.mod / go.sum               <- Module deps (alexedwards/scs, modernc.org/sqlite (pure Go), golang.org/x/crypto for argon2id) + tygo pinned as a `tool`
+|   +-- go.mod / go.sum               <- Module deps (alexedwards/scs, modernc.org/sqlite (pure Go), golang.org/x/crypto for argon2id)
 |   +-- .golangci.yml                 <- golangci-lint config WRITTEN from shared-tooling's template - never edit it by hand
 |   +-- .golangci.local.yml           <- Senpan's own golangci-lint rules, merged into .golangci.yml by `go run -C shared/lint/go . -dir backend`
 |   \-- internal/
@@ -170,13 +168,17 @@ immediately**. See **Authentication & authorization** below.
 +-- plugins/                          <- FFXIV Dalamud plugin (C#/.NET) - secondary admin UI over the server
 |   +-- pluginmaster.json             <- Dalamud custom-repo index (hosted at /plugin/pluginmaster.json)
 |   +-- Directory.Build.props         <- imports shared/lint/dotnet/analyzers.props: the .NET analyzers (latest-recommended) + the shared C# code style (.globalconfig), checked in the build
-|   \-- SenpanCompanion/              <- the plugin (DLL/InternalName "SenpanCompanionAdmin"; display "Senpan Admin Companion")
-|       +-- Plugin.cs                 <- entry point: injected [PluginService]s, /senpan (+ /senpan config) command, window system
-|       +-- Configuration.cs          <- persisted config: server URL + personal-access token
-|       +-- Api/                      <- ApiClient (REST, Bearer pat_...) + ApiModels + LiveConnection (the admin WebSocket: game_draw/game_update/cards_update/yoever(_config)/auto_config/halftime_prompt; it moves to the staff event stream in phase 10 of `plans/release-c.md`)
-|       +-- Services/                 <- Session (auth/perms), CardCache (coalesced, framework-thread), NearbyPlayers (IObjectTable), ChatSender (/tell), WinnerChime (winmm synth)
-|       +-- Windows/                  <- ImGui tabs: TabBase + Bingo{Cards,Game,Winners}Tab + RaffleTab + MainWindow
-|       \-- SenpanCompanion.csproj    <- Dalamud.NET.Sdk/15.0.0; <AssemblyName>SenpanCompanionAdmin; EnableWindowsTargeting (Linux CI)
+|   +-- dotnet-tools.json / global.json <- NSwag 14.7.1 pinned as a local tool; Microsoft.Testing.Platform for `dotnet test` (as Kindred Nights' plugins/)
+|   +-- SenpanCompanion/              <- the plugin (DLL/InternalName "SenpanCompanionAdmin"; display "Senpan Admin Companion")
+|   |   +-- Plugin.cs                 <- entry point: injected [PluginService]s, /senpan (+ /senpan config) command, window system, the HttpClient
+|   |   +-- Configuration.cs          <- persisted config: server URL + personal-access token
+|   |   +-- nswag.json                <- NSwag: the operations the plugin calls, from frontend/src/api/openapi.json into Api/SenpanApi.g.cs (`task gen`)
+|   |   +-- Api/SenpanApi.g.cs        <- the generated client and every schema as a class (Newtonsoft) - committed, DO NOT EDIT
+|   |   +-- Core/                     <- no Dalamud, so the tests compile it: SenpanApi.cs (the client's partial: the base address and Bearer token per request, tolerant reading, OpenEventsAsync), Feed (the SSE reader), Backoff (1-16 s), Problems (a refusal in the server's words), Times, Raffles (pricing)
+|   |   +-- Services/                 <- LiveConnection (the staff event stream), Session (auth/perms from /me), CardCache (coalesced, framework-thread), NearbyPlayers (IObjectTable), ChatSender (/tell), Chime (winmm synth)
+|   |   +-- Windows/                  <- ImGui pages: TabBase + Bingo{Cards,Game,Winners}Tab + RaffleTab + GaraponTab + StampRallyTab + TeaRoomsTab + RollsTab + TimedMacrosTab + MainWindow
+|   |   \-- SenpanCompanion.csproj    <- Dalamud.NET.Sdk/15.0.0; <AssemblyName>SenpanCompanionAdmin; EnableWindowsTargeting (Linux CI)
+|   \-- SenpanCompanion.Tests/        <- xUnit v3 over Core/ and Api/, compiled in (no Dalamud): the client against Fixtures/ shaped as the document declares, the feed reader, the back-off, Problems, the pricing
 +-- .editorconfig / .gitattributes    <- from shared/repo (Sync-RepoFiles.ps1); Senpan's lines - the plugin's two C# exceptions - go below the project marker
 +-- devdata/                          <- Local dev sandbox: SQLite DBs + built binaries + webroot uploads (gitignored)
 ```
@@ -185,13 +187,9 @@ immediately**. See **Authentication & authorization** below.
 
 Each place below is code that still does what the shared rules now rule out, checked against the code on 2026-11-07. The rest of this file describes the code as it is today. When a follow-up lands, its line here goes, and the lines that describe the old way change with it.
 
-Planned follow-ups, from shared-tooling's `PLAN.md` (step 3, and step 7's five releases), most of them with the move to huma (`plans/release-c.md`):
+Planned follow-ups, from shared-tooling's `PLAN.md` (step 3, and step 7's five releases):
 
 - **The document root.** The uploads (`images/`, `fonts/`), the Carrd sites and the plugin repository live in Apache's document root. Apache serves `images/`, the Carrd sites and the plugin repository straight from it; `fonts/` sits there unserved, streamed by the app. The goal is nothing served from it, as Home Library and Kindred Nights do (decided 2026-11-09): the app serves them from a data folder under `/opt/senpan`, and the vhost proxies everything to it. It comes after the move to huma, and the fonts need the most care: never reachable as plain files during the move, and `fonts.senpan.cafe/kit.css` and its token URLs unchanged.
-- **Package layout.** The handlers are all on huma in `internal/api`, one file per domain over the domain packages (`raffles`, `tearooms`, `festival`, `media`, `uploads`, `fonts` and the rest) and sqlc's queries, which is the guide's split. What is left of the old layering is `server`, which holds the HTTP shell and the two background schedulers (the announcements' and the tea-room locks'); the architecture section below describes it. Phase 10 of `plans/release-c.md` closes this line.
-- **JSON field names (the plugin).** Every operation on huma speaks camelCase and the SPA with it. The Dalamud plugin's `Api/ApiModels.cs` still reads the snake_case of the old routes, and it calls eight old garapon and stamp-rally routes that no longer answer; it moves with phase 10 of `plans/release-c.md`, which also moves its live connection to the staff event stream.
-- **Front-end API types.** openapi-typescript's `frontend/src/api/schema.d.ts`, from the committed document, types every call. tygo still generates `frontend/src/types/api.generated.ts` from the few Go types left in `internal/model` (`npm run gen:types`, checked by the `generated` CI job); tygo goes in phase 10.
-- **SQL.** Every domain's SQL is sqlc's (`internal/db`), with the schema committed (`backend/schema.sql`) and held to the migrations by a test. What is not: `GetSetting`/`SetSetting` and the test helpers in `internal/store`, and the migrations themselves.
 - **Vitest layout.** Specs sit beside the code as `src/**/*.test.ts`, with the config in `vitest.config.ts`. They move to `src/__tests__/*.spec.ts`, with the config inside `vite.config.ts`.
 - **Static inline styles.** `vue/no-static-inline-styles` is off (`eslint.config.js`, the `senpan/vue` block), and templates hold about 120 static `style=""` attributes, mostly one-off layout such as a form column's flex share. The shared rule comes back on, and those styles move into CSS.
 
@@ -204,7 +202,6 @@ Found in the docs and checked against the code, with no follow-up planned yet. T
 - **Images re-encoded.** The guide re-encodes every raster upload. Here JPEG and PNG are re-encoded (dropping EXIF, GPS and text chunks; the EXIF orientation is applied first), but GIF and WebP are checked and kept as sent (decided 2026-11-10): Go writes no WebP, and re-encoding a GIF risks its animation. An animated PNG keeps its first frame.
 - **Markdown editor.** The editor is Milkdown (Crepe), `MarkdownEditor.vue`. The guide's one editor is Tiptap 3 with its Markdown package.
 - **Class parts.** Shared objects join a part with `-` (`.list-row-title`) and never use BEM's `__`. The guide makes a reusable component's classes BEM (`.media-card__title`).
-- **Live-stream reconnect in the plugin.** The SPA's `lib/feed.ts` reopens with back-off from 1 to 16 seconds and checks again on wake, as the guide has it. The plugin's `LiveConnection` still runs on the old WebSocket until it moves to the staff event stream in phase 10 (`plans/release-c.md`).
 
 ## Architecture
 
@@ -390,13 +387,11 @@ cards,winners-log,patterns,presets}`), **teahouse** ("Senpan Tea House":
   route with a "session expired" toast when any non-auth request 401s.
 
 **Type sync**: the types of every call are generated from the document
-(`frontend/src/api/schema.d.ts`, exported by name from `api/client.ts`). The few Go
-types left in `internal/model` still go through tygo into
-`frontend/src/types/api.generated.ts` - **committed**: regenerate it with
-`npm run gen:types` after changing one and commit it with the change; CI's
-`generated` job (and `scripts/check.ps1`) fails when a committed copy is stale. Never
-edit either by hand. Hand-written envelopes are in `types/api.ts`. Both go with
-tygo in phase 10.
+(`frontend/src/api/schema.d.ts`, exported by name from `api/client.ts`), as is the
+plugin's client (`plugins/SenpanCompanion/Api/SenpanApi.g.cs`), both **committed** and
+regenerated by `task gen`; CI's `generated` job (and `scripts/check.ps1`) fails when a
+committed copy is stale. Never edit either by hand. The form models the SPA alone uses
+are in `types/api.ts`.
 
 **Library choices** (migrated off CDNs):
 
@@ -609,9 +604,11 @@ client<->client networking, so the server _must_ stay the relay - the plugin nev
 talks peer-to-peer.
 
 - **Auth - personal access token.** The plugin sends `Authorization: Bearer pat_...`
-  on REST and on the live connection; the header is the only way in (there is no
-  `?token=` fallback; the plugin's old WebSocket, which still sends it, moves in phase 10),
-  keeping the token out of access logs/history/Referer. The
+  on every call and on the live event stream; the header is the only way in (there is
+  no `?token=` fallback), keeping the token out of access logs/history/Referer. The
+  server address must be https, or plain http only for a server on this PC
+  (`SenpanApi.ApiBase`), so the token is never sent in the clear. It reads its account
+  from `GET /api/v1/me`. The
   server URL + token are entered via
   `/senpan config` (PAT support shipped in FE+BE v1.5.0) and the **token is encrypted
   at rest** with the Windows Data Protection API (DPAPI, CurrentUser scope, see
@@ -619,12 +616,31 @@ talks peer-to-peer.
   plaintext token; a pre-encryption plaintext token migrates on first load.
   Permissions are enforced server-side exactly as for the web admin (`bingo-cards` /
   `bingo-game` / `teahouse-raffles`). `/senpan` opens the main window.
-- **Feature parity (admin subset).** Bingo: create named cards (`generate_single`)
-  - delete / delete-all; game lifecycle (start with pattern IDs, draw w/ delay,
-    halftime, end with winner IDs); live draws + winner alerts over the **admin
-    WebSocket** (`game_draw` / `game_update` / `cards_update`; the plugin moves to the
-    staff event stream, `GET /api/v1/events`, in phase 10 of `plans/release-c.md`). Raffle: pick an open
-    raffle, add / delete entrants, record payments, pick->confirm a winner (no raffle
+- **The client is generated** from the committed document (NSwag 14.7.1, a local tool
+  in `plugins/dotnet-tools.json`; `nswag.json` lists the operations it calls), as
+  Kindred Nights' plugin has it: `Api/SenpanApi.g.cs`, Newtonsoft, every schema a class.
+  `Core/SenpanApi.cs` is its partial: each request goes to the configured server's
+  `/api/v1/` with the token of the moment, a time stays text (`DateParseHandling.None`),
+  and an enum value newer than the build reads as -1 instead of refusing the answer. A
+  refusal is shown in the server's words (`Problems.Say`: each field a validation names,
+  else the problem's `detail`).
+- **The live event stream** (`Services/LiveConnection`, over `Core/Feed`): the staff's
+  `GET /api/v1/events` with the Bearer header. A drop reopens after 1 to 16 seconds
+  (`Core/Backoff`), sending `Last-Event-ID`; 70 seconds without even a ping is a drop; a
+  401 or 403 stops it until the settings change (the status bar says so). On every open
+  the game and the cards are read again, and on `resync` every page; `resource_changed`
+  marks the page that shows it stale (`MainWindow.OnResourceChanged`). The game page
+  follows `draw`, `game_started`/`game_ended`, `auto_draw`, `yoever`/`yoever_switched`,
+  `draw_delay` (the delay is the one every console shares, kept by the server),
+  `game_details`, `halftime_prompt` and `halftime_resolved`: a prompt answered elsewhere
+  closes here, and a prompt still waiting when the page opens (the game's `halftime`) is
+  shown.
+- **Feature parity (admin subset).** Bingo: create named cards
+  - delete / delete-all; game lifecycle (start with pattern IDs, draw with the shared
+    delay, half-time, end naming the game and its winners); live draws + winner alerts
+    over the event stream. Raffle: pick an open
+    raffle, add / delete entrants, record payments (`…/settle`, `…/unsettle`),
+    pick->confirm a winner, the server's pending winner from any console (no raffle
     creation). The Paid cell opens a popup carrying the same settlement the website
     offers - tickets covered (for a part payment) and gil waived - because both need
     a number typed, which a checkbox has nowhere to put. A **details-only** raffle
@@ -637,7 +653,7 @@ talks peer-to-peer.
   - live-connection handlers. Tab panels extend `Windows/TabBase` (shared `Run`/`Busy`/`Status`,
     `EnsureLoaded`/`MarkStale` with retry cooldown, `LoadAsync`); the card list is the
     shared `Services/CardCache` (coalesced refresh, framework-thread swap).
-- **Game interop is minimal + ToS-sensitive.** `WinnerChime` is a synth WAV via
+- **Game interop is minimal + ToS-sensitive.** `Chime` is a synth WAV via
   winmm (no game interop); `ChatSender` /tell uses
   `RaptureShellModule.ExecuteCommandInner` - the only game interop, and opt-out.
 - **Rolls tool (`Services/RollTracker` + `Windows/RollsTab`).** A **permission-free,
@@ -731,11 +747,8 @@ cd frontend; npm run format         # Prettier write over src/
 cd frontend; npm run format:check   # Prettier check (CI gate)
 cd frontend; npm run lint:conventions  # CSS naming, the scoped-CSS ratchet, theme tokens (CI gate)
 cd frontend; npm run analyze        # build + emit frontend/stats.html bundle treemap (visualizer)
-cd frontend; npm run gen:types      # regenerate TS types from Go models (`go tool tygo generate` in ../backend; tygo is pinned as a tool in backend/go.mod; needs Go)
 cd frontend; npm run test:e2e       # end-to-end: builds the binary (on the SPA's build: run npm run build first, or task test:e2e) and runs it on a throwaway database in %TEMP%, never devdata/ (e2e/)
-
-# NOTE: src/types/api.generated.ts is committed. After changing Go model types, run
-# `npm run gen:types` and commit the result with the change.
+task gen                            # (repo root) after a query or API change: sqlc, the document, the SPA's schema.d.ts and the plugin's client (NSwag); commit what it writes
 
 # -- Go backend --
 # Every Go build, test and lint compiles the SPA in (go:embed), so the front end is
@@ -776,6 +789,7 @@ cd backend; go build -ldflags="-s -w" -o app-suite .
 # Needs the .NET 10 SDK + a local XIVLauncher/Dalamud install (Windows).
 cd plugins\SenpanCompanion; dotnet build -c Release   # -> bin/Release/SenpanCompanionAdmin/latest.zip (keep 0/0 warnings; the analyzers + code style run in the build - the C# lint gate)
 cd plugins\SenpanCompanion; dotnet format             # apply the code style (CI runs --verify-no-changes)
+cd plugins\SenpanCompanion.Tests; dotnet test --project SenpanCompanion.Tests.csproj   # the plugin tests (no Dalamud needed; plugins/global.json picks Microsoft.Testing.Platform)
 .\scripts\deploy.ps1 -Target plugin                   # build + publish the custom Dalamud repo (pluginmaster.json + latest.zip)
 
 # -- Scripts, docs and repo files (from the repo root) --
@@ -802,10 +816,11 @@ each call one of shared-tooling's reusable workflows, pinned to the release the
   `build`, uploaded as the `web-dist` artifact for the backend job. It compiles
   against the committed API types.
 - **generated** (Senpan's own, as Kindred Nights' and Home Library's, after the
-  frontend job, whose build `go run` compiles in): `go run . openapi` ->
-  openapi-typescript 7.13.0 -> Prettier -> `go tool tygo generate`, then fails if
-  `frontend/src/api` or `frontend/src/types/api.generated.ts` now differs from the
-  committed copy (`task gen` runs the same).
+  frontend job, whose build `go run` compiles in): sqlc -> `go run . openapi` ->
+  openapi-typescript 7.13.0 -> Prettier -> NSwag 14.7.1 (`dotnet nswag run`, the
+  plugin's client), then fails if `backend/internal/db`, `frontend/src/api` or
+  `plugins/SenpanCompanion/Api` now differs from the committed copy (`task gen` runs
+  the same).
 - **backend** (`go.yml`, `dir: backend`, after the frontend job, whose build it
   downloads into `backend/internal/web/dist` for the binary to embed): `.golangci.yml` still matches the shared
   template merged with `.golangci.local.yml` -> `go vet ./...` -> golangci-lint
@@ -841,7 +856,9 @@ each call one of shared-tooling's reusable workflows, pinned to the release the
   the `net*-windows` TFM compiles via the `EnableWindowsTargeting` property
   (conditioned off on Windows, so local builds are unchanged). Gate =
   `dotnet build -c Release -p:TreatWarningsAsErrors=true` (the 0-warning rule) +
-  `dotnet format --verify-no-changes`. The build is also the C# lint gate:
+  `dotnet format --verify-no-changes`, then the tests (`test-project:
+  plugins/SenpanCompanion.Tests`, `dotnet test` on Microsoft.Testing.Platform, which
+  `plugins/global.json` picks). The build is also the C# lint gate:
   `plugins/Directory.Build.props` imports shared-tooling's `lint/dotnet`, which turns
   on the .NET analyzers at `latest-recommended` and checks the shared code style
   (`this.` qualification, `var`, file-scoped namespaces, naming) in the build with
@@ -867,8 +884,8 @@ each call one of shared-tooling's reusable workflows, pinned to the release the
 `scripts/check.ps1` (or `task check`) runs, stopping at the first failure: the
 front end's build, which the binary embeds; backend - the golangci config check, golangci-lint, `go build`, `go vet`, `go test`
 (without `-race`, which needs gcc) and govulncheck; frontend - the frontend job's
-scripts plus `npm audit`; then, on a full run only, the plugin's build and
-`dotnet format` (skipped with a message when `dotnet` isn't installed) and the
+scripts plus `npm audit`; then, on a full run only, the plugin's build,
+`dotnet format` and its tests (skipped with a message when `dotnet` isn't installed) and the
 scripts and docs jobs' checks. It needs `shared/` checked out, and says so when it
 isn't.
 
@@ -1230,8 +1247,8 @@ an unknown value can never read as "free" or "no sign-ups".
 | `custom`  | Custom Cost per Entry  | the Nth ticket costs `tier_costs[N-1]` (50k/100k/150k = 300k for three) | yes     |
 
 **One pricing rule, three implementations.** `raffles.Pricing.EntryCost(n)` (Go; `model.Raffle` delegates to it for the festival code) is the
-authority; `raffleEntryCost` (`stores/raffles.ts`) and `Raffle.EntryCost` (the
-plugin's `ApiModels.cs`) mirror it so a previewed total can't disagree with what the
+authority; `raffleEntryCost` (`stores/raffles.ts`) and `Raffles.EntryCost` (the
+plugin's `Core/Raffles.cs`) mirror it so a previewed total can't disagree with what the
 server charges. Change one, change all three. All three walk the **ladder**, never
 the ticket count - `max_entries` is admin-set and unbounded, so a per-ticket loop
 would let a large allowance spin every time the admin raffle list loads.
@@ -1348,7 +1365,7 @@ draw and the collected-gil totals read.
 - **Rate limiter**: IP-based brute-force protection for login / registration / passkey-login (begin + finish). Its per-IP key comes from the same `logClientIP` logic the access log uses - `CF-Connecting-IP`/`X-Forwarded-For` trusted **only** from the loopback proxy peer, else `RemoteAddr` - so a client behind Cloudflare can neither share nor forge another IP's throttle bucket (`clientIP` delegates to `logClientIP`).
 - **FontAwesome**: bundled via `@fortawesome/fontawesome-svg-core`; only the used Pro-kit icons are added to the library in `frontend/src/lib/fontawesome.ts`. Templates render them with the global **`<font-awesome-icon :icon="[prefix, name]" />`** component (`@fortawesome/vue-fontawesome`, registered in `main.ts`) - `['fad', ...]` duotone, `['fas', ...]` solid, `['fab', 'discord']` brands. The shared `ui/` primitives (AdminPanel/ManagerView/SubPageHeader/EmptyState) take an `icon?: [IconPrefix, string]` prop and forward it (name is `string` because Pro icon names aren't in FA's free `IconName`). CSS targets the rendered `.svg-inline--fa` (not `<i>`). Component tests stub `<font-awesome-icon>` globally via `vitest.setup.ts`.
 - **Theme editor**: structured token editor (`ThemeTokenEditor.vue`) bound to the edited theme's `tokens` map; `lib/theme-tokens.ts` is the token source of truth. Themes are token-only (no free-form CSS); the applied `:root{}` is generated server-side (`store.TokensToCSS`) and locally for the live preview (`tokensToCss`). CodeMirror was removed.
-- **TS<->Go type sync**: the SPA's types come from the document (`schema.d.ts`). `frontend/src/types/api.generated.ts` is generated from the few types left in `internal/model` by tygo (`backend/tygo.yaml`; `go tool tygo generate`, with tygo's version pinned by the `tool` directive in `backend/go.mod`); it is **committed** - regenerate with `npm run gen:types` (needs Go) after a model change and commit it with the change; CI's `generated` job fails on a stale copy. Never edit either generated file. Tygo goes in phase 10.
+- **Types from the document**: the SPA's types (`schema.d.ts`, openapi-typescript) and the plugin's client (`Api/SenpanApi.g.cs`, NSwag) are generated from the committed document by `task gen` and committed; CI's `generated` job fails on a stale copy. Never edit either by hand.
 - **Typed API calls**: every call goes through `api` from `@/api/client` (openapi-fetch, typed from the generated schema), usually wrapped in `unwrap()`, which answers the data or throws an `ApiError` with the problem's `detail`. A file upload goes through `apiUpload` (`lib/api.ts`, XHR for progress), typed with the schema's response types; `refusedFiles` reads a 422's per-file reasons.
 - **Global 401 handling**: `lib/api.ts` holds a registered handler (set in `main.ts`) that the client calls on any non-auth 401 -> redirect to `/admin/login` + "session expired" toast. Auth operations skip it so a bad-password login doesn't trigger it.
 - **Themed confirm dialog**: use `await ui.confirm(message, opts)` (renders `ConfirmModal.vue`) instead of the native `window.confirm`.
@@ -1390,7 +1407,7 @@ draw and the collected-gil totals read.
 ## Extending the project
 
 - **New API endpoint**: an operation on huma in `internal/api`, in its domain's file (`huma.Register` with an `operationId`, a summary, tags, its guard middleware, and named input and output types whose fields are all described with `doc:` tags), then `task gen` and commit `frontend/src/api` with it; the SPA calls it through `@/api/client`. The release C plan (`plans/release-c.md`) has the checklist each operation meets.
-- **New domain type / response struct**: add to its domain's file in `internal/model/` (the domain types and their response envelopes side by side; a new domain gets a new file), then run `npm run gen:types` (tygo's frontend types, only for the few types still in `internal/model`); an operation's own types live beside it in `internal/api`, and `task gen` documents them - prefer those.
+- **New request or response type**: an operation's own types live beside it in `internal/api`, and `task gen` documents them and regenerates the SPA's types and the plugin's client from the document. `internal/model` keeps only the few types shared below the API (accounts, log entries, the participant label, the stamp types); add there only what the store or a service needs too.
 - **New store method**: add the query to the domain's `internal/db/queries/<domain>.sql` and run `task gen` (a hand-written store method only for a test helper), taking `ctx context.Context` first and returning typed structs. Keep timestamps in the one form (see **Timestamps** above): write a client's through `nullTime`, read a nullable one as `COALESCE(col, '')`, and add the path to `TestTimestampsInTheStoredForm` when the frontend or plugin parses it. Reads go through `s.read`, writes through `s.write`. A multi-statement write goes through `beginImmediate`.
 - **New migration**: a new file in `store/migrations/`, numbered after the last (`00074_name.sql`), starting `-- +goose Up` and ending `PRAGMA user_version = 74;`; a Go migration only where it needs logic. A table rebuild follows SQLite's procedure (`-- +goose NO TRANSACTION`, as `00073_timestamps.sql` does). Then `go run ./cmd/schema-gen` in `backend/` and commit `schema.sql` with it.
 - **New admin tab**: add the tab id to the `AdminTab` union in `frontend/src/stores/admin.ts` (mapping its prefix to a section in `setTabFromRoute()` + any per-tab data load - wrap the load in `loadFresh('<key>', ...)` so revisits stay snappy), add a child route with `meta.tab` in `router/index.ts`, add a sidebar link (gated with `v-if="can('<key>')"`) in `components/admin/AdminSidebar.vue`, and create a `components/admin/<Tab>.vue` referenced by the route's lazy `import()`. **Wire its permission too** (see "New admin page permission" below) unless it's admin-only. For a "manage items" tab use the **manager model** (`ManagerView` + `ListRow` + `SubPageHeader` + `SearchInput`, with a `screen` ref for sub-pages - see `PatternsTab.vue`); otherwise wrap content in `<AdminPanel>`. Either way build forms/tables from the `components/common/ui/` primitives (`FormField`, `FormRow`, `FormActions`, `DataTable`, `PaginationBar`, `EmptyState`) rather than hand-rolled markup.
@@ -1401,4 +1418,4 @@ draw and the collected-gil totals read.
 - **New book club**: add an entry to `Clubs` (`internal/bookclubs`) **and** `BOOK_CLUBS` (`lib/constants.ts`) - keep the slug identical. The route, sidebar button, comments label, its webhook (on its page), and its `bookclub-<slug>` page permission are then derived automatically.
 - **New setting**: add the key and its default to `internal/settings`, then the field to `SettingsInput` (`internal/api/settings.go`) with its `doc` and validation tags, read in `loadSettings` and written in the save; run `task gen`, then add it to `DEFAULT_SETTINGS` (`lib/constants.ts`) and `SettingsTab.vue`. A value only an admin may read belongs in `Integrations` instead.
 - **New test**: colocate a `*.test.ts` next to the code; import `{ describe, it, expect }` from `vitest`; run `npm run test`. Add it to the same gate CI runs. (Go: colocate `*_test.go` and run `go test ./...`. A test that needs a database opens a migrated copy, `storetest.Path(t)` or `storetest.Open(t)` (`internal/store/storetest`; `migratedPath(t)` inside `package store`), never a fresh one: the migrations run once per test binary, since under `-race` migration 73 alone takes over a second, and a fresh database per test ran the server package past CI's ten minutes. Only the migration tests migrate from scratch.)
-- **New plugin feature/tab** (`plugins/SenpanCompanion/`): the plugin is API-only - add the call to `Api/ApiClient.cs` (+ a shape in `Api/ApiModels.cs`) against an **existing** server endpoint; never add client<->client logic. A new ImGui tab subclasses `Windows/TabBase` and is registered in `Windows/MainWindow.cs`; **route every post-await UI write through `Apply(() => ...)`**. Keep the build at **0/0 warnings** and run `dotnet format` before pushing (CI gates both). If the backend gained a new endpoint, expose it on the server first (see **New API endpoint**).
+- **New plugin feature/tab** (`plugins/SenpanCompanion/`): the plugin is API-only - add the operation's id to `includedOperationIds` in `nswag.json` and run `task gen`, so the generated `SenpanApi` gains the call and its types, against an **existing** server operation; never add client<->client logic. A page that shows a resource marks itself stale on its `resource_changed` (routed in `MainWindow.OnResourceChanged`); code with no Dalamud in it goes in `Core/`, where `SenpanCompanion.Tests` can cover it. A new ImGui tab subclasses `Windows/TabBase` and is registered in `Windows/MainWindow.cs`; **route every post-await UI write through `Apply(() => ...)`**. Keep the build at **0/0 warnings** and run `dotnet format` before pushing (CI gates both). If the backend gained a new endpoint, expose it on the server first (see **New API endpoint**).

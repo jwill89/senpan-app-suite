@@ -13,7 +13,7 @@ namespace SenpanCompanion.Windows;
 /// Bingo Cards tab: create named cards (with a nearby-player picker that can also
 /// /tell the player their card URL), copy a card's URL, and delete cards. The card
 /// list is the shared <see cref="CardCache"/> (newest-first), so the Game tab's
-/// winner names and this tab stay in sync and refresh once on a WebSocket card
+/// winner names and this tab stay in sync and refresh once on a live card
 /// change. Creating a card for a character who already has one prompts to replace it.
 /// </summary>
 internal sealed class BingoCardsTab : TabBase
@@ -21,7 +21,7 @@ internal sealed class BingoCardsTab : TabBase
     // Muted grey for the "pending approval" star (vs. gold for an approved custom card).
     private static readonly Vector4 PendingColor = new(0.62f, 0.62f, 0.62f, 1f);
 
-    private readonly ApiClient api;
+    private readonly SenpanApi api;
     private readonly NearbyPlayers nearby;
     private readonly Configuration config;
     private readonly ChatSender chat;
@@ -39,7 +39,7 @@ internal sealed class BingoCardsTab : TabBase
     private bool createDoTell;
     private List<string> replaceIds = new();
 
-    public BingoCardsTab(ApiClient api, NearbyPlayers nearby, Configuration config, ChatSender chat, CardCache cardCache)
+    public BingoCardsTab(SenpanApi api, NearbyPlayers nearby, Configuration config, ChatSender chat, CardCache cardCache)
     {
         this.api = api;
         this.nearby = nearby;
@@ -109,16 +109,16 @@ internal sealed class BingoCardsTab : TabBase
     }
 
     /// <summary>Status glyphs for a card: a pending/approved custom star and/or a Protected lock.</summary>
-    private static void DrawStatusIcons(CardListEntry card)
+    private static void DrawStatusIcons(CardSummary card)
     {
         var drewAny = false;
 
-        if (card.CustomStatus == "pending")
+        if (card.CustomStatus == CardSummaryCustomStatus.Pending)
         {
             StatusIcon(FontAwesomeIcon.Star, PendingColor, CustomTooltip(card, "Pending approval"));
             drewAny = true;
         }
-        else if (card.CustomStatus == "approved")
+        else if (card.CustomStatus == CardSummaryCustomStatus.Approved)
         {
             StatusIcon(FontAwesomeIcon.Star, Ui.WarnColor, CustomTooltip(card, "Approved custom card"));
             drewAny = true;
@@ -145,7 +145,7 @@ internal sealed class BingoCardsTab : TabBase
     }
 
     /// <summary>Appends the requester's character @ world to a custom-card status tooltip.</summary>
-    private static string CustomTooltip(CardListEntry card, string label)
+    private static string CustomTooltip(CardSummary card, string label)
     {
         var who = card.PlayerName;
         if (!string.IsNullOrEmpty(card.World))
@@ -154,12 +154,12 @@ internal sealed class BingoCardsTab : TabBase
     }
 
     /// <summary>Row action buttons: approve (pending only), protect toggle, copy URL, delete.</summary>
-    private void DrawRowActions(CardListEntry card)
+    private void DrawRowActions(CardSummary card)
     {
         var id = card.Id;
 
         // Approve - only shown for a pending custom-card request.
-        if (card.CustomStatus == "pending")
+        if (card.CustomStatus == CardSummaryCustomStatus.Pending)
         {
             if (Ui.IconButton($"approve{id}", FontAwesomeIcon.Check, "Approve custom card"))
             {
@@ -180,7 +180,7 @@ internal sealed class BingoCardsTab : TabBase
         {
             this.Run(async () =>
             {
-                await this.api.SetCardProtectedAsync(id, !isProtected);
+                await this.api.ProtectCardAsync(id, new CardProtection { Protected = !isProtected });
                 await this.cardCache.RefreshAsync();
             });
         }
@@ -237,7 +237,7 @@ internal sealed class BingoCardsTab : TabBase
         {
             foreach (var id in toDelete)
                 await this.api.DeleteCardAsync(id);
-            var created = await this.api.CreateNamedCardAsync(name);
+            var created = await this.api.CreateCardAsync(new CardInput { PlayerName = name });
             await this.cardCache.RefreshAsync();
             await Apply(() =>
             {
@@ -246,12 +246,12 @@ internal sealed class BingoCardsTab : TabBase
                 this.pendingTellWorld = string.Empty;
             });
 
-            if (doTell && !string.IsNullOrEmpty(created.Card.Id))
+            if (doTell && !string.IsNullOrEmpty(created.Id))
             {
                 var parts = TellComposer.Compose(this.config.BingoCardTellTemplate, new Dictionary<string, string>
                 {
                     [TellComposer.TargetToken] = name,
-                    [TellComposer.BingoCardLinkToken] = this.config.CardUrl(created.Card.Id),
+                    [TellComposer.BingoCardLinkToken] = this.config.CardUrl(created.Id),
                 });
                 this.chat.SendTell(name, tellWorld, parts);
             }

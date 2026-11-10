@@ -2,7 +2,7 @@
 
 Dalamud plugins that act as a **second UI** over the Senpan App Suite server. They
 are pure API clients: the Go backend stays the single source of truth, and every
-action a plugin takes still broadcasts to the website over the server's WebSocket.
+action a plugin takes reaches the website through the server's live event stream.
 
 ## Senpan Admin Companion
 
@@ -16,8 +16,10 @@ name). Its panels:
   **B-I-N-G-O called-numbers grid**, last-drawn, winners (card ID + player name),
   and active patterns. The **half-time** prompt pops up automatically at the same
   scaled mid-point the website uses, and a short **chime** plays when a new winner
-  appears. Draws/winners arrive over the WebSocket, so it stays in sync even when
-  the website drives the game.
+  appears. Draws, winners, the half-time answer, the shared draw delay and the game
+  details arrive over the server's live event stream, so it stays in sync when the
+  website or another console drives the game: a half-time prompt or End Game confirm
+  answered elsewhere closes here.
 - **Bingo Cards** - create named cards (with a "Nearby..." picker that fills the name
   from visible players, and an optional /tell of the card URL), copy a card's URL,
   and delete cards.
@@ -50,6 +52,16 @@ The loadable plugin is written to `bin/Release/` as **`SenpanCompanionAdmin.dll`
 **`bin/Release/SenpanCompanionAdmin/latest.zip`** (the file a custom repo serves).
 `bin/` and `obj/` are git-ignored.
 
+The API client (`SenpanCompanion/Api/SenpanApi.g.cs`) is generated from the server's
+OpenAPI document by NSwag, a local tool pinned in `dotnet-tools.json`; `task gen` (at
+the repo root) regenerates it with the document, and `nswag.json` lists the operations
+the plugin calls. The tests cover what doesn't touch the game and need no Dalamud:
+
+```sh
+cd plugins/SenpanCompanion.Tests
+dotnet test --project SenpanCompanion.Tests.csproj
+```
+
 ### Install as a dev plugin
 
 1. In game, open **Dalamud Settings** (`/xlsettings`) -> **Experimental**.
@@ -65,7 +77,8 @@ The loadable plugin is written to `bin/Release/` as **`SenpanCompanionAdmin.dll`
    paste the token and **Save & Connect**. (The server URL defaults to
    `apps.senpan.cafe`; only change it if you're self-hosting/dev.)
 3. The data tabs populate automatically - no manual refresh - and a green **Live**
-   badge means the WebSocket is connected. Change the token/URL or the toggles any
+   badge means the live event stream is open; a page whose records change anywhere
+  reads them again when next shown. Change the token/URL or the toggles any
    time on the **Settings** tab (there's no separate settings window).
 
 ### Custom plugin repository (pluginmaster.json)
@@ -111,8 +124,10 @@ against a newer Dalamud SDK (it's currently **15**).
   sections you can't access - and the server enforces the same permissions on the
   token regardless. An account with no Senpan permissions sees only Settings.
 - The token is stored locally in the plugin's Dalamud config and sent only to your
-  server as a Bearer credential (and, for the live WebSocket, as a `?token=` query
-  parameter on the `/api/ws` upgrade).
+  server as a Bearer credential (`Authorization` header), on every call and on the
+  live event stream (`GET /api/v1/events`); never in a URL. The server address must
+  be `https://` (plain `http://` only for a server on this PC), so the token is never
+  sent in the clear. Needs app 5.0.0 or later.
 - This talks to your own backend, so it is intended for distribution via a **custom
   Dalamud repository**, not the official plugin list. The nearby-player picker only
   reads visible character names + home worlds (the same fields a player would type

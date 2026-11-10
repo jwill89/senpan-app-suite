@@ -7,13 +7,14 @@ using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using SenpanCompanion.Api;
+using SenpanCompanion.Core;
 using SenpanCompanion.Services;
 
 namespace SenpanCompanion.Windows;
 
 /// <summary>
 /// Garapon operator panel. One object backs two sidebar pages that share the
-/// picked garapon + its detail (a single GET /api/garapons/{id} returns the drawing
+/// picked garapon + its detail (a single GET /api/v1/garapons/{id} returns the drawing
 /// links and the full draw log):
 /// <list type="bullet">
 /// <item><see cref="DrawManage"/> - issue a per-player drawing link (nearby-player
@@ -22,27 +23,27 @@ namespace SenpanCompanion.Windows;
 /// <item><see cref="DrawLog"/> - the read-only draw log for the picked garapon.</item>
 /// </list>
 /// When the garapon is linked to an open Stamp Rally, the server auto-issues the
-/// paired stamp card (same token) on create - the plugin makes one call and reads
-/// back player.stamp_card_token. Garapons aren't pushed over the WebSocket, so a
-/// Refresh button re-pulls the list + detail.
+/// paired stamp card (on its own token) on create - the plugin makes one call and
+/// reads back the player's stampCardToken. A garapons change from anywhere marks the
+/// page stale, and the Refresh button re-pulls the list + detail on demand.
 /// </summary>
 internal sealed class GaraponTab : TabBase
 {
-    private readonly ApiClient api;
+    private readonly SenpanApi api;
     private readonly NearbyPlayers nearby;
     private readonly Configuration config;
     private readonly ChatSender chat;
 
     private List<Garapon> garapons = new();
     private long selectedGaraponId;
-    private GaraponDetailResponse? detail;
+    private GaraponDetail? detail;
 
     private string newPlayerName = string.Empty;
     private int newMaxDraws = 1;
     private string pendingTellName = string.Empty;
     private string pendingTellWorld = string.Empty;
 
-    public GaraponTab(ApiClient api, NearbyPlayers nearby, Configuration config, ChatSender chat)
+    public GaraponTab(SenpanApi api, NearbyPlayers nearby, Configuration config, ChatSender chat)
     {
         this.api = api;
         this.nearby = nearby;
@@ -58,7 +59,7 @@ internal sealed class GaraponTab : TabBase
         var detailRes = selected != 0 ? await this.api.GetGaraponAsync(selected) : null;
         await Apply(() =>
         {
-            this.garapons = listRes.Garapons;
+            this.garapons = listRes.Garapons.ToList();
             // Install only if the selection hasn't moved on (guards against a stale
             // fetch overwriting a newer selection's detail).
             if (detailRes != null && this.selectedGaraponId == selected)
@@ -83,7 +84,7 @@ internal sealed class GaraponTab : TabBase
         ImGui.Separator();
         DrawHeader(d.Garapon);
 
-        var open = string.Equals(d.Garapon.Status, "open", StringComparison.OrdinalIgnoreCase);
+        var open = d.Garapon.Status == GaraponStatus.Open;
         Ui.Section(FontAwesomeIcon.Plus, "Issue a drawing link");
         if (open)
             this.DrawCreateForm();
@@ -143,14 +144,19 @@ internal sealed class GaraponTab : TabBase
 
         this.Run(async () =>
         {
-            var created = (await this.api.CreateGaraponPlayerAsync(id, name, pickedWorld, maxDraws)).Player;
+            var created = await this.api.CreateGaraponPlayerAsync(id, new GaraponPlayerInput
+            {
+                PlayerName = name,
+                World = pickedWorld,
+                MaxDraws = maxDraws,
+            });
             var d = await this.api.GetGaraponAsync(id);
             await Apply(() =>
             {
                 if (this.selectedGaraponId == id)
                     this.detail = d;
                 this.newPlayerName = string.Empty;
-                this.newMaxDraws = Math.Max(1, this.detail?.Garapon.DefaultDraws ?? 1);
+                this.newMaxDraws = (int)Math.Max(1, this.detail?.Garapon.DefaultDraws ?? 1);
                 this.pendingTellName = string.Empty;
                 this.pendingTellWorld = string.Empty;
             });
@@ -167,7 +173,7 @@ internal sealed class GaraponTab : TabBase
         });
     }
 
-    private void DrawPlayers(List<GaraponPlayer> players)
+    private void DrawPlayers(IReadOnlyList<GaraponPlayer> players)
     {
         if (players.Count == 0)
         {
@@ -247,7 +253,7 @@ internal sealed class GaraponTab : TabBase
         {
             ImGui.TableNextRow();
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted(FormatTime(draw.DrawnAt));
+            ImGui.TextUnformatted(Times.Local(draw.DrawnAt));
             ImGui.TableNextColumn();
             ImGui.TextUnformatted(string.IsNullOrEmpty(draw.PlayerName) ? "-" : draw.PlayerName);
             ImGui.TableNextColumn();
@@ -272,7 +278,7 @@ internal sealed class GaraponTab : TabBase
     private void DrawGaraponPicker()
     {
         var current = this.garapons.FirstOrDefault(g => g.Id == this.selectedGaraponId);
-        var preview = current != null ? $"{current.Title} ({current.Status})" : "Select garapon...";
+        var preview = current != null ? $"{current.Title} ({StatusWord(current.Status)})" : "Select garapon...";
 
         // Lock selection while a load/action is in flight so the picked garapon and the
         // loaded detail can't diverge: TabBase.Run is busy-gated, so a selection made
@@ -290,7 +296,7 @@ internal sealed class GaraponTab : TabBase
         {
             foreach (var g in this.garapons)
             {
-                if (ImGui.Selectable($"{g.Title} ({g.Status})##g{g.Id}", g.Id == this.selectedGaraponId))
+                if (ImGui.Selectable($"{g.Title} ({StatusWord(g.Status)})##g{g.Id}", g.Id == this.selectedGaraponId))
                     this.LoadGarapon(g.Id);
             }
             ImGui.EndCombo();
@@ -313,7 +319,7 @@ internal sealed class GaraponTab : TabBase
                     this.detail = d;
                     // Seed the Draws box from the garapon's own default, the way the
                     // web form does, rather than leaving it on a hardcoded 1.
-                    this.newMaxDraws = Math.Max(1, d.Garapon.DefaultDraws);
+                    this.newMaxDraws = (int)Math.Max(1, d.Garapon.DefaultDraws);
                 }
             });
         });
@@ -323,7 +329,7 @@ internal sealed class GaraponTab : TabBase
     {
         ImGui.Text(g.Title);
         ImGui.SameLine();
-        ImGui.TextDisabled($"- {g.Status}");
+        ImGui.TextDisabled($"- {StatusWord(g.Status)}");
         if (!string.IsNullOrEmpty(g.StampRallyTitle))
             UiText.WrappedDisabled($"Linked to Stamp Rally \"{g.StampRallyTitle}\" - a stamp card is issued with each drawing link.");
     }
@@ -344,15 +350,7 @@ internal sealed class GaraponTab : TabBase
         ImGui.EndCombo();
     }
 
-    private static string FormatTime(string ts)
-    {
-        if (string.IsNullOrWhiteSpace(ts))
-            return "-";
-        var normalized = ts.Contains('T') ? ts : ts.Replace(' ', 'T') + "Z";
-        return DateTimeOffset.TryParse(normalized, out var dto)
-            ? dto.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)
-            : ts;
-    }
+    private static string StatusWord(GaraponStatus status) => status == GaraponStatus.Open ? "open" : "closed";
 
     /// <summary>Parses a "#rrggbb" ball colour to a Vector4; white on any failure.</summary>
     private static Vector4 ParseColor(string hex)

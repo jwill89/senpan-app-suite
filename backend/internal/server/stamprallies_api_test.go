@@ -515,8 +515,33 @@ func TestStampCardGuessesAreLimited(t *testing.T) {
 	}
 }
 
-// A right password costs nothing and clears the misses, so a participant collecting
-// normally never meets the limit.
+// A right password doesn't clear the misses before it: knowing one stall's word, a guesser
+// could otherwise spend it between tries at the others and never run out.
+func TestStampCardRightPasswordKeepsTheMisses(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+	stamps := []map[string]any{stampBody("alpha", nil), stampBody("beta", nil)}
+	token := env.issueCard(t, env.createRally(t, "R", map[string]any{"stamps": stamps}), "Tataru")
+	anon := newClient(t, env)
+
+	for i := range 9 {
+		if got := status(env.collect(t, anon, token, fmt.Sprintf("wrong-%d", i))); got != http.StatusUnprocessableEntity {
+			t.Fatalf("guess %d: %d, want 422", i, got)
+		}
+	}
+	if got := status(env.collect(t, anon, token, "alpha")); got != http.StatusOK {
+		t.Fatalf("the known password: %d, want 200", got)
+	}
+	if got := status(env.collect(t, anon, token, "wrong-9")); got != http.StatusUnprocessableEntity {
+		t.Fatalf("the tenth wrong guess: %d, want 422", got)
+	}
+	if got := status(env.collect(t, anon, token, "beta")); got != http.StatusTooManyRequests {
+		t.Errorf("after ten wrong guesses with a right one between: %d, want 429", got)
+	}
+}
+
+// A right password costs nothing, so a participant collecting normally never meets the
+// limit.
 func TestStampCardRightPasswordsDoNotCount(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)

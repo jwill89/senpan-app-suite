@@ -27,9 +27,10 @@ as Kindred Nights and Home Library have it.
   one the document declares.
 
 Nothing under `/api/` is registered by hand any more: `routes()` in
-`backend/internal/server` holds the HTTP shell only. The plugin still calls eight old
-garapon and stamp-rally routes until it moves with the release's last phase, and tygo's
-`frontend/src/types/api.generated.ts` stays until then.
+`backend/internal/server` holds the HTTP shell only. The Dalamud plugin's client is
+generated from the same document (NSwag, `plugins/SenpanCompanion/nswag.json` into
+`Api/SenpanApi.g.cs`, also by `task gen`), so the SPA and the plugin read the API as it
+declares itself.
 
 ## Errors
 

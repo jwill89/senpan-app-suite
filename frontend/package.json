@@ -1,7 +1,7 @@
 {
   "name": "app-suite-frontend",
   "private": true,
-  "version": "4.1.0",
+  "version": "5.0.0",
   "type": "module",
   "engines": {
     "node": "^26"
@@ -21,8 +21,7 @@
     "format:check": "prettier --check src/ e2e/ playwright.config.ts",
     "lint:conventions": "node scripts/check-conventions.mjs",
     "lint:conventions:baseline": "node scripts/check-conventions.mjs --update-baseline",
-    "analyze": "cross-env ANALYZE=true vue-tsc -b && cross-env ANALYZE=true vite build",
-    "gen:types": "cd ../backend && go tool tygo generate"
+    "analyze": "cross-env ANALYZE=true vue-tsc -b && cross-env ANALYZE=true vite build"
   },
   "dependencies": {
     "@awesome.me/kit-46204fb6f1": "^1.0.9",

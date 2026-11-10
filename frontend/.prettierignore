@@ -3,7 +3,6 @@ dist-ssr
 coverage
 node_modules
 *.local
-src/types/api.generated.ts
 test-results
 playwright-report
 

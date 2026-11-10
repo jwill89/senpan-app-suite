@@ -57,10 +57,7 @@ public class Configuration : IPluginConfiguration
         this.Token = string.Empty; // never keep plaintext once set through the accessor
     }
 
-    /// <summary>Last-used draw delay (seconds) for the bingo game tab.</summary>
-    public int DrawDelaySeconds { get; set; }
-
-    /// <summary>Open the live WebSocket automatically once a URL + token are set.</summary>
+    /// <summary>Open the live event stream automatically once a URL + token are set.</summary>
     public bool AutoConnect { get; set; } = true;
 
     /// <summary>

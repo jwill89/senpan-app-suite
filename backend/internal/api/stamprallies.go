@@ -1305,7 +1305,9 @@ func (h handlers) getStampCard(ctx context.Context, in *tokenInput) (*stampCardO
 func (h handlers) stampStampCard(ctx context.Context, in *stampCardStampInput) (*stampResultOutput, error) {
 	// Stamp passwords are short words read out at a stall, so an unthrottled endpoint is a
 	// password oracle: a script could collect a card's stamps without visiting anything.
-	// Only a miss costs budget, so a participant collecting normally never notices.
+	// Only a miss costs budget, so a participant collecting normally never notices. A right
+	// password clears nothing: someone who knows one stall's word could otherwise spend it
+	// between guesses at the others and never run out.
 	ip := requestOf(ctx).IP
 	if wait := retryAfter(h.StampGuessLimit, ip); wait > 0 {
 		h.Logger.Warn("stamp password guessing held back", "ip", ip)
@@ -1330,9 +1332,6 @@ func (h handlers) stampStampCard(ctx context.Context, in *stampCardStampInput) (
 		return nil, huma.Error422UnprocessableEntity("That password doesn't match any stamp on this card.", &huma.ErrorDetail{
 			Location: "body.password", Message: "That password doesn't match any stamp on this card.",
 		})
-	}
-	if h.StampGuessLimit != nil {
-		h.StampGuessLimit.Reset(ip)
 	}
 
 	now := time.Now().UTC()

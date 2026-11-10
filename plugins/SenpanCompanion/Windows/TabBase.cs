@@ -2,6 +2,7 @@ using System;
 using System.Numerics;
 using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
+using SenpanCompanion.Core;
 
 namespace SenpanCompanion.Windows;
 
@@ -10,10 +11,11 @@ namespace SenpanCompanion.Windows;
 /// <list type="bullet">
 /// <item>a busy-gated background <see cref="Run"/>ner whose result-writes are applied
 /// on the framework thread (via <see cref="Apply"/>), so UI state never races the
-/// render loop or the WebSocket handlers;</item>
+/// render loop or the live-event handlers;</item>
 /// <item>a once-with-cooldown-retry data load (<see cref="EnsureLoaded"/> +
 /// <see cref="LoadAsync"/>); and</item>
-/// <item>a persistent error line (<see cref="DrawStatusLine"/>).</item>
+/// <item>a persistent error line (<see cref="DrawStatusLine"/>), in the server's own
+/// words where it refused something (<see cref="Problems.Say"/>).</item>
 /// </list>
 /// </summary>
 internal abstract class TabBase
@@ -79,7 +81,7 @@ internal abstract class TabBase
             }
             catch (Exception ex)
             {
-                this.Status = ex.Message;
+                this.Status = Problems.Say(ex);
             }
             finally
             {

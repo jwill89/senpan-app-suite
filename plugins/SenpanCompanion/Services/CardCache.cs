@@ -9,13 +9,13 @@ namespace SenpanCompanion.Services;
 /// <summary>
 /// Shared, live card list. Both the Bingo Cards tab (which manages cards) and the
 /// Bingo Game tab (which needs card -> player-name lookups for winners) read from
-/// this single source, so they stay consistent and the WebSocket card-change event
+/// this single source, so they stay consistent and the live card-change event
 /// refreshes them once rather than per tab. Concurrent refreshes coalesce, and the
 /// list + name index are swapped together on the framework thread.
 /// </summary>
 public sealed class CardCache : IDisposable
 {
-    private readonly ApiClient api;
+    private readonly SenpanApi api;
     private readonly LiveConnection live;
     private readonly object gate = new();
 
@@ -25,12 +25,12 @@ public sealed class CardCache : IDisposable
     private Dictionary<string, string> namesById = new();
 
     /// <summary>The current cards (snapshot; replaced wholesale on refresh).</summary>
-    public List<CardListEntry> Cards { get; private set; } = new();
+    public List<CardSummary> Cards { get; private set; } = new();
 
     /// <summary>True if the most recent refresh failed (so the UI can say so).</summary>
     public bool LoadFailed { get; private set; }
 
-    public CardCache(ApiClient api, LiveConnection live)
+    public CardCache(SenpanApi api, LiveConnection live)
     {
         this.api = api;
         this.live = live;
@@ -67,7 +67,7 @@ public sealed class CardCache : IDisposable
 
     /// <summary>
     /// Refreshes the card list. Concurrent callers share one in-flight request, so a
-    /// create/delete (which refreshes) plus the WebSocket card-change event don't
+    /// create/delete (which refreshes) plus the live card-change event don't
     /// double-fetch.
     /// </summary>
     public Task RefreshAsync()
@@ -93,11 +93,10 @@ public sealed class CardCache : IDisposable
     {
         try
         {
-            // Newest-first by created_at (the server returns them ordered by id).
-            // created_at is an ISO/SQLite timestamp string, which sorts chronologically;
-            // blank (pre-tracking) values sort last under descending order.
+            // Newest-first by createdAt (the server returns them ordered by id). It is an
+            // RFC 3339 UTC string, which sorts chronologically; a card with none sorts last.
             var cards = (await this.api.ListCardsAsync().ConfigureAwait(false)).Cards
-                .OrderByDescending(c => c.CreatedAt, StringComparer.Ordinal)
+                .OrderByDescending(c => c.CreatedAt ?? string.Empty, StringComparer.Ordinal)
                 .ToList();
             await Plugin.Framework.RunOnFrameworkThread(() =>
             {

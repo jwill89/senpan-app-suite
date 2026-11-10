@@ -15,7 +15,8 @@ namespace SenpanCompanion.Windows;
 /// Bingo Game tab, mirroring the web admin Game view: a New Game setup (preset +
 /// win patterns + game details) and the live Current Game view (draw controls,
 /// last-drawn, the B-I-N-G-O called-numbers grid, winners, active patterns). Draws,
-/// winners, and the halftime prompt arrive live over the WebSocket; a chime plays
+/// winners, the half-time prompt and its answer, the draw delay and the details arrive
+/// over the live stream from whichever console or website changed them; a chime plays
 /// when a new winner appears. Card -> player-name lookups come from the shared cache.
 /// </summary>
 internal sealed class BingoGameTab : TabBase, IDisposable
@@ -29,15 +30,14 @@ internal sealed class BingoGameTab : TabBase, IDisposable
     private static readonly Vector4 GridDimColor = new(0.45f, 0.45f, 0.50f, 1f);
     private static readonly Vector4 GridHotColor = new(1f, 1f, 1f, 1f);
 
-    private readonly ApiClient api;
-    private readonly Configuration config;
+    private readonly SenpanApi api;
     private readonly LiveConnection live;
     private readonly CardCache cardCache;
 
     private List<Pattern> patterns = new();
     private List<GamePreset> presets = new();
     private List<FrequentWinner> frequentWinners = new();
-    private readonly HashSet<int> selectedPatterns = new();
+    private readonly HashSet<long> selectedPatterns = new();
     private long selectedPresetId;
 
     // Bulk expand/collapse of the win-pattern category headers: pendingPatternOpen forces
@@ -45,85 +45,104 @@ internal sealed class BingoGameTab : TabBase, IDisposable
     private bool? pendingPatternOpen;
     private bool patternsCollapsed;
 
-    private GameState? game;
+    private Game? game;
     private List<string> winners = new();
-    private DrawnNumber? lastDrawn;
+    private string? lastCalled;
     private string gameDetails = string.Empty;
+
+    // Whether the details box has the keyboard: a details change from another console
+    // waits rather than replacing what is being typed.
+    private bool detailsEditing;
+
+    /// <summary>Seconds a drawn number waits before players get it. One value for every
+    /// console, kept by the server: read with the game, followed live, saved on change.</summary>
+    private long drawDelay;
 
     // New Game auto-draw controls (session-local, like the web's new-game form).
     private bool newGameAuto;
     private int newGameAutoInterval = DefaultAutoInterval;
 
     private bool openHalftimePopup;
+    private bool closeHalftimePopup;
     private bool halftimeAutoPaused;
+
     /// <summary>
-    /// The game the pending half-time prompt belongs to. The prompt is a latch that
-    /// only the Bingo Game page consumes, and nothing used to clear it on a game
-    /// boundary - so a prompt raised near the end of one game sat there and popped
-    /// during the NEXT one, where answering "Yes" broadcast a half-time mini-game
-    /// alert to players who had never reached half time.
+    /// The game the pending half-time prompt belongs to, 0 for none. An answer names it,
+    /// so one left open across a new game is refused rather than alerting players who never
+    /// reached half time.
     /// </summary>
     private long halftimeGameId;
+
     /// <summary>
-    /// When this page last drew a frame. The half-time prompt is a modal on THIS
-    /// page, so it is invisible while the window is closed or showing something
-    /// else - and the server has paused auto-draw waiting for an answer, so the
-    /// game just stalls with nothing said. This is how the prompt knows to speak up.
+    /// When this page last drew a frame. The half-time prompt is a modal on THIS page, so
+    /// it is invisible while the window is closed or showing something else - and the
+    /// server has paused auto-draw waiting for an answer, so the game just stalls with
+    /// nothing said. This is how the prompt knows to speak up.
     /// </summary>
     private DateTime lastDrawnAt = DateTime.MinValue;
 
     private bool openEndGamePopup;
+    private bool closeEndGamePopup;
     private readonly HashSet<string> endGameSelected = new();
+
+    /// <summary>The game the End Game confirm was opened for: ending names it, so a confirm
+    /// left open while another console starts a new game can't end that one.</summary>
+    private long endGameId;
 
     private bool openViewCard;
     private Card? viewCard;
     private HashSet<(int, int)> viewMatched = new();
 
-    public BingoGameTab(ApiClient api, Configuration config, LiveConnection live, CardCache cardCache)
+    public BingoGameTab(SenpanApi api, LiveConnection live, CardCache cardCache)
     {
         this.api = api;
-        this.config = config;
         this.live = live;
         this.cardCache = cardCache;
 
-        this.live.GameDraw += this.OnGameDraw;
-        this.live.GameUpdate += this.OnGameUpdate;
+        this.live.Draw += this.OnDraw;
+        this.live.GameStarted += this.OnGameStarted;
+        this.live.GameEnded += this.OnGameEnded;
+        this.live.PatternsChanged += this.MarkStale;
         this.live.Yoever += this.OnYoever;
-        this.live.YoeverConfig += this.OnYoeverConfig;
-        this.live.AutoConfig += this.OnAutoConfig;
+        this.live.YoeverSwitched += this.OnYoeverSwitched;
+        this.live.AutoDraw += this.OnAutoDraw;
         this.live.HalftimePrompt += this.OnHalftimePrompt;
-        this.live.Reconnected += this.OnReconnected;
+        this.live.HalftimeResolved += this.OnHalftimeResolved;
+        this.live.DrawDelay += this.OnDrawDelay;
+        this.live.GameDetails += this.OnGameDetails;
     }
 
     public void Dispose()
     {
-        this.live.GameDraw -= this.OnGameDraw;
-        this.live.GameUpdate -= this.OnGameUpdate;
+        this.live.Draw -= this.OnDraw;
+        this.live.GameStarted -= this.OnGameStarted;
+        this.live.GameEnded -= this.OnGameEnded;
+        this.live.PatternsChanged -= this.MarkStale;
         this.live.Yoever -= this.OnYoever;
-        this.live.YoeverConfig -= this.OnYoeverConfig;
-        this.live.AutoConfig -= this.OnAutoConfig;
+        this.live.YoeverSwitched -= this.OnYoeverSwitched;
+        this.live.AutoDraw -= this.OnAutoDraw;
         this.live.HalftimePrompt -= this.OnHalftimePrompt;
-        this.live.Reconnected -= this.OnReconnected;
+        this.live.HalftimeResolved -= this.OnHalftimeResolved;
+        this.live.DrawDelay -= this.OnDrawDelay;
+        this.live.GameDetails -= this.OnGameDetails;
     }
 
     protected override async Task LoadAsync()
     {
         // Patterns, presets and frequent-winners are gated by their own permissions
         // (bingo-patterns / bingo-presets / bingo-winners-log). Fetch them optionally,
-        // so an operator with only bingo-game still gets the (public) game state and
-        // can draw - a missing sub-permission just leaves that section empty.
+        // so an operator with only bingo-game still gets the game state and can draw -
+        // a missing sub-permission just leaves that section empty.
         var patternsRes = await OptionalAsync(() => this.api.ListPatternsAsync());
         var presetsRes = await OptionalAsync(() => this.api.ListPresetsAsync());
-        var gameRes = await this.api.GetGameAsync();
-        var freqRes = await OptionalAsync(() => this.api.FrequentWinnersAsync());
+        var state = await this.api.GetGameAsync();
+        var freqRes = await OptionalAsync(() => this.api.ListFrequentWinnersAsync());
         await Apply(() =>
         {
-            this.patterns = patternsRes?.Patterns ?? new List<Pattern>();
-            this.presets = presetsRes?.Presets ?? new List<GamePreset>();
-            this.game = gameRes.Game;
-            this.winners = gameRes.Winners;
-            this.gameDetails = gameRes.GameDetails;
-            this.frequentWinners = freqRes?.Winners ?? new List<FrequentWinner>();
+            this.patterns = patternsRes?.Patterns.ToList() ?? new List<Pattern>();
+            this.presets = presetsRes?.Presets.ToList() ?? new List<GamePreset>();
+            this.frequentWinners = freqRes?.Winners.ToList() ?? new List<FrequentWinner>();
+            this.TakeState(state);
         });
     }
 
@@ -139,6 +158,25 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// Takes the game as the server answers it. The answer carries what a console opening
+    /// mid-way needs: the draw delay, the last number called, and a half-time prompt still
+    /// waiting for an answer, which opens here as it would have on the draw.
+    /// </summary>
+    private void TakeState(GameState state)
+    {
+        if (state.Game == null || state.Game.Id != this.game?.Id)
+            this.ClearHalftimePrompt();
+        this.game = state.Game;
+        this.winners = state.Winners.ToList();
+        this.drawDelay = state.DrawDelay;
+        if (!this.detailsEditing)
+            this.gameDetails = state.GameDetails;
+        this.lastCalled = state.Game?.LastDraw is { } last ? $"{last.Letter}-{last.Number}" : null;
+        if (state.Game?.Halftime is { } pending && pending.GameId != this.halftimeGameId)
+            this.ShowHalftime(pending.GameId, pending.AutoPaused, alert: false);
     }
 
     public void Draw()
@@ -200,14 +238,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
 
         Ui.Section(FontAwesomeIcon.AlignLeft, "Game details");
         Ui.Help("Markdown supported.");
-        var details = this.gameDetails;
-        if (ImGui.InputTextMultiline("##gamedetails", ref details, 4000, new Vector2(-1, 90)))
-            this.gameDetails = details;
-        if (ImGui.IsItemDeactivatedAfterEdit())
-        {
-            var toSave = this.gameDetails;
-            this.Run(() => this.api.UpdateGameDetailsAsync(toSave));
-        }
+        this.DrawDetailsEditor();
 
         Ui.Section(FontAwesomeIcon.Robot, "Auto-draw");
         var auto = this.newGameAuto;
@@ -235,18 +266,18 @@ internal sealed class BingoGameTab : TabBase, IDisposable
             ImGui.BeginDisabled();
         if (Ui.PrimaryButton($"Start Game ({this.selectedPatterns.Count})"))
         {
-            var ids = this.selectedPatterns.ToArray();
-            var startAuto = this.newGameAuto;
-            var startInterval = this.newGameAutoInterval;
+            var start = new GameStartInput
+            {
+                PatternIds = this.selectedPatterns.ToList(),
+                Auto = this.newGameAuto,
+                AutoInterval = this.newGameAutoInterval,
+            };
             this.Run(async () =>
             {
-                var g = await this.api.StartGameAsync(ids, startAuto, startInterval);
+                var state = await this.api.StartGameAsync(start);
                 await Apply(() =>
                 {
-                    this.game = g.Game;
-                    this.winners = g.Winners;
-                    this.gameDetails = g.GameDetails;
-                    this.lastDrawn = null;
+                    this.TakeState(state);
                     this.selectedPatterns.Clear();
                 });
             });
@@ -255,9 +286,23 @@ internal sealed class BingoGameTab : TabBase, IDisposable
             ImGui.EndDisabled();
     }
 
+    /// <summary>The details box, saved when it loses focus; every console hears the change.</summary>
+    private void DrawDetailsEditor()
+    {
+        var details = this.gameDetails;
+        if (ImGui.InputTextMultiline("##gamedetails", ref details, 4000, new Vector2(-1, 90)))
+            this.gameDetails = details;
+        this.detailsEditing = ImGui.IsItemActive();
+        if (ImGui.IsItemDeactivatedAfterEdit())
+            this.SaveDetails(this.gameDetails);
+    }
+
+    private void SaveDetails(string details) =>
+        this.Run(() => this.api.UpdateGameAsync(new GameChanges { Details = details }));
+
     private void ApplyPreset(GamePreset preset)
     {
-        var valid = this.patterns.Select(p => (int)p.Id).ToHashSet();
+        var valid = this.patterns.Select(p => p.Id).ToHashSet();
         this.selectedPatterns.Clear();
         foreach (var id in preset.PatternIds.Where(valid.Contains))
             this.selectedPatterns.Add(id);
@@ -265,9 +310,8 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         // Pre-fill the auto-draw controls from the preset (tweaking here never
         // writes back to the preset).
         this.newGameAuto = preset.Auto;
-        this.newGameAutoInterval = preset.AutoInterval > 0 ? preset.AutoInterval : DefaultAutoInterval;
-        var toSave = this.gameDetails;
-        this.Run(() => this.api.UpdateGameDetailsAsync(toSave));
+        this.newGameAutoInterval = preset.AutoInterval > 0 ? (int)preset.AutoInterval : DefaultAutoInterval;
+        this.SaveDetails(this.gameDetails);
     }
 
     private void DrawPatternPicker()
@@ -285,7 +329,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
                 foreach (var pattern in group)
                 {
                     ImGui.TableNextColumn();
-                    var id = (int)pattern.Id;
+                    var id = pattern.Id;
                     DrawPatternMini(pattern.PatternData);
                     ImGui.SameLine();
                     var selected = this.selectedPatterns.Contains(id);
@@ -308,7 +352,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
 
     // -- Current game ---------------------------------------------------------
 
-    private void DrawCurrentGame(GameState state)
+    private void DrawCurrentGame(Game state)
     {
         // Snapshot Busy: the click handler below calls Run(), which sets Busy true
         // synchronously, so re-reading the field at the End would pop a disabled
@@ -319,18 +363,15 @@ internal sealed class BingoGameTab : TabBase, IDisposable
             ImGui.BeginDisabled();
         if (Ui.PrimaryButton("Draw Number"))
         {
-            var delay = this.config.DrawDelaySeconds;
+            var delay = this.drawDelay;
             this.Run(async () =>
             {
-                var result = await this.api.DrawAsync(delay);
+                var result = await this.api.DrawNumberAsync(new DrawInput { Delay = delay });
                 await Apply(() =>
                 {
-                    this.lastDrawn = result.Drawn;
+                    this.lastCalled = $"{result.Drawn.Letter}-{result.Drawn.Number}";
                     this.ApplyWinners(result.Winners);
-                    if (this.game != null && !this.game.CalledNumbers.Contains(result.Drawn.Number))
-                        this.game.CalledNumbers.Add(result.Drawn.Number);
-                    // The half-time prompt is server-driven now (halftime_prompt),
-                    // so it fires for manual and automatic draws alike.
+                    this.game = result.Game;
                 });
             });
         }
@@ -342,6 +383,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         ImGui.SameLine();
         if (Ui.DangerButton("End Game"))
         {
+            this.endGameId = state.Id;
             if (this.winners.Count > 0)
             {
                 this.endGameSelected.Clear();
@@ -351,8 +393,17 @@ internal sealed class BingoGameTab : TabBase, IDisposable
             }
             else
             {
-                this.EndGame(Array.Empty<string>());
+                this.EndGame(state.Id, Array.Empty<string>());
             }
+        }
+
+        // A prompt closed without an answer still holds the automatic draws; it can be
+        // brought back here.
+        if (this.halftimeGameId == state.Id && !ImGui.IsPopupOpen("Half-Time###halftime"))
+        {
+            ImGui.SameLine();
+            if (Ui.Button("Half-time..."))
+                this.openHalftimePopup = true;
         }
 
         // "It's Yoever" live controls: switch the reaction on/off for all players
@@ -361,8 +412,8 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         if (ImGui.Checkbox("It's Yoever", ref yoeverEnabled))
         {
             var next = yoeverEnabled;
-            state.YoeverEnabled = next; // optimistic; the yoever_config broadcast confirms
-            this.Run(() => this.api.SetYoeverEnabledAsync(next));
+            state.YoeverEnabled = next; // optimistic; yoever_switched confirms
+            this.Run(() => this.api.UpdateGameAsync(new GameChanges { YoeverEnabled = next }));
         }
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip("Let players trigger the \"It's Yoever\" reaction. Switch off to curb spam.");
@@ -375,8 +426,8 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         if (ImGui.Checkbox("Auto-Draw", ref autoEnabled))
         {
             var next = autoEnabled;
-            state.AutoEnabled = next; // optimistic; the auto_config broadcast confirms
-            this.Run(() => this.api.SetAutoEnabledAsync(next));
+            state.AutoEnabled = next; // optimistic; auto_draw confirms
+            this.Run(() => this.api.UpdateGameAsync(new GameChanges { AutoEnabled = next }));
         }
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip("Draw numbers automatically on a timer. Turns off at half-time and when a winner is found.");
@@ -390,8 +441,8 @@ internal sealed class BingoGameTab : TabBase, IDisposable
                 {
                     if (ImGui.Selectable(AutoIntervalLabel(s), s == state.AutoInterval))
                     {
-                        state.AutoInterval = s; // optimistic; the auto_config broadcast confirms
-                        this.Run(() => this.api.SetAutoIntervalAsync(s));
+                        state.AutoInterval = s; // optimistic; auto_draw confirms
+                        this.Run(() => this.api.UpdateGameAsync(new GameChanges { AutoInterval = s }));
                     }
                 }
                 ImGui.EndCombo();
@@ -404,11 +455,11 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         // left; winners, frequent winners, game details, and active patterns on the
         // right.
         ImGui.BeginGroup();
-        if (this.lastDrawn != null)
+        if (this.lastCalled != null)
         {
             ImGui.TextDisabled("Last Called:");
             ImGui.SameLine();
-            ImGui.TextColored(new Vector4(0.4f, 0.8f, 1f, 1f), $"{this.lastDrawn.Letter}-{this.lastDrawn.Number}");
+            ImGui.TextColored(new Vector4(0.4f, 0.8f, 1f, 1f), this.lastCalled);
         }
         DrawCalledNumbersGrid(state);
         ImGui.EndGroup();
@@ -428,9 +479,10 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         ImGui.EndGroup();
     }
 
+    /// <summary>The draw delay, shared by every console: picking one saves it for all.</summary>
     private void DrawDelayCombo()
     {
-        var d = this.config.DrawDelaySeconds;
+        var d = this.drawDelay;
         ImGui.SetNextItemWidth(120);
         if (ImGui.BeginCombo("##delay", DelayLabel(d)))
         {
@@ -438,19 +490,20 @@ internal sealed class BingoGameTab : TabBase, IDisposable
             {
                 if (ImGui.Selectable(DelayLabel(s), s == d))
                 {
-                    this.config.DrawDelaySeconds = s;
-                    this.config.Save();
+                    this.drawDelay = s;
+                    this.Run(() => this.api.UpdateGameAsync(new GameChanges { Delay = s }));
                 }
             }
             ImGui.EndCombo();
         }
+        Ui.ItemTooltip("How long a drawn number waits before players get it. Shared with every console.");
     }
 
-    private static string DelayLabel(int s) => s == 0 ? "Instant" : $"{s}s Delay";
+    private static string DelayLabel(long s) => s == 0 ? "Instant" : $"{s}s Delay";
 
-    private static void DrawCalledNumbersGrid(GameState state)
+    private static void DrawCalledNumbersGrid(Game state)
     {
-        var called = new HashSet<int>(state.CalledNumbers);
+        var called = new HashSet<long>(state.CalledNumbers);
         ImGui.TextUnformatted($"Called Numbers ({called.Count} / 75)");
 
         ImGui.PushStyleVar(ImGuiStyleVar.CellPadding, new Vector2(3, 2));
@@ -476,7 +529,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
                 for (var c = 0; c < 5; c++)
                 {
                     ImGui.TableNextColumn();
-                    var n = c * 15 + row + 1;
+                    var n = (c * 15) + row + 1;
                     var hit = called.Contains(n);
                     if (hit)
                         ImGui.TableSetBgColor(ImGuiTableBgTarget.CellBg, highlight);
@@ -509,7 +562,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         ImGui.Spacing();
     }
 
-    private static void DrawActivePatterns(GameState state)
+    private static void DrawActivePatterns(Game state)
     {
         if (state.Patterns.Count == 0)
             return;
@@ -541,22 +594,35 @@ internal sealed class BingoGameTab : TabBase, IDisposable
 
     private void DrawHalftimePopup()
     {
-        // Refuse a prompt that outlived the game it was raised for. OnGameUpdate
-        // clears it on a boundary, but the operator may not have had this page open
-        // when that arrived, so check again at the point of use.
-        if (this.halftimeGameId != 0 && this.halftimeGameId != (this.game?.Id ?? 0))
+        // Refuse a prompt that outlived the game it was raised for. A game boundary
+        // clears it, but the operator may not have had this page open when that
+        // arrived, so check again at the point of use.
+        if (this.halftimeGameId != 0 && this.game != null && this.halftimeGameId != this.game.Id)
             this.ClearHalftimePrompt();
 
         if (this.openHalftimePopup)
         {
             ImGui.OpenPopup("Half-Time###halftime");
             this.openHalftimePopup = false;
+            this.closeHalftimePopup = false;
         }
 
         ImGui.SetNextWindowSize(new Vector2(340, 0), ImGuiCond.Appearing);
         var open = true;
         if (!ImGui.BeginPopupModal("Half-Time###halftime", ref open))
+        {
+            this.closeHalftimePopup = false;
             return;
+        }
+
+        // Answered on another console: nothing is left to decide here.
+        if (this.closeHalftimePopup || this.halftimeGameId == 0)
+        {
+            this.closeHalftimePopup = false;
+            ImGui.CloseCurrentPopup();
+            ImGui.EndPopup();
+            return;
+        }
 
         var threshold = this.game != null ? HalftimeThreshold(this.game.Patterns) : 0;
         ImGui.TextWrapped($"You've drawn {threshold} numbers! Alert players about a half-time mini-game?");
@@ -569,19 +635,30 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         if (Ui.PrimaryButton("Yes"))
         {
             // Yes -> run a mini-game (alert players; auto stays paused).
-            this.Run(() => this.api.TriggerHalftimeAsync(true));
-            this.halftimeAutoPaused = false;
+            this.AnswerHalftime(true);
             ImGui.CloseCurrentPopup();
         }
         ImGui.SameLine();
         if (Ui.Button("No"))
         {
             // No -> decline the mini-game; the server resumes auto if it was paused.
-            this.Run(() => this.api.TriggerHalftimeAsync(false));
-            this.halftimeAutoPaused = false;
+            this.AnswerHalftime(false);
             ImGui.CloseCurrentPopup();
         }
         ImGui.EndPopup();
+    }
+
+    /// <summary>Answers the prompt for the game it was raised for. A second answer, from
+    /// any console, is refused by the server and its words shown.</summary>
+    private void AnswerHalftime(bool minigame)
+    {
+        var answer = new HalftimeAnswer { GameId = this.halftimeGameId, Minigame = minigame };
+        this.ClearHalftimePrompt();
+        this.Run(async () =>
+        {
+            var state = await this.api.AnswerHalftimeAsync(answer);
+            await Apply(() => this.TakeState(state));
+        });
     }
 
     private void DrawEndGamePopup()
@@ -590,12 +667,25 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         {
             ImGui.OpenPopup("End Game###endgame");
             this.openEndGamePopup = false;
+            this.closeEndGamePopup = false;
         }
 
         ImGui.SetNextWindowSize(new Vector2(360, 0), ImGuiCond.Appearing);
         var open = true;
         if (!ImGui.BeginPopupModal("End Game###endgame", ref open))
+        {
+            this.closeEndGamePopup = false;
             return;
+        }
+
+        // The game ended (or another began) on another console: this confirm is moot.
+        if (this.closeEndGamePopup)
+        {
+            this.closeEndGamePopup = false;
+            ImGui.CloseCurrentPopup();
+            ImGui.EndPopup();
+            return;
+        }
 
         ImGui.TextWrapped("Confirm the valid winners to record, then end the game:");
         ImGui.Spacing();
@@ -615,7 +705,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         ImGui.Spacing();
         if (Ui.DangerButton("End Game##confirm"))
         {
-            this.EndGame(this.endGameSelected.ToArray());
+            this.EndGame(this.endGameId, this.endGameSelected.ToArray());
             ImGui.CloseCurrentPopup();
         }
         ImGui.SameLine();
@@ -624,16 +714,18 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         ImGui.EndPopup();
     }
 
-    private void EndGame(string[] validWinnerIds)
+    private void EndGame(long gameId, string[] validWinnerIds)
     {
+        var end = new GameEndInput { GameId = gameId, ValidWinnerIds = validWinnerIds };
         this.Run(async () =>
         {
-            await this.api.EndGameAsync(validWinnerIds);
+            await this.api.EndGameAsync(end);
             await Apply(() =>
             {
                 this.game = null;
                 this.winners = new List<string>();
-                this.lastDrawn = null;
+                this.lastCalled = null;
+                this.ClearHalftimePrompt();
             });
         });
     }
@@ -650,7 +742,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         {
             try
             {
-                var res = await this.api.GetCardBoardAsync(cardId);
+                var res = await this.api.GetBoardAsync(cardId, preview: true);
                 await Apply(() =>
                 {
                     this.viewCard = res.Card;
@@ -659,7 +751,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
             }
             catch (Exception ex)
             {
-                this.Status = ex.Message;
+                this.Status = Core.Problems.Say(ex);
             }
         });
     }
@@ -669,12 +761,12 @@ internal sealed class BingoGameTab : TabBase, IDisposable
     /// verification: a pattern is satisfied when every non-FREE required cell has
     /// been called; that pattern's required cells are then all "hits".
     /// </summary>
-    private HashSet<(int, int)> ComputeMatched(int[][] board)
+    private HashSet<(int, int)> ComputeMatched(IReadOnlyList<IReadOnlyList<int>> board)
     {
         var matched = new HashSet<(int, int)>();
         if (this.game == null)
             return matched;
-        var called = new HashSet<int>(this.game.CalledNumbers);
+        var called = new HashSet<long>(this.game.CalledNumbers);
 
         foreach (var pat in this.game.Patterns)
         {
@@ -684,9 +776,9 @@ internal sealed class BingoGameTab : TabBase, IDisposable
             {
                 for (var c = 0; c < 5; c++)
                 {
-                    if (r < pd.Length && c < pd[r].Length && pd[r][c])
+                    if (r < pd.Count && c < pd[r].Count && pd[r][c])
                     {
-                        var val = r < board.Length && c < board[r].Length ? board[r][c] : 0;
+                        var val = r < board.Count && c < board[r].Count ? board[r][c] : 0;
                         if (val != 0 && !called.Contains(val))
                         {
                             satisfied = false;
@@ -701,7 +793,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
             {
                 for (var c = 0; c < 5; c++)
                 {
-                    if (r < pd.Length && c < pd[r].Length && pd[r][c])
+                    if (r < pd.Count && c < pd[r].Count && pd[r][c])
                         matched.Add((r, c));
                 }
             }
@@ -753,7 +845,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
     private static readonly Vector4 BoardFreeText = new(0.55f, 0.55f, 0.60f, 1f);
     private static readonly Vector4 BoardText = new(0.90f, 0.90f, 0.92f, 1f);
 
-    private static void DrawCardBoard(int[][] board, HashSet<(int, int)> matched)
+    private static void DrawCardBoard(IReadOnlyList<IReadOnlyList<int>> board, HashSet<(int, int)> matched)
     {
         ImGui.PushStyleVar(ImGuiStyleVar.CellPadding, new Vector2(4, 5));
         if (ImGui.BeginTable("cardboard", 5, ImGuiTableFlags.Borders | ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.NoHostExtendX))
@@ -775,7 +867,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
                 for (var c = 0; c < 5; c++)
                 {
                     ImGui.TableNextColumn();
-                    var val = r < board.Length && c < board[r].Length ? board[r][c] : 0;
+                    var val = r < board.Count && c < board[r].Count ? board[r][c] : 0;
                     var hit = matched.Contains((r, c));
                     if (hit)
                         ImGui.TableSetBgColor(ImGuiTableBgTarget.CellBg, matchBg);
@@ -792,26 +884,40 @@ internal sealed class BingoGameTab : TabBase, IDisposable
 
     // -- Live event handlers (already on the framework thread) -----------------
 
-    private void OnGameDraw(DrawnNumber drawn, string[] winnerIds)
+    private void OnDraw(long? gameId, DrawnNumber drawn, IReadOnlyList<string> winnerIds)
     {
-        this.lastDrawn = drawn;
-        this.ApplyWinners(winnerIds.ToList());
-        if (this.game != null && !this.game.CalledNumbers.Contains(drawn.Number))
-            this.game.CalledNumbers.Add(drawn.Number);
+        if (this.game == null || this.game.Id != gameId)
+        {
+            // A draw for a game this page doesn't hold: it is out of step, so read it again.
+            this.MarkStale();
+            return;
+        }
+        this.lastCalled = $"{drawn.Letter}-{drawn.Number}";
+        this.ApplyWinners(winnerIds);
+        if (!this.game.CalledNumbers.Contains(drawn.Number))
+            this.game.CalledNumbers = [.. this.game.CalledNumbers, drawn.Number];
     }
 
-    private void OnGameUpdate(GameState? state)
+    private void OnGameStarted(long? gameId)
     {
-        // A different game (or none at all) makes any pending half-time prompt
-        // meaningless - drop it rather than letting it surface against the new game.
-        if (state == null || state.Id != this.game?.Id)
-            this.ClearHalftimePrompt();
-        this.game = state;
-        if (state == null)
+        // A different game makes any pending prompt or End Game confirm meaningless.
+        this.ClearHalftimePrompt();
+        this.closeEndGamePopup = true;
+        this.MarkStale();
+    }
+
+    private void OnGameEnded(long? gameId)
+    {
+        if (this.game == null || gameId == null || this.game.Id == gameId)
         {
+            this.game = null;
             this.winners = new List<string>();
-            this.lastDrawn = null;
+            this.lastCalled = null;
+            this.ClearHalftimePrompt();
+            this.closeEndGamePopup = true;
         }
+        // The frequent winners follow the log the end just wrote.
+        this.MarkStale();
     }
 
     private void ClearHalftimePrompt()
@@ -823,30 +929,12 @@ internal sealed class BingoGameTab : TabBase, IDisposable
 
     // Auto-draw state changed on the server (started, toggled, interval adjusted, or
     // switched off by a winner/half-time): mirror it onto the current game.
-    private void OnAutoConfig(bool enabled, int interval)
+    private void OnAutoDraw(bool enabled, long interval)
     {
         if (this.game == null)
             return;
         this.game.AutoEnabled = enabled;
         this.game.AutoInterval = interval;
-    }
-
-    // The server reached the half-time mark (on any draw, manual or automatic):
-    // open the mini-game prompt. autoPaused tells the modal whether declining will
-    // resume the auto draws.
-    /// <summary>
-    /// The socket came back after a drop. Anything that arrived only as a push while
-    /// we were disconnected is missing: CalledNumbers is short, and the winners and
-    /// game state may be stale. Nothing on the wire fills that gap - the server sends
-    /// no snapshot on connect - so mark both this tab and the card cache stale and let
-    /// the per-frame EnsureLoaded re-pull GET /api/game. Without this, ending a game
-    /// after a reconnect wrote the WRONG winners into the permanent log, and the
-    /// called-numbers grid stayed wrong for the rest of the session.
-    /// </summary>
-    private void OnReconnected()
-    {
-        this.MarkStale();
-        this.cardCache.MarkStale();
     }
 
     /// <summary>
@@ -869,29 +957,63 @@ internal sealed class BingoGameTab : TabBase, IDisposable
             $"[Senpan] Half time reached - open the Companion window to answer the mini-game prompt.{paused}");
     }
 
-    private void OnHalftimePrompt(bool autoPaused)
+    // The server reached the half-time mark (on any draw, manual or automatic):
+    // open the mini-game prompt. autoPaused tells the modal whether declining will
+    // resume the auto draws.
+    private void OnHalftimePrompt(long? gameId, bool autoPaused)
+    {
+        if (gameId is { } id)
+            this.ShowHalftime(id, autoPaused, alert: true);
+    }
+
+    private void ShowHalftime(long gameId, bool autoPaused, bool alert)
     {
         this.halftimeAutoPaused = autoPaused;
+        this.halftimeGameId = gameId;
         this.openHalftimePopup = true;
-        this.halftimeGameId = this.game?.Id ?? 0;
 
         // If this page was not on screen a moment ago, nobody is going to see the
         // modal. Say so where the operator IS looking - the game itself.
-        if (DateTime.UtcNow - this.lastDrawnAt > TimeSpan.FromSeconds(1))
+        if (alert && DateTime.UtcNow - this.lastDrawnAt > TimeSpan.FromSeconds(1))
             AlertHalftimeOffPage(autoPaused);
     }
 
-    // A player fired the reaction: keep the running count in step. The dedicated
-    // "yoever" broadcast is the only live count update between draws (game_update
-    // only arrives on start/draw/end), so the tracker relies on it.
-    private void OnYoever(string playerName, int count)
+    /// <summary>
+    /// Someone answered the prompt. One this console was still showing closes, with a
+    /// line in this client's own chat log saying who answered and how (local only, as
+    /// <see cref="AlertHalftimeOffPage"/>). This console's own answer cleared its prompt
+    /// already, so it says nothing.
+    /// </summary>
+    private void OnHalftimeResolved(long? gameId, bool minigame, string by)
     {
-        if (this.game != null)
+        if (this.game?.Id == gameId && this.game != null)
+            this.game.Halftime = null;
+        if (this.halftimeGameId == 0 || this.halftimeGameId != gameId)
+            return;
+        this.ClearHalftimePrompt();
+        this.closeHalftimePopup = true;
+        var answer = minigame ? "a mini-game runs" : "no mini-game";
+        var who = string.IsNullOrWhiteSpace(by) ? "another console" : by;
+        Plugin.ChatGui.Print($"[Senpan] Half time was answered by {who}: {answer}.");
+    }
+
+    private void OnDrawDelay(long delay) => this.drawDelay = delay;
+
+    private void OnGameDetails(string details)
+    {
+        if (!this.detailsEditing)
+            this.gameDetails = details;
+    }
+
+    // A player fired the reaction: keep the running count in step.
+    private void OnYoever(long? gameId, string playerName, long count)
+    {
+        if (this.game != null && this.game.Id == gameId)
             this.game.YoeverCount = count;
     }
 
     // An admin (here or on the web) switched the reaction on/off.
-    private void OnYoeverConfig(bool enabled)
+    private void OnYoeverSwitched(bool enabled)
     {
         if (this.game != null)
             this.game.YoeverEnabled = enabled;
@@ -899,19 +1021,19 @@ internal sealed class BingoGameTab : TabBase, IDisposable
 
     /// <summary>
     /// Replaces the winners list, chiming once when it grows (a genuinely new
-    /// winner). The plugin's own draw arrives twice (REST result + WS echo); the
-    /// count guard de-dupes it.
+    /// winner). The plugin's own draw arrives twice (its answer and the live event);
+    /// the count guard de-dupes it.
     /// </summary>
-    private void ApplyWinners(List<string> next)
+    private void ApplyWinners(IReadOnlyList<string> next)
     {
         if (next.Count > this.winners.Count)
             Chime.Winner();
-        this.winners = next;
+        this.winners = next.ToList();
     }
 
     // -- Helpers --------------------------------------------------------------
 
-    private static string AutoIntervalLabel(int seconds)
+    private static string AutoIntervalLabel(long seconds)
     {
         if (seconds < 60)
             return $"{seconds}s";
@@ -924,15 +1046,15 @@ internal sealed class BingoGameTab : TabBase, IDisposable
     /// The half-way call count, mirroring the web (lib/halftime.ts): the classic
     /// 35-of-75 ratio scaled to this game's callable pool (active columns x 15).
     /// </summary>
-    private static int HalftimeThreshold(List<GamePattern> patterns)
+    private static int HalftimeThreshold(IReadOnlyList<GamePattern> patterns)
     {
         var cols = new bool[5];
         foreach (var p in patterns)
         {
             var grid = p.PatternData;
-            for (var r = 0; r < grid.Length && r < 5; r++)
+            for (var r = 0; r < grid.Count && r < 5; r++)
             {
-                for (var c = 0; c < grid[r].Length && c < 5; c++)
+                for (var c = 0; c < grid[r].Count && c < 5; c++)
                 {
                     if (grid[r][c] && !(r == 2 && c == 2))
                         cols[c] = true;
@@ -947,7 +1069,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         return Math.Max(1, (int)Math.Round(35.0 / 75.0 * maxCallable, MidpointRounding.AwayFromZero));
     }
 
-    private static void DrawPatternMini(bool[][] data, float cell = 8f)
+    private static void DrawPatternMini(IReadOnlyList<IReadOnlyList<bool>> data, float cell = 8f)
     {
         var dl = ImGui.GetWindowDrawList();
         var origin = ImGui.GetCursorScreenPos();
@@ -957,9 +1079,9 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         {
             for (var c = 0; c < 5; c++)
             {
-                var a = new Vector2(origin.X + c * cell, origin.Y + r * cell);
+                var a = new Vector2(origin.X + (c * cell), origin.Y + (r * cell));
                 var b = new Vector2(a.X + cell - 1.5f, a.Y + cell - 1.5f);
-                var set = r < data.Length && c < data[r].Length && data[r][c];
+                var set = r < data.Count && c < data[r].Count && data[r][c];
                 dl.AddRectFilled(a, b, set ? on : off);
             }
         }

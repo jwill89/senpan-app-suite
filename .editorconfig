@@ -43,7 +43,7 @@ trim_trailing_whitespace = false
 # shared/lint/dotnet/.globalconfig, imported by plugins/Directory.Build.props.
 [plugins/SenpanCompanion/**.cs]
 # Braced `case` blocks keep their `{` aligned with the `case` label, as the plugin's
-# switches are written (LiveConnection.HandleMessage); `dotnet format`'s default would
+# switches are written (LiveConnection.Dispatch); `dotnet format`'s default would
 # indent every such block one level deeper.
 csharp_indent_case_contents_when_block = false
 
@@ -51,3 +51,7 @@ csharp_indent_case_contents_when_block = false
 # [DllImport]: [LibraryImport] would mean partial methods and explicit marshalling for a
 # one-shot chime and two small DPAPI calls.
 dotnet_diagnostic.SYSLIB1054.severity = none
+
+# A test's name is a sentence, its words joined by underscores.
+[plugins/SenpanCompanion.Tests/**.cs]
+dotnet_diagnostic.CA1707.severity = none

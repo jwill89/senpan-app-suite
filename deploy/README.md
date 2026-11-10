@@ -371,6 +371,68 @@ Pulls) if you need it to be tamper-proof. Capability tokens in request
 paths/queries/Referer are redacted to a short correlation hash before logging, so
 draw/stamp/font links never appear verbatim in the log or the viewer.
 
+## Deploy day: 5.0.0
+
+5.0.0 moves the whole API to `/api/v1` with camelCase fields, and the live feed from the
+WebSocket to server-sent events. Nothing answers at the old addresses, so the plugin
+(4.0.0.0), the font host and the Carrd pages move the same day. In order:
+
+1. **Push and deploy.** Once CI is green on `main` it tags `v5.0.0` and
+   `Plugin-v4.0.0.0`. `task deploy` then ships the app and publishes the plugin, since
+   its version is new. The smoke check asks `/api/v1/version`. Migration 74 seeds the
+   tea-room CORS allowlist (`teaRoomOrigins`) with `https://senpan.cafe` and
+   `https://*.senpan.cafe`, so there is nothing to enter first. If the smoke check fails,
+   the deploy puts 4.1.0 back with its database: stop there and change nothing below.
+2. **The font host, straight away.** Public fonts now answer only at
+   `/api/v1/fonts/pub/` (no alias for the old `/api/fonts/pub/`), so
+   `fonts.senpan.cafe` is down, and the Carrd pages' fonts with it, until its vhost
+   points there:
+
+   ```apache
+   ProxyPass        / http://localhost:8080/api/v1/fonts/pub/
+   ProxyPassReverse / http://localhost:8080/api/v1/fonts/pub/
+   ```
+
+   Then `sudo apachectl configtest && sudo systemctl reload apache2`, and check that
+   `https://fonts.senpan.cafe/kit.css` answers from a page that embeds it. The public
+   addresses (`kit.css`, `/f/<token>`) don't change.
+3. **The site's vhost.** Drop the `/api/ws` ProxyPass (and a WebSocket `RewriteRule` for
+   it, if there is one): nothing answers there any more. Give the `/api/` ProxyPass
+   `timeout=3600`, so a quiet event stream isn't cut:
+
+   ```apache
+   ProxyPass        /api/   http://localhost:8080/api/ timeout=3600
+   ProxyPassReverse /api/   http://localhost:8080/api
+   ```
+
+   If `mod_deflate` is on, keep it off the streams (`SetEnvIfNoCase Request_URI
+   "/events$" no-gzip`), or events arrive in batches. Reload Apache as above. The app
+   pings each stream every 25 seconds, so the streams work before this step; the
+   timeout is the belt to it.
+4. **The Carrd pages' tea-room scripts.** The public API moved and is camelCase:
+   - `GET /api/tea-rooms/public` is now `GET /api/v1/tea-rooms/public`, answering
+     `{ teaRooms: [...] }` (was `tea_rooms`).
+   - `GET /api/tea-rooms/public/{number}` is now `GET /api/v1/tea-rooms/public/{number}`,
+     answering the room itself (was wrapped in `tea_room`); an unknown number is a 404.
+   - A room's `room_number`, `room_owner`, `cost_per_half_hour`, `locked_until`,
+     `sort_order` and `created_at` are `roomNumber`, `roomOwner`, `costPerHalfHour`,
+     `lockedUntil`, `sortOrder` and `createdAt`; `lockedUntil` and `createdAt` are
+     `null` for none (were `""`).
+   - The browser reads it cross-origin only from an origin on the allowlist
+     (System -> Settings, "Allowed sites for the public tea-room API"). A page served
+     anywhere but `senpan.cafe` or one of its subdomains needs its origin added there.
+5. **The public stamp-card and drawing-link API.** The links players hold don't change
+   (`/stamp-card/<token>` and `/garapon/<token>` on the site), but the API behind them
+   moved from `/api/stamp-card/` and `/api/garapon/` to `/api/v1/stamp-cards/` and
+   `/api/v1/garapon-players/`. Anything that names the old paths, such as a Cloudflare
+   rule or a saved log filter, takes the new ones.
+6. **Staff update the plugin** in Dalamud (`/xlplugins`, then update). Until they do,
+   its calls fail with "Request failed (404)". Once updated, its status bar shows
+   **Live**.
+7. **Check by hand:** a board receives a draw, a second admin console and the plugin
+   both close the half-time prompt when one answers it, a Carrd page shows its rooms and
+   its fonts, and a stamp card opens from its link.
+
 ## Each deploy
 
 **Scripted (recommended).** From the repo root, on Windows. Only releases ship: the app's newest `v<version>` tag CI made on main, the plugin's newest `Plugin-v<version>` (the tags are fetched first). Each is checked out into a folder of its own under `%TEMP%` and built there, with `npm ci` from its own lockfile, so commits after it, a shared-tooling update or anything uncommitted are never part of it (shared-tooling's newest-release deploy). `task deploy` deploys the app, then the plugin with `-IfNewer`, which skips it when its version is already published. `task deploy:backend` (the app) and `task deploy:plugin` deploy one each, with flags after `--`. The script itself:

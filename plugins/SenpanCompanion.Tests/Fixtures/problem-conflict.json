@@ -1,0 +1,6 @@
+{
+  "$schema": "http://127.0.0.1:8080/api/v1/schemas/ErrorModel.json",
+  "title": "Conflict",
+  "status": 409,
+  "detail": "a winner is already picked: confirm it or pick another"
+}

@@ -7,7 +7,7 @@
     First (for either half): the SPA's build, `task build:web`, which the backend embeds
     Backend (backend/):   golangci-lint - go build - go vet - go test - govulncheck
     Frontend (frontend/): generated code (task gen) - lint:check (ESLint + Stylelint) - format:check - lint:conventions - typecheck - test:coverage - npm audit - test:e2e
-    Plugin (plugins/SenpanCompanion/): dotnet build (warnings=errors) - dotnet format
+    Plugin (plugins/SenpanCompanion/): dotnet build (warnings=errors) - dotnet format - the tests (plugins/SenpanCompanion.Tests)
     Scripts and repo: PSScriptAnalyzer on every tracked script, markdownlint, the shared
     .editorconfig/.gitattributes and the shared-tooling version (shared-tooling's own checks)
 
@@ -130,12 +130,12 @@ if ($run.backend) {
 if ($run.frontend) {
     Push-Location "$root\frontend"
     try {
-        # The API's document and the types built from it (and tygo's, until every domain
-        # is on huma) are committed; this regenerates them (task gen) and fails if a
-        # committed copy is stale, as CI's generated job does.
+        # The API's document, the SPA's types and the plugin's client built from it are
+        # committed; this regenerates them (task gen) and fails if a committed copy is
+        # stale, as CI's generated job does.
         Invoke-Step "frontend: generated code" {
             task gen
-            if ($LASTEXITCODE -eq 0) { git -C $root diff --exit-code -- backend/internal/db frontend/src/api frontend/src/types/api.generated.ts }
+            if ($LASTEXITCODE -eq 0) { git -C $root diff --exit-code -- backend/internal/db frontend/src/api plugins/SenpanCompanion/Api }
         }
         # ESLint (eslint.config.js) for the scripts and templates, Stylelint
         # (stylelint.config.mjs) for the stylesheets and <style> blocks.
@@ -176,6 +176,15 @@ if ($run.plugin) {
             # The analyzers and code style are shared-tooling's (plugins/Directory.Build.props
             # imports them), so the build above is the lint gate; this checks the formatting.
             Invoke-Step "plugin: dotnet format" { dotnet format --verify-no-changes }
+        } finally { Pop-Location }
+        # The tests of what doesn't touch the game, as CI's plugin job runs them: from the
+        # test project's folder, where plugins/global.json picks Microsoft.Testing.Platform.
+        Push-Location "$root\plugins\SenpanCompanion.Tests"
+        try {
+            Invoke-Step "plugin: tests" {
+                dotnet format --verify-no-changes
+                if ($LASTEXITCODE -eq 0) { dotnet test --project SenpanCompanion.Tests.csproj }
+            }
         } finally { Pop-Location }
     }
 }

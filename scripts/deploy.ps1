@@ -33,7 +33,7 @@
          snapshot, since the new one may have migrated a schema the old one refuses. Then
          swap the web root's .htaccess in, keeping the previous in .deploy-backup: it
          serves the web root's own folders and proxies the rest to the app.
-      4. Fetch the site from here, through Cloudflare: /healthz and /api/version naming
+      4. Fetch the site from here, through Cloudflare: /healthz and /api/v1/version naming
          this release, the page naming its entry script, and that script. If any fails,
          the previous .htaccess goes back, then the previous binary with the snapshot.
          Once they pass, the host records the release.
@@ -197,7 +197,7 @@ $release = if ($Target -eq 'plugin') {
     Get-DeployRelease -Path $repoRoot
 }
 $version = $release.Tag
-# The version the app reports (GET /api/version, /healthz): the tag without its v.
+# The version the app reports (GET /api/v1/version, /healthz): the tag without its v.
 $appVersion = $version -replace '^v', ''
 
 Write-Host "Deploy target: $Target, release $version -> $($settings.VpsUser)@$($settings.VpsHost)" -ForegroundColor Yellow
@@ -394,7 +394,7 @@ if [ -n "$db" ] && [ -f "$db" ]; then echo "db_owner=$(stat -c '%U:%G' "$db")"; 
     $token = [guid]::NewGuid().ToString('N').Substring(0, 12)
     $checks = @(
         @{ Url = "$site/healthz?deploy=$token"; Contains = "`"version`":`"$appVersion`"" }
-        @{ Url = "$site/api/version?deploy=$token"; Contains = "`"$appVersion`"" }
+        @{ Url = "$site/api/v1/version?deploy=$token"; Contains = "`"$appVersion`"" }
         @{ Url = "$site/?deploy=$token"; Contains = $entryScript }
         @{ Url = "$site$entryScript" }
     )

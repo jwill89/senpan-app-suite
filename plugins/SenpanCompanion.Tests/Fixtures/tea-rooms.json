@@ -1,0 +1,45 @@
+{
+  "$schema": "http://127.0.0.1:8080/api/v1/schemas/TeaRoomList.json",
+  "teaRooms": [
+    {
+      "color": "#c0392b",
+      "costPerHalfHour": 250000,
+      "createdAt": "2026-10-01T12:00:00Z",
+      "description": "",
+      "discounted": false,
+      "hashtags": "#cozy",
+      "id": 1,
+      "image": "",
+      "lockable": true,
+      "locked": true,
+      "lockedUntil": "2026-11-10T21:30:00Z",
+      "name": "Sakura Room",
+      "open": true,
+      "roomNumber": "3",
+      "roomOwner": "Y'shtola",
+      "seasonal": false,
+      "sortOrder": 0,
+      "subtitle": ""
+    },
+    {
+      "color": "",
+      "costPerHalfHour": 100000,
+      "createdAt": null,
+      "description": "",
+      "discounted": true,
+      "hashtags": "",
+      "id": 2,
+      "image": "",
+      "lockable": false,
+      "locked": false,
+      "lockedUntil": null,
+      "name": "Garden Room",
+      "open": false,
+      "roomNumber": "7",
+      "roomOwner": "",
+      "seasonal": true,
+      "sortOrder": 1,
+      "subtitle": ""
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "$schema": "http://127.0.0.1:8080/api/v1/schemas/GameState.json",
+  "drawDelay": 5,
+  "game": {
+    "autoEnabled": false,
+    "autoInterval": 30,
+    "calledNumbers": [12, 47],
+    "createdAt": "2026-11-10T20:00:00Z",
+    "halftime": { "autoPaused": true, "gameId": 7 },
+    "id": 7,
+    "lastDraw": { "callOrder": 2, "letter": "G", "number": 47, "playersAt": "2026-11-10T20:05:05Z" },
+    "minigameAlerted": false,
+    "patterns": [
+      {
+        "id": 3,
+        "name": "Top line",
+        "patternData": [
+          [true, true, true, true, true],
+          [false, false, false, false, false],
+          [false, false, false, false, false],
+          [false, false, false, false, false],
+          [false, false, false, false, false]
+        ]
+      }
+    ],
+    "totalCalled": 2,
+    "yoeverCount": 4,
+    "yoeverEnabled": true
+  },
+  "gameDetails": "**Prize:** 1,000,000 gil",
+  "winners": ["ABC234"]
+}

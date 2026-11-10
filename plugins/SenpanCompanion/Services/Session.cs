@@ -1,12 +1,11 @@
 using System;
 using System.Collections.Generic;
-using System.Net;
 using System.Threading.Tasks;
 using SenpanCompanion.Api;
 
 namespace SenpanCompanion.Services;
 
-/// <summary>Server page-permission keys (mirror internal/server/permissions.go).</summary>
+/// <summary>Server page-permission keys (mirror internal/permissions).</summary>
 internal static class Perms
 {
     public const string BingoGame = "bingo-game";
@@ -21,13 +20,13 @@ internal static class Perms
 }
 
 /// <summary>
-/// Caches the authenticated account's identity + permissions (from GET /api/auth)
+/// Caches the authenticated account's identity + permissions (from GET /api/v1/me)
 /// so the UI can hide panels the user can't access - mirroring the web, which hides
 /// nav sections you lack permission for. Admins implicitly hold every permission.
 /// </summary>
 public sealed class Session
 {
-    private readonly ApiClient api;
+    private readonly SenpanApi api;
     private readonly object gate = new();
 
     private long lastAttempt;
@@ -48,7 +47,7 @@ public sealed class Session
     public bool IsAdmin { get; private set; }
     public string Username { get; private set; } = string.Empty;
 
-    public Session(ApiClient api) => this.api = api;
+    public Session(SenpanApi api) => this.api = api;
 
     /// <summary>True if the account holds the permission (admins hold everything).</summary>
     public bool Has(string permission) => this.IsAdmin || this.permissions.Contains(permission);
@@ -100,14 +99,14 @@ public sealed class Session
     {
         try
         {
-            var res = await this.api.CheckAuthAsync().ConfigureAwait(false);
+            var account = (await this.api.GetMeAsync().ConfigureAwait(false)).Account;
             await Plugin.Framework.RunOnFrameworkThread(() =>
             {
-                if (res is { Authenticated: true, User: not null })
+                if (account != null)
                 {
-                    this.IsAdmin = res.User.IsAdmin;
-                    this.Username = res.User.Username;
-                    this.permissions = new HashSet<string>(res.User.Permissions);
+                    this.IsAdmin = account.IsAdmin;
+                    this.Username = account.Username;
+                    this.permissions = new HashSet<string>(account.Permissions);
                     this.Loaded = true;
                     this.LoadFailed = false;
                 }
@@ -124,7 +123,7 @@ public sealed class Session
                 }
             }).ConfigureAwait(false);
         }
-        catch (ApiException ex) when (ex.Status is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+        catch (ApiException ex) when (ex.StatusCode is 401 or 403)
         {
             // Token rejected outright -> terminal; back off until the token changes.
             // Marshal the state write to the framework thread (Dalamud has no SyncContext).

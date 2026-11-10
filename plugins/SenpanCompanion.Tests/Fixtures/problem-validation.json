@@ -1,0 +1,13 @@
+{
+  "$schema": "http://127.0.0.1:8080/api/v1/schemas/ErrorModel.json",
+  "title": "Unprocessable Entity",
+  "status": 422,
+  "detail": "validation failed",
+  "errors": [
+    {
+      "message": "expected number <= 100",
+      "location": "body.numEntries",
+      "value": 1000
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "$schema": "http://127.0.0.1:8080/api/v1/schemas/RaffleEntryList.json",
+  "entries": [
+    {
+      "amountWaived": 0,
+      "characterName": "Tataru Taru",
+      "createdAt": "2026-11-02T19:00:00Z",
+      "id": 11,
+      "numEntries": 3,
+      "paid": false,
+      "paidEntries": 1,
+      "paymentState": "partial",
+      "raffleId": 9,
+      "world": "Famfrit"
+    },
+    {
+      "amountWaived": 50000,
+      "characterName": "Krile Baldesion",
+      "createdAt": null,
+      "id": 12,
+      "numEntries": 1,
+      "paid": true,
+      "paidEntries": 1,
+      "paymentState": "paid",
+      "raffleId": 9,
+      "world": "Balmung"
+    }
+  ]
+}

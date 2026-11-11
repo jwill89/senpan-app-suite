@@ -33,7 +33,7 @@ same REST API and live event stream, so its changes still reach the website. See
 (Dalamud)** below.
 
 **At a glance:** Vue 3 SFCs + TypeScript (strict) - Pinia (setup stores) - Vue
-Router (history mode, lazy routes) - Go 1.26+ stdlib HTTP - SQLite (WAL) -
+Router (history mode, lazy routes) - Go 1.27.4+ stdlib HTTP - SQLite (WAL) -
 server-sent events - per-user accounts (argon2id) + WebAuthn passkeys + optional
 Cloudflare Turnstile + per-page permissions - embedded tzdata + background
 schedulers (Discord embeds) - Vitest + Vue Test Utils - C#/.NET 10 Dalamud plugin
@@ -100,8 +100,8 @@ immediately**. See **Authentication & authorization** below.
 +-- shared/                           <- the shared-tooling submodule (lint configs, the CI workflows' scripts, SharedDeploy, repo files) - see **Shared tooling**
 +-- Taskfile.yml                      <- day-to-day commands (`task` lists them); includes shared/repo/Taskfile.yml as shared:*
 +-- scripts/                          <- check.ps1 (everything CI runs, on demand) + deploy.ps1 (on SharedDeploy; settings in the untracked deploy.config.ps1)
-+-- deploy/                           <- host artifacts: apache-vhost.conf (the three names' VirtualHosts, installed by the deploy), senpan.service (the unit's template), persistent images/
-+-- docs/ops.md                       <- the deploy and host guide: the data folder, the vhost, one-time server setup, each deploy, backups, and the steps a release needs beyond the deploy (Upgrading to x.y.z)
++-- deploy/                           <- host artifacts: senpan.service (the unit) and apache-vhost.conf (the three names' VirtualHosts), both installed by every app deploy with the host's values filled in from the deploy config, and the persistent images/
++-- docs/ops.md                       <- the deploy and host guide: the data folder, the vhost, the env file, one-time server setup, each deploy, backups, and the steps a release needs beyond the deploy (Upgrading to x.y.z)
 +-- backend/                          <- Go backend
 |   +-- main.go                       <- Entry point: flags, DB init, the embedded SPA, server start
 |   +-- sqlc.yaml                     <- sqlc 1.31.1: internal/db/queries/*.sql against schema.sql -> internal/db (`task gen`)
@@ -191,7 +191,6 @@ Each place below is code that still does what the shared rules now rule out, che
 
 Found in the docs and checked against the code, with no follow-up planned yet. The owner decides whether each moves or stays; one that stays gets its reason here:
 
-- **The unit is not shipped.** Every app deploy installs the vhost from `deploy/apache-vhost.conf` where it differs (`Install-ServiceBinary -Vhost`), checked with `apachectl configtest`, but the systemd unit is changed on the host by hand: `deploy/senpan.service` is a template, and the deploy only reads the running unit. The guide ships the units from repo templates too, with the host values filled from the deploy config.
 - **Client address.** `logClientIP` (`server/ratelimit.go`) trusts `CF-Connecting-IP`, then the leftmost `X-Forwarded-For`, from a loopback peer. The guide has Apache restore the address with `mod_remoteip` and the app read the last `X-Forwarded-For` entry, never `CF-Connecting-IP`; the droplet's `mod_remoteip` change comes first.
 - **Bootstrap admin.** Migration v22 seeds `admin`/`admin`, protected by its name. The guide makes the first admin with a command run on the host, and protects the owner accounts named in config. It stays (decided 2026-11-07): the seeded password is changed as soon as an install creates it, and otherwise the account serves only development.
 - **Content-Security-Policy.** The app sets the policy on the SPA (`internal/web`), the one Apache set before 4.0.0, with `style-src 'unsafe-inline'` and `https:` sources. The guide sets it in the app with a per-response nonce, never `'unsafe-inline'`, naming only the hosts the app uses.
@@ -896,6 +895,8 @@ Since 4.0.0 the app has one version, for the SPA and the API together, since one
 
 Only the maintainer deploys, from the owner's PC, through `scripts/deploy.ps1` on SharedDeploy, and only releases ship: the newest `v<version>` CI tagged on main for the app, the newest `Plugin-v<version>` for the plugin, each built in a checkout of its own (shared-tooling's newest-release deploy). `task deploy` deploys the app, then the plugin when its version is new (`-IfNewer`); an app release the host already runs is skipped (`-Force` deploys it again). `task deploy:backend` and `task deploy:plugin` deploy one each, with flags after `--`. The settings live in the untracked `scripts/deploy.config.ps1`; `docs/ops.md` has the whole run.
 
+Every app deploy also installs the service's unit (`deploy/senpan.service`) and the vhost, each with the host's values filled in from those settings (`ServiceName`, `ServiceUser`, `RemoteOptDir`, `AppPort`, `EnvFile`, `CertName`) and the previous copy kept for the rollback. Neither is edited on the host: a change goes into its template and ships with the next deploy, and a drop-in on the unit, which would override the template, is named by the deploy. A placeholder is filled by `Expand-DeployTemplate` in `scripts/deploy.ps1`, which stops the run on one a template lacks or one nothing fills, so a new placeholder gets its value there. The unit holds no secret: the Turnstile and session secrets are the variables of `/etc/<service>/<service>.env`, root's alone, which the unit loads with `EnvironmentFile=` (no leading `-`, so a missing file stops the start instead of starting the app with the bot check off) and which the deploy requires before it builds anything. The vhost is one file holding both ports, `sites-available/<service>.conf`, and the deploy disables any other enabled site serving its names (certbot's `-le-ssl` file, say); certbot never edits it. The app listens on the loopback only (`127.0.0.1:<AppPort>`), where Apache proxies to it. Everything the app writes is in its data folder, and the unit's `ReadWritePaths` is that folder alone, so the binary beside it is read-only to the running service: a new place the app writes goes under `-data`, never beside the binary (the log file is the one exception, in `/var/log/senpan` through `LogsDirectory`).
+
 The Go binary serves everything: the API, its event streams, the SPA it embeds and the
 public files of its data folder. Apache serves nothing from a document root: the vhost
 (`deploy/apache-vhost.conf`, which every app deploy installs where it differs) proxies
@@ -906,7 +907,7 @@ repository, beside the database, so redeploys never touch them (full guide in
 `docs/ops.md`):
 
 ```text
-/opt/senpan/data/    <- -data on the unit's ExecStart (the deploy reads it)
+/opt/senpan/data/    <- the unit's -data (<RemoteOptDir>/data in the deploy)
 +-- database.sqlite  <- -db; backups/ beside it holds the daily copies
 +-- images/          <- deploy/images/ on a new host (PERSISTENT: logo/favicon/banner/PWA icons + every image category, bookclub/, ema_plaques/); served at /images/
 +-- fonts/           <- (PERSISTENT: admin-uploaded font files + .woff2/; never served as files - streamed via tokenized URLs; fonts.senpan.cafe proxies to /api/v1/fonts/pub/)
@@ -915,9 +916,9 @@ repository, beside the database, so redeploys never touch them (full guide in
 \-- sounds/          <- the game's sound effects (4 MP3s), kept out of the repo and every build, copied in by hand; served at /sounds/
 ```
 
-Until 5.2.0 these folders were Apache's document root (`/var/www/apps.senpan.cafe`, passed
-as `-webroot`); 5.2.0's first deploy moved them (see **Upgrading to 5.2.0** in
-`docs/ops.md`). `-webroot` is gone: a unit still passing it fails to start.
+`-webroot` (these folders as Apache's document root) is gone: a unit still passing it fails
+to start, and the deploy stops on a host whose unit does (see **Upgrading to 5.2.0** in
+`docs/ops.md`).
 
 - Run the Go server with `-data <folder>`; uploads are written under
   `<data>/images/<category>/`, `<data>/images/{bookclub,ema_plaques}/`,

@@ -22,7 +22,7 @@ jobs:
   # are the committed ones, which the generated job checks. The build is uploaded for
   # the backend job, since the binary embeds it.
   frontend:
-    uses: jwill89/shared-tooling/.github/workflows/web.yml@v2.7.0
+    uses: jwill89/shared-tooling/.github/workflows/web.yml@v2.8.0
     with:
       dir: frontend
       fontawesome: true
@@ -86,7 +86,7 @@ jobs:
   # frontend job's build, which the binary embeds, so every Go step compiles with it.
   backend:
     needs: frontend
-    uses: jwill89/shared-tooling/.github/workflows/go.yml@v2.7.0
+    uses: jwill89/shared-tooling/.github/workflows/go.yml@v2.8.0
     with:
       dir: backend
       download-artifact: web-dist
@@ -105,7 +105,7 @@ jobs:
   # plugins/Directory.Build.props), dotnet format, and the tests of everything that
   # doesn't touch the game (the client, the live stream's reader, the pricing).
   plugin:
-    uses: jwill89/shared-tooling/.github/workflows/dotnet.yml@v2.7.0
+    uses: jwill89/shared-tooling/.github/workflows/dotnet.yml@v2.8.0
     with:
       projects: plugins/SenpanCompanion
       test-project: plugins/SenpanCompanion.Tests
@@ -118,7 +118,7 @@ jobs:
   # board, see a draw arrive live and keep a stamp across a reload.
   e2e:
     needs: [frontend, backend]
-    uses: jwill89/shared-tooling/.github/workflows/e2e.yml@v2.7.0
+    uses: jwill89/shared-tooling/.github/workflows/e2e.yml@v2.8.0
     with:
       dir: frontend
       go-version-file: backend/go.mod
@@ -128,15 +128,15 @@ jobs:
       FONTAWESOME_TOKEN: ${{ secrets.FONTAWESOME_NPM_TOKEN }}
 
   scripts:
-    uses: jwill89/shared-tooling/.github/workflows/pwsh.yml@v2.7.0
+    uses: jwill89/shared-tooling/.github/workflows/pwsh.yml@v2.8.0
 
   docs:
-    uses: jwill89/shared-tooling/.github/workflows/docs.yml@v2.7.0
+    uses: jwill89/shared-tooling/.github/workflows/docs.yml@v2.8.0
 
   # OSV-Scanner over every lockfile. An osv-scanner.toml beside a lockfile passes over the
   # advisories that reach only lint, test or build tooling.
   osv:
-    uses: jwill89/shared-tooling/.github/workflows/osv.yml@v2.7.0
+    uses: jwill89/shared-tooling/.github/workflows/osv.yml@v2.8.0
     permissions:
       contents: read
       actions: read

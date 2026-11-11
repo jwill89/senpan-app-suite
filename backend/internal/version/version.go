@@ -14,4 +14,4 @@
 package version
 
 // Version is the app's current semantic version, frontend/package.json's.
-const Version = "5.2.0"
+const Version = "5.3.0"

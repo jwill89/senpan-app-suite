@@ -16,6 +16,21 @@ The app's major version rises for a breaking change to the JSON API or the live 
 
 The SPA and the API, one binary, one version (since 4.0.0).
 
+### [5.3.0] - 2026-11-11
+
+Needs a one-time step at deploy (docs/ops.md, Upgrading to 5.3.0).
+
+#### Changed
+
+- The deploy installs the service's systemd unit and the Apache vhost from templates in the repo, so the host runs what the repo says, and disables any other enabled Apache site serving the vhost's names. The unit is no longer edited on the host.
+- The service reads its secrets, the Turnstile secret and the session secret, from a root-only env file instead of `Environment=` lines in its unit. The deploy stops before building anything if that file is missing or readable by others, or if the unit still passes `-webroot`.
+- The deploy needs a `ServiceUser` setting (the account the service runs as) and takes an optional `AppPort`, `EnvFile` and `HostKey`; `RemoteDbPath` is gone.
+- The app listens on the loopback address only.
+
+#### Security
+
+- The server is built with Go 1.27.4, which fixes a way it could crash while reading a request.
+
 ### [5.2.0] - 2026-11-10
 
 Needs a one-time step at deploy (docs/ops.md, Upgrading to 5.2.0).

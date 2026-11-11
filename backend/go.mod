@@ -1,8 +1,6 @@
 module app-suite
 
-go 1.27.1
-
-toolchain go1.27.3
+go 1.27.4
 
 require (
 	github.com/DeRuina/timberjack v1.4.10
@@ -12,7 +10,7 @@ require (
 	github.com/go-webauthn/webauthn v0.18.2
 	github.com/pressly/goose/v3 v3.30.0
 	github.com/tdewolff/font v0.0.0-20261010204837-88a7f6b56918
-	golang.org/x/crypto v0.58.0
+	golang.org/x/crypto v0.59.0
 	golang.org/x/image v0.48.0
 	modernc.org/sqlite v1.62.0
 )

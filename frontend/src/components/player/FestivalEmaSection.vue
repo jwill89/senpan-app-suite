@@ -167,8 +167,7 @@ async function sendRequest(): Promise<void> {
     </p>
     <p v-else-if="nextWindow" class="festival-ema-day">
       <font-awesome-icon :icon="['fad', 'calendar-days']" />
-      The next plaque day is <strong>{{ nextWindow.label }}</strong
-      >,
+      The next plaque day is <strong>{{ nextWindow.label }}</strong>,
       {{ formatEventRange(nextWindow.startAt, nextWindow.endAt) }}
     </p>
     <p v-else class="festival-ema-day text-muted">The plaque days for this festival are over.</p>

@@ -86,8 +86,7 @@ function when(ts: string | null): string {
     <div v-if="garapons.lastWin" class="callout">
       <BallSwatch :color="garapons.lastWin.ballColor" />
       <font-awesome-icon :icon="['fad', 'champagne-glasses']" /> Congratulations, you've won
-      <strong>{{ garapons.lastWin.prizeName }}</strong
-      >!
+      <strong>{{ garapons.lastWin.prizeName }}</strong>!
     </div>
 
     <!-- The drum (open + a link to draw with) -->

@@ -439,8 +439,10 @@ const linkTarget = computed(() => (props.embedded ? '_blank' : undefined))
                 <!-- The label is the part a visitor scans for ("Day 1"), so it
                      carries the weight; the range beside it stays plain. -->
                 <span>
-                  <strong v-if="t.label.trim()">{{ t.label.trim() }}</strong
-                  ><template v-if="t.label.trim()"> - </template
+                  <strong v-if="t.label.trim()">{{ t.label.trim() }}</strong><template
+                    v-if="t.label.trim()"
+                  >
+                    - </template
                   >{{ formatEventRange(t.start, t.end) }}
                 </span>
               </li>

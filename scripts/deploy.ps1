@@ -3,7 +3,7 @@
 
 <#
 .SYNOPSIS
-    Deploy the Senpan App Suite's newest release to the host: the app (one binary, the SPA inside it), or the Dalamud plugin.
+    Deploy the Senpan App Suite's newest release to the host: the app (one binary, the SPA inside it, with the service's unit and the Apache vhost), or the Dalamud plugin.
 
 .DESCRIPTION
     Built on the SharedDeploy module (shared/deploy/pwsh): one archive, one held SSH
@@ -17,53 +17,37 @@
     embeds the SPA's build and serves the data folder's public files.
 
     app (the default), on one SSH connection held for the whole run:
-      1. Read the service from the host - the user it runs as, and the database (-db),
-         listen address (-addr) and data folder (-data) on its ExecStart - and the release
-         the host last took. When that is this release, nothing is done (-Force deploys it
-         again). Nothing changes if the unit is missing or names a different database than
-         RemoteDbPath.
+      1. When the host already runs this release, nothing is done (-Force deploys it
+         again). Otherwise the host is read, before anything is built or changed: the
+         service's account and data folder are there, its env file is root's alone, and the
+         unit does not pass -webroot. A unit that does keeps the app's files in a web root,
+         and the unit this deploy installs looks for them in the data folder. A drop-in on
+         the unit is named, since it overrides the template.
       2. Build the release: the front end into backend/internal/web/dist, then the static
-         linux/amd64 binary that embeds it. Pack it with the Apache vhost
-         (deploy/apache-vhost.conf, with the app's address and CertName filled in) into one
-         archive, and upload it. A broken build changes nothing.
-      3. One remote run checks the archive's SHA-256 and file count, then: install the
-         vhost where it differs and check it with apachectl configtest, stop the service,
+         linux/amd64 binary that embeds it. Pack it with the service's unit
+         (deploy/senpan.service) and the Apache vhost (deploy/apache-vhost.conf), their
+         placeholders filled from the settings, into one archive, and upload it. A broken
+         build changes nothing.
+      3. One remote run checks the archive's SHA-256 and file count, then: try the
+         vhost on a copy of Apache's config and install it as sites-available/<service>.conf
+         where it differs, retiring any other enabled site that serves its names (certbot's
+         -le-ssl file, say) and checking it with apachectl configtest, stop the service,
          keep app-suite.old, snapshot the database to <db>.pre-<time>.gz (sqlite3 .backup,
-         checked and compressed, newest three kept), install the binary, owned by the
-         account the unit runs as, start it, and wait for /healthz to answer on the host; if
-         it does not, the previous binary and vhost go back with the snapshot, since the new
-         binary may have migrated a schema the previous one refuses. Apache reloads once it does.
+         checked and compressed, newest three kept), install the unit where it differs (the
+         previous kept as <service>.service.old beside the binary) and the binary, owned by
+         the service's account, start it, and wait for /healthz to answer on the host; if
+         it does not, the previous binary, unit and vhost go back with the snapshot, since
+         the new binary may have migrated a schema the previous one refuses. Apache reloads
+         once it does.
       4. Fetch the site from here, through Cloudflare: /healthz and /api/v1/version naming
          this release, the page naming its entry script, that script, a picture and the
-         plugin index. If any fails, the previous binary, vhost and snapshot go back. Once
-         they pass, the host records the release.
+         plugin index. If any fails, the previous binary, unit, vhost and snapshot go back.
+         Once they pass, the host records the release.
       5. Check the daily database backup (Install-BackupTimer's shared job, run as the
          service's user at 10:00 UTC: a VACUUM INTO copy in a backups folder beside the
          database, named <service>-YYYY-MM-DD.sqlite.gz, 28 days kept), then pull an online
          snapshot of the live database into devdata/database.sqlite, keeping the three
          previous local copies (skip with -NoDbPull).
-
-    The move out of the web root. A unit that still passes -webroot (Apache serving the
-    folders from a document root) is moved in the same run, while the service is stopped:
-      - Before anything stops: the folders to move are there and the data folder
-        (<RemoteOptDir>/data) holds none of them; the sites now serving the vhost's names
-        are found from apachectl -S and serve no other name; Apache takes the new vhost in
-        their place, tried on a copy of its config; and each folder, Apache's config, the
-        unit, the web root's .htaccess and its dist/sounds are backed up, compressed and
-        checked, to ~/senpan-before-data-move-<time> (root's alone).
-      - After the stop: images, fonts, carrd and plugin move whole into the data folder
-        (the fonts with their converted copies), the web root's dist/sounds becomes the
-        data folder's sounds/ unless it has one, the unit's -webroot becomes -data and
-        its ReadWritePaths drop the web root's folders for the data folder, those sites
-        are disabled and the vhost enabled, and apachectl configtest must pass. Apache
-        reloads once the new release answers.
-      - After the start, every name the vhost serves is asked on the host, through Apache,
-        for a font file as a plain file: anything but a refusal (400, 403 or 404, redirects
-        followed) rolls the run back.
-      - Any failure, from the stop to the smoke check, puts everything back: the folders,
-        the unit and the sites with it.
-      The move's shell travels in the archive (data-move*.sh), and the steps source it, so
-      the host run's command stays within what plink's shared connection carries.
 
     plugin: build the release's plugin from clean and lay out its repository (latest.zip,
     and plugins/pluginmaster.json with ?v=<version> on its download links), refuse a
@@ -74,7 +58,7 @@
 
     Settings resolve from the parameter, then $env:DEPLOY_*, then the git-ignored
     scripts/deploy.config.ps1 (copy scripts/deploy.config.example.ps1). Nothing about the
-    host is in this file.
+    host is in this file or in the unit and vhost templates.
 
     Needs PuTTY's plink 0.85 or later, with a key that has a passphrase loaded into
     Pageant first: pageant.exe "<KeyPath>". The host needs sqlite3 and curl, and Apache
@@ -84,9 +68,10 @@
 
 .PARAMETER Target
     What to deploy: app (the default: the binary, which serves the API, the SPA and the
-    data folder's public files, with the Apache vhost) or plugin (the Dalamud custom repo:
-    SenpanCompanionAdmin/latest.zip and pluginmaster.json). task deploy runs app, then
-    plugin with -IfNewer; task deploy:backend and deploy:plugin run one each.
+    data folder's public files, with the service's unit and the Apache vhost) or plugin
+    (the Dalamud custom repo: SenpanCompanionAdmin/latest.zip and pluginmaster.json). task
+    deploy runs app, then plugin with -IfNewer; task deploy:backend and deploy:plugin run
+    one each.
 
 .PARAMETER IfNewer
     With -Target plugin: a plugin whose version is already the published one is left
@@ -108,20 +93,33 @@
     Path to the PuTTY .ppk private key. If omitted, resolved from $env:DEPLOY_KEY_PATH,
     then $DeployKeyPath.
 
+.PARAMETER HostKey
+    Optional host key fingerprint (SHA256:...) for the SSH connection. If omitted, resolved
+    from $env:DEPLOY_HOST_KEY, then $DeployHostKey; without one plink uses its cached key.
+
 .PARAMETER ServiceName
-    The app's systemd service. Its unit lives only on the host; this script never ships
-    it. If omitted, resolved from $env:DEPLOY_SERVICE_NAME, then $DeployServiceName.
+    The app's systemd service. If omitted, resolved from $env:DEPLOY_SERVICE_NAME, then
+    $DeployServiceName.
+
+.PARAMETER ServiceUser
+    The account the service runs as: the unit's User= and Group=, and the owner of the
+    binary and the plugin repository. Never root. If omitted, resolved from
+    $env:DEPLOY_SERVICE_USER, then $DeployServiceUser.
 
 .PARAMETER RemoteOptDir
-    Directory on the host holding the binary (app-suite). Its data folder, where a unit
-    that still passes -webroot has its files moved, is <RemoteOptDir>/data. If omitted,
+    Directory on the host holding the binary (app-suite). Its data folder, with the
+    database, the uploads and the plugin repository, is <RemoteOptDir>/data. If omitted,
     resolved from $env:DEPLOY_REMOTE_OPT_DIR, then $DeployRemoteOptDir.
 
-.PARAMETER RemoteDbPath
-    The live SQLite database on the host. Normally left unset: the deploy reads it from
-    the -db on the service's ExecStart. When set (here, $env:DEPLOY_REMOTE_DB_PATH or
-    $DeployRemoteDbPath), it must match that path, or the deploy stops before anything
-    changes; it is used on its own only when the unit names no -db.
+.PARAMETER EnvFile
+    The env file holding the service's secrets, root's alone, which the unit loads. If
+    omitted, resolved from $env:DEPLOY_ENV_FILE, then $DeployEnvFile, then
+    /etc/<service>/<service>.env.
+
+.PARAMETER AppPort
+    The port the app listens on, on the loopback address: the unit's -addr, the vhost's
+    proxy and the health check. If omitted, resolved from $env:DEPLOY_APP_PORT, then
+    $DeployAppPort, then 8080.
 
 .PARAMETER SiteUrl
     The site's public address, fetched after the deploy as visitors reach it. If omitted,
@@ -137,10 +135,9 @@
     The untracked settings file; by default scripts/deploy.config.ps1. It need not exist.
 
 .PARAMETER NoBackup
-    Remove the rollback copies (app-suite.old, the previous vhost, plugin.old) once the
-    run succeeds on the host. The smoke check then has nothing to go back to, so a failure
-    only stops the run. The database snapshot is still taken. A run that moves the files
-    out of the web root refuses it, since that move is undone through the previous release.
+    Remove the rollback copies (app-suite.old, the previous unit and vhost, plugin.old)
+    once the run succeeds on the host. The smoke check then has nothing to go back to, so a
+    failure only stops the run. The database snapshot is still taken.
 
 .PARAMETER NoDbPull
     Skip refreshing the local dev DB (devdata/database.sqlite) from live after an app
@@ -168,9 +165,12 @@ param(
     [string]$VpsHost,
     [string]$VpsUser,
     [string]$KeyPath,
+    [string]$HostKey,
     [string]$ServiceName,
+    [string]$ServiceUser,
     [string]$RemoteOptDir,
-    [string]$RemoteDbPath,
+    [string]$AppPort,
+    [string]$EnvFile,
     [string]$SiteUrl,
     [string]$CertName,
     [string]$ConfigPath = (Join-Path -Path $PSScriptRoot -ChildPath 'deploy.config.ps1'),
@@ -186,43 +186,6 @@ $PSNativeCommandUseErrorActionPreference = $false
 Import-Module (Join-Path $PSScriptRoot '..\shared\deploy\pwsh\SharedDeploy.psd1') -Force
 trap { Close-DeployConnection; Write-Host "`nERROR: $($_.Exception.Message)" -ForegroundColor Red; exit 1 }
 
-$settings = Resolve-DeploySetting -ConfigPath $ConfigPath -Value @{
-    VpsHost      = $VpsHost
-    VpsUser      = $VpsUser
-    KeyPath      = $KeyPath
-    ServiceName  = $ServiceName
-    RemoteOptDir = $RemoteOptDir
-    RemoteDbPath = $RemoteDbPath
-    SiteUrl      = $SiteUrl
-    CertName     = $CertName
-} -Required (@('VpsHost', 'VpsUser', 'KeyPath', 'ServiceName', 'RemoteOptDir') + @(if ($Target -eq 'app') { 'CertName' })) -Default @{
-    # Public already (plugins/pluginmaster.json's download links), so not a host secret.
-    SiteUrl = 'https://apps.senpan.cafe'
-}
-
-$service = $settings.ServiceName
-if ($service -notmatch '^[A-Za-z0-9_.@-]+$') { throw "ServiceName '$service' is not a systemd service name." }
-$optDir = $settings.RemoteOptDir.TrimEnd('/')
-$remoteBinary = "$optDir/app-suite"
-$site = $settings.SiteUrl.TrimEnd('/')
-if ($site -notmatch '^https?://[^/\s]+$') {
-    throw "SiteUrl must be the site's address alone, such as https://example.com, not '$($settings.SiteUrl)'."
-}
-$certName = [string]$settings.CertName
-if ($Target -eq 'app' -and $certName -notmatch '^[A-Za-z0-9][A-Za-z0-9.-]*$') {
-    throw "CertName must be a certificate's folder name under /etc/letsencrypt/live, such as example.com, not '$certName'."
-}
-
-$repoRoot = Split-Path -Path $PSScriptRoot -Parent
-# The dev database the pull refreshes; git-ignored, so this checkout's, never the release's.
-$devDb = Join-Path $repoRoot 'devdata\database.sqlite'
-# What the host records as running, for the next deploy to compare with.
-$record = 'senpan'
-# The vhost every app deploy installs, named for the service.
-$vhostPath = "/etc/apache2/sites-available/$service.conf"
-# The folders the move carries from the web root into the data folder.
-$dataFolders = 'images fonts carrd plugin'
-
 # A path the remote scripts take literally: absolute, and nothing a shell or sed reads
 # as anything but itself.
 function Test-RemotePath {
@@ -232,51 +195,125 @@ function Test-RemotePath {
     $Path -match '^/[A-Za-z0-9._/@+-]*[A-Za-z0-9._@+-]$' -and $Path -notmatch '(^|/)\.\.?(/|$)'
 }
 
-# plink carries a remote command in one packet over its shared connection, whose buffer
-# holds about 16 KB; a longer one ends the pipe (Error 109) before the host runs any of
-# it. The limit leaves room for the packet's own fields.
-$commandLimit = 15000
-function Assert-CommandFit {
-    [CmdletBinding()]
-    param([string]$Script, [string]$What)
-    $size = [System.Text.Encoding]::UTF8.GetByteCount(($Script -replace "`r", ''))
-    if ($size -gt $commandLimit) {
-        throw "$What is $size bytes, more than the $commandLimit plink's shared connection carries in one command; nothing was changed."
-    }
+$settings = Resolve-DeploySetting -ConfigPath $ConfigPath -Value @{
+    VpsHost      = $VpsHost
+    VpsUser      = $VpsUser
+    KeyPath      = $KeyPath
+    HostKey      = $HostKey
+    ServiceName  = $ServiceName
+    ServiceUser  = $ServiceUser
+    RemoteOptDir = $RemoteOptDir
+    AppPort      = $AppPort
+    EnvFile      = $EnvFile
+    SiteUrl      = $SiteUrl
+    CertName     = $CertName
+} -Required (@('VpsHost', 'VpsUser', 'KeyPath', 'ServiceName', 'ServiceUser', 'RemoteOptDir') + @(if ($Target -eq 'app') { 'CertName' })) -Default @{
+    # Public already (plugins/pluginmaster.json's download links), so not a host secret.
+    SiteUrl = 'https://apps.senpan.cafe'
+    # The app's own default port (backend/main.go).
+    AppPort = '8080'
 }
 
-# The service as the host runs it: the unit lives only there, so it is the one place
-# that says where the live database is (-db), where the app listens (-addr), where its
-# data folder is (-data, or -webroot on a unit not yet moved) and whom the service runs as.
-function Read-ServiceUnit {
+$service = $settings.ServiceName
+if ($service -notmatch '^[A-Za-z0-9_.@-]+$') { throw "ServiceName '$service' is not a systemd service name." }
+$serviceUser = [string]$settings.ServiceUser
+if ($serviceUser -notmatch '^[a-z_][a-z0-9_-]*$' -or $serviceUser -eq 'root') {
+    throw "ServiceUser must be the service's own unprivileged account, such as myapp, not '$serviceUser'."
+}
+$optDir = $settings.RemoteOptDir.TrimEnd('/')
+if (-not (Test-RemotePath -Path $optDir)) { throw "RemoteOptDir '$optDir' is not a plain absolute path." }
+$port = [string]$settings.AppPort
+if ($port -notmatch '^\d{4,5}$' -or [int]$port -lt 1024 -or [int]$port -gt 65535) {
+    throw "AppPort must be a port from 1024 to 65535, not '$port'."
+}
+$site = $settings.SiteUrl.TrimEnd('/')
+if ($site -notmatch '^https?://[^/\s]+$') {
+    throw "SiteUrl must be the site's address alone, such as https://example.com, not '$($settings.SiteUrl)'."
+}
+$certName = [string]$settings.CertName
+if ($Target -eq 'app' -and $certName -notmatch '^[A-Za-z0-9][A-Za-z0-9.-]*$') {
+    throw "CertName must be a certificate's folder name under /etc/letsencrypt/live, such as example.com, not '$certName'."
+}
+
+# The service as the host holds it. The app listens on the loopback only, the one address
+# Apache proxies to and the health check asks.
+$addr = "127.0.0.1:$port"
+$data = "$optDir/data"
+$db = "$data/database.sqlite"
+$remoteBinary = "$optDir/app-suite"
+$unitFile = "$service.service"
+$serviceOwner = "${serviceUser}:$serviceUser"
+# The service's secrets, read by the unit, root's alone.
+$envFile = if ($settings.EnvFile) { [string]$settings.EnvFile } else { "/etc/$service/$service.env" }
+if (-not (Test-RemotePath -Path $envFile)) { throw "The env file '$envFile' is not a plain absolute path; check ServiceName and EnvFile." }
+$repoRoot = Split-Path -Path $PSScriptRoot -Parent
+# The dev database the pull refreshes; git-ignored, so this checkout's, never the release's.
+$devDb = Join-Path $repoRoot 'devdata\database.sqlite'
+# What the host records as running, for the next deploy to compare with.
+$record = 'senpan'
+
+# Writes a tracked template with its placeholders filled in, for the archive. Every
+# placeholder given must be in the template and none may be left over, so a renamed or
+# new one cannot reach the host unfilled.
+function Expand-DeployTemplate {
+    [CmdletBinding()]
+    [OutputType([string])]
+    param([string]$Template, [string]$Destination, [hashtable]$Value)
+    $name = Split-Path -Path $Template -Leaf
+    $text = Get-Content -LiteralPath $Template -Raw
+    foreach ($key in $Value.Keys) {
+        if (-not $text.Contains("__${key}__")) { throw "deploy/$name has no __${key}__ placeholder; nothing was changed." }
+    }
+    $filled = Format-RemoteScript -Template $text -Value $Value
+    $left = [regex]::Match($filled, '__[A-Z][A-Z0-9]*__')
+    if ($left.Success) { throw "deploy/$name has a placeholder, $($left.Value), that nothing fills; nothing was changed." }
+    New-Item -ItemType Directory -Force -Path (Split-Path -Path $Destination -Parent) | Out-Null
+    [System.IO.File]::WriteAllText($Destination, $filled)
+    $Destination
+}
+
+# What the host must hold before anything is built or changed, asked in one run; a check
+# that fails ends the run with its reason. With -ForApp the env file is checked too. The
+# answer is the host's key=value lines. Only the env file's variable NAMES come back,
+# never a value.
+function Read-ServiceHost {
     [CmdletBinding()]
     [OutputType([hashtable])]
-    param([string]$Database)
-    if ($Database -match '[''"\s]') { throw "RemoteDbPath '$Database' cannot hold quotes or spaces." }
-    $read = Format-RemoteScript -Value @{ SERVICE = $service; DB = $Database } -Template @'
+    param([switch]$ForApp)
+    $everyRun = @'
 svc='__SERVICE__'
-show() { systemctl show "$svc.service" -p "$1" --value 2>/dev/null; }
-if [ "$(show LoadState)" != loaded ]; then
-  echo "$svc.service is not installed on the host; install its unit first (docs/ops.md). Nothing was changed." >&2
+say() { printf '%s\n' "$*" >&2; }
+# A unit that passes -webroot keeps the app's files in a web root, and the unit this deploy
+# installs looks for them in the data folder.
+if systemctl show "$svc.service" -p ExecStart --value 2>/dev/null | grep -Eq -- '[[:space:]]--?webroot([[:space:]=]|$)'; then
+  say "$svc.service still passes -webroot, so the app's files are in a web root and not in __DATA__, where the unit this deploy installs looks for them. 5.2.0's deploy moved them (docs/ops.md, Upgrading to 5.2.0). Nothing was changed."
   exit 3
 fi
-user=$(show User)
-group=$(show Group)
-[ -n "$user" ] || user=root
-[ -n "$group" ] || group=$(id -gn "$user" 2>/dev/null || true)
-args=$(show ExecStart | tr ' ' '\n')
-flag() { printf '%s\n' "$args" | sed -n -e "/^--\{0,1\}$1\$/{n;p;q;}" -e "s/^--\{0,1\}$1=//p" | head -n 1; }
-db='__DB__'
-[ -n "$db" ] || db=$(flag db)
-echo "user=$user"
-echo "group=$group"
-echo "dynamic=$(show DynamicUser)"
-echo "unit_db=$(flag db)"
-echo "unit_addr=$(flag addr)"
-echo "unit_data=$(flag data)"
-echo "unit_webroot=$(flag webroot)"
-if [ -n "$db" ] && [ -f "$db" ]; then echo "db_owner=$(stat -c '%U:%G' "$db")"; fi
+if [ ! -d '__DATA__' ]; then
+  say "__DATA__ is not on the host; create the data folder first (docs/ops.md, One-time server setup). Nothing was changed."
+  exit 3
+fi
+if ! getent passwd '__USER__' >/dev/null; then
+  say "The account __USER__ is not on the host; create it first (docs/ops.md, One-time server setup). Nothing was changed."
+  exit 3
+fi
+echo "dropins=$(systemctl show "$svc.service" -p DropInPaths --value 2>/dev/null)"
 '@
+    $appOnly = @'
+envfile='__ENVFILE__'
+if [ ! -f "$envfile" ]; then
+  say "$envfile is not on the host, and the unit reads the service's secrets from it (docs/ops.md, Upgrading to 5.3.0). Nothing was changed."
+  exit 3
+fi
+have=$(stat -c '%U:%G %a' "$envfile")
+if [ "$have" != 'root:root 600' ]; then
+  say "$envfile is $have and holds secrets; make it root:root 600 with: chown root:root '$envfile' && chmod 600 '$envfile'. Nothing was changed."
+  exit 3
+fi
+echo "env_names=$(sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' "$envfile" | tr '\n' ' ')"
+'@
+    $template = (@($everyRun) + @(if ($ForApp) { $appOnly })) -join "`n"
+    $read = Format-RemoteScript -Value @{ SERVICE = $service; USER = $serviceUser; DATA = $data; ENVFILE = $envFile } -Template $template
     $found = @{}
     foreach ($line in @(Invoke-Remote -Script $read)) {
         if ($line -match '^([a-z_]+)=(.*)$') { $found[$Matches[1]] = $Matches[2].Trim() }
@@ -337,14 +374,8 @@ if ($Target -eq 'plugin') {
         Write-Ok ('{0} files, {1:N1} MB, one archive' -f $archive.FileCount, ($archive.Size / 1MB))
 
         $connection = $settings | Open-DeployConnection
-        # The repository is the data folder's plugin/, which the app serves; a unit not
-        # yet moved out of the web root still names that folder by -webroot.
-        $found = Read-ServiceUnit -Database ''
-        $data = if ($found['unit_data']) { $found['unit_data'] } else { $found['unit_webroot'] }
-        if (-not $data -or -not (Test-RemotePath -Path $data)) {
-            throw "$service.service names no usable -data on its ExecStart ('$data'), so where the plugin repository goes is unknown; nothing was changed."
-        }
-        $owner = if ($found['group']) { "$($found['user']):$($found['group'])" } else { $found['user'] }
+        # The repository is the data folder's plugin/, which the app serves.
+        $null = Read-ServiceHost
 
         Write-Step 'Uploading...'
         $upload = Invoke-Upload -Path $archive.Path -Destination 'senpan-plugin.tgz' -Activity "Uploading Senpan Companion $($repo.Version)" -FileCount $archive.FileCount
@@ -352,7 +383,7 @@ if ($Target -eq 'plugin') {
 
         Write-Step "Publishing Senpan Companion $($repo.Version) to $data/plugin..."
         Invoke-DeployBundle -Archive 'senpan-plugin.tgz' -Sha256 $archive.Sha256 -ExpectedFileCount $archive.FileCount -Step @(
-            Publish-PluginRepository -AsStep -Live "$data/plugin" -Version $repo.Version -IndexPath 'pluginmaster.json' -Owner $owner -NoBackup:$NoBackup
+            Publish-PluginRepository -AsStep -Live "$data/plugin" -Version $repo.Version -IndexPath 'pluginmaster.json' -Owner $serviceOwner -NoBackup:$NoBackup
         )
         $checks = @(@{ Url = "$site/plugin/pluginmaster.json"; Contains = "latest.zip?v=$($repo.Version)" })
         Write-Step "Checking $site..."
@@ -377,62 +408,28 @@ if ($Target -eq 'plugin') {
 }
 
 # -- The app ------------------------------------------------------------------------
-$moving = $false
-$backups = $null
 try {
     $connection = $settings | Open-DeployConnection
 
-    # -- The service, as the host runs it, and the release it took last -------------
-    $configuredDb = [string]$settings.RemoteDbPath
-    Write-Step "Reading $service.service on the host..."
-    $found = Read-ServiceUnit -Database $configuredDb
-
-    $unitDb = $found['unit_db']
-    if ($configuredDb -and $unitDb -and $configuredDb -ne $unitDb) {
-        throw "RemoteDbPath is $configuredDb, but $service.service opens $unitDb (the -db on its ExecStart). Correct or clear RemoteDbPath; nothing was changed."
-    }
-    $db = if ($configuredDb) { $configuredDb } else { $unitDb }
-    if (-not $db) {
-        throw "$service.service names no -db on its ExecStart, so the live database is unknown. Set RemoteDbPath (-RemoteDbPath / `$env:DEPLOY_REMOTE_DB_PATH / `$DeployRemoteDbPath); nothing was changed."
-    }
-
-    # Where the app answers on the host: -addr, or the binary's own default (:8080,
-    # backend/main.go). An address on every interface is asked on the loopback. The
-    # vhost proxies to the same address.
-    $addr = if ($found['unit_addr']) { $found['unit_addr'] } else { ':8080' }
-    if ($addr -match '^(|0\.0\.0\.0|\[::\])(:\d+)$') { $addr = "127.0.0.1$($Matches[2])" }
-    if ($addr -notmatch '^[A-Za-z0-9.\[\]:-]+:\d+$') { throw "Could not tell where $service listens from its -addr '$addr'; nothing was changed." }
-
-    # The data folder: -data, or, on a unit that still passes -webroot, the folder this
-    # run moves the files into.
-    $webRoot = $null
-    if ($found['unit_data']) {
-        $data = $found['unit_data']
-    } elseif ($found['unit_webroot']) {
-        $moving = $true
-        $webRoot = $found['unit_webroot'].TrimEnd('/')
-        $data = "$optDir/data"
-        if (-not (Test-RemotePath -Path $webRoot)) { throw "The unit's -webroot '$webRoot' is not a plain absolute path; nothing was changed." }
-        if ($NoBackup) { throw "-NoBackup cannot go with the move out of $webRoot, which is undone through the previous release that -NoBackup removes; nothing was changed." }
-    } else {
-        throw "$service.service names neither -data nor -webroot on its ExecStart, so its files are unknown; nothing was changed."
-    }
-    if (-not (Test-RemotePath -Path $data)) { throw "The data folder '$data' is not a plain absolute path; nothing was changed." }
-
-    $serviceOwner = if ($found['group']) { "$($found['user']):$($found['group'])" } else { $found['user'] }
-    $dbOwner = if ($found['db_owner']) { $found['db_owner'] } else { 'not there yet' }
-    Write-Ok "Live database: $db (owner $dbOwner); $service runs as $serviceOwner, listens on $addr and keeps its files in $data."
-    if ($found['user'] -eq 'root' -and $found['dynamic'] -ne 'yes') {
-        Write-Warning "$service runs as root, so its backup will too. docs/ops.md (Running as a non-root user) says how to move it to its own account."
-    }
-
+    # -- The release the host took last ----------------------------------------------
     $live = Get-DeployedRelease -Name $record
     if ($live -eq $version -and -not $Force) {
         Write-Ok "$version is already running on the host; nothing to deploy. (A version pushed since goes out once CI tags it; -Force deploys this one again.)"
         return
     }
     Write-Step "Releasing $version (the host runs $(if ($live) { $live } else { 'a release not recorded' }))"
-    if ($moving) { Write-Step "This run also moves $dataFolders from $webRoot into $data, and the unit to -data." }
+
+    # -- The host, before anything is built or changed --------------------------------
+    Write-Step "Checking $service on the host..."
+    $found = Read-ServiceHost -ForApp
+    $names = @($found['env_names'] -split '\s+' | Where-Object { $_ })
+    Write-Ok "$service runs as $serviceOwner, listens on $addr and keeps its files in $data; $envFile holds $(if ($names) { $names -join ', ' } else { 'no variables' })."
+    if ($names -notcontains 'APPSUITE_TURNSTILE_SECRET') {
+        Write-Warning "$envFile sets no APPSUITE_TURNSTILE_SECRET, so the login bot check is off."
+    }
+    if ($found['dropins']) {
+        Write-Warning "$service.service has a drop-in ($($found['dropins'])), which overrides the unit this deploy installs. Remove it so the host runs what the repo says."
+    }
 
     # -- Build the release, in its own checkout --------------------------------------
     $tree = New-ReleaseTree -Path $repoRoot -Tag $version -Npm 'frontend'
@@ -444,281 +441,18 @@ try {
     $entryScript = [regex]::Match((Get-Content -LiteralPath $shell -Raw), 'src="(/assets/[^"]+\.js)"').Groups[1].Value
     if (-not $entryScript) { throw 'The built index.html names no /assets/*.js entry script; the smoke check would have nothing to fetch.' }
 
-    # The vhost, with the app's address and the certificate's name filled in.
+    # The unit and the vhost, with the host's values filled in.
     $hostDir = Join-Path $tree 'deploy\host'
-    New-Item -ItemType Directory -Force -Path $hostDir | Out-Null
-    $vhost = Join-Path $hostDir 'apache-vhost.conf'
-    $template = Get-Content -LiteralPath (Join-Path $tree 'deploy\apache-vhost.conf') -Raw
-    foreach ($placeholder in '__APP__', '__CERT__') {
-        if (-not $template.Contains($placeholder)) { throw "deploy/apache-vhost.conf has no $placeholder placeholder; nothing was changed." }
+    $unit = Expand-DeployTemplate -Template (Join-Path $tree 'deploy\senpan.service') -Destination (Join-Path $hostDir $unitFile) -Value @{
+        SERVICE = $service; USER = $serviceUser; OPT = $optDir; ADDR = $addr; ENVFILE = $envFile
     }
-    Set-Content -LiteralPath $vhost -Value ($template.Replace('__APP__', $addr).Replace('__CERT__', $certName)) -NoNewline
-
-    # -- The move out of the web root, as shell for the remote run -------------------
-    $prepare = $null
-    $move = $null
-    $undo = $null
-    $fontCheck = $null
-    if ($moving) {
-        $vars = Format-RemoteScript -Value @{ WEB = $webRoot; DATA = $data; SITE = $service; FOLDERS = $dataFolders; RECORD = $record } -Template @'
-web='__WEB__'
-data='__DATA__'
-site='__SITE__'
-folders='__FOLDERS__'
-state="$HOME/.shared-deploy/__RECORD__-data-move"
-'@
-        # Puts back whatever the move changed, from what it recorded: the folders it
-        # moved, the unit as it was and the sites it switched. Each part is safe to run
-        # again, or when its part never happened.
-        $undoFunction = @'
-e_undo() {
-  set +e
-  echo 'Putting the web root back: its folders, the unit and the Apache sites.' >&2
-  sites=$(cat "$state/sites" 2>/dev/null)
-  unit=$(cat "$state/unit" 2>/dev/null)
-  if [ -f "$state/moved" ]; then
-    while read -r d; do
-      if [ -n "$d" ] && [ -e "$data/$d" ] && [ ! -e "$web/$d" ]; then mv "$data/$d" "$web/$d" && echo "Moved $data/$d back to $web/$d." >&2; fi
-    done < "$state/moved"
-    rm -f "$state/moved"
-  fi
-  if [ -f "$state/sounds" ]; then
-    if [ -e "$data/sounds" ] && [ ! -e "$web/dist/sounds" ]; then mv "$data/sounds" "$web/dist/sounds" && echo "Moved $data/sounds back to $web/dist/sounds." >&2; fi
-    rm -f "$state/sounds"
-  fi
-  if [ -n "$unit" ] && [ -f "$state/unit.orig" ] && ! cmp -s "$state/unit.orig" "$unit"; then
-    cat "$state/unit.orig" > "$unit"
-    systemctl daemon-reload
-  fi
-  a2dissite -q "$site" >/dev/null 2>&1
-  rm -f "/etc/apache2/sites-enabled/$site.conf"
-  for s in $sites; do a2ensite -q "$s" >/dev/null 2>&1; done
-  set -e
-}
-'@
-        # Before anything stops, and changing nothing: what the move needs is checked,
-        # and everything it touches is backed up.
-        $prepareBody = @'
-vhost="$bundle/apache-vhost.conf"
-say() { printf '%s\n' "$*" >&2; }
-for t in a2ensite a2dissite apache2ctl tar gzip awk curl; do
-  command -v "$t" >/dev/null || { say "$t is not installed on the host; nothing was changed."; exit 3; }
-done
-# The folders: images/ in the web root to move, and no folder in the data folder already.
-if [ ! -d "$web/images" ]; then say "There is no $web/images to move; nothing was changed."; exit 3; fi
-for d in $folders; do
-  if [ -L "$web/$d" ]; then say "$web/$d is a link, not a folder; nothing was changed."; exit 3; fi
-  if [ -e "$web/$d" ] && [ -e "$data/$d" ]; then say "$data/$d is there already, and so is $web/$d; nothing was changed."; exit 3; fi
-done
-if [ ! -d "$(dirname "$data")" ]; then say "$(dirname "$data") is not there to hold $data; nothing was changed."; exit 3; fi
-if [ -L "$web/dist/sounds" ]; then say "$web/dist/sounds is a link, not a folder; nothing was changed."; exit 3; fi
-# The unit: -webroot outside a comment, and no drop-in that sets what the move edits.
-unit=$(systemctl show "$svc" -p FragmentPath --value)
-if [ ! -f "$unit" ] || ! grep -Ev '^[[:space:]]*#' "$unit" | grep -Eq -- '(^|[[:space:]=])--?webroot([[:space:]]|=)'; then
-  say "$svc's unit ($unit) passes no -webroot, so it can't be moved to -data; nothing was changed."; exit 3
-fi
-for f in $(systemctl show "$svc" -p DropInPaths --value); do
-  if grep -Eq '^[[:space:]]*(ExecStart|ReadWritePaths)=' "$f"; then say "$f sets ExecStart or ReadWritePaths; put them in $unit first. Nothing was changed."; exit 3; fi
-done
-# The sites now serving the vhost's names (apachectl -S), each serving those names alone.
-tmp=$(mktemp -d)
-trap 'rm -rf "$tmp"' EXIT
-# A site file may end its lines with CRLF; the CR is no part of a name.
-sed -n -E 's/^[[:space:]]*Server(Name|Alias)[[:space:]]+//p' "$vhost" | tr -s ' \t\r' '\n\n\n' | sed '/^$/d' | sort -u > "$tmp/names"
-if [ ! -s "$tmp/names" ]; then say 'The new vhost names no host; nothing was changed.'; exit 3; fi
-if ! apache2ctl -S > "$tmp/dump" 2>&1; then cat "$tmp/dump" >&2; say 'apachectl -S failed; nothing was changed.'; exit 3; fi
-: > "$tmp/files"
-while read -r n; do
-  re=$(printf '%s' "$n" | sed 's/[.]/\\./g')
-  sed -n -E "s/.*[[:space:]]${re}[[:space:]]+\\((\\/[^:]+):[0-9]+\\).*/\\1/p" "$tmp/dump" >> "$tmp/files"
-done < "$tmp/names"
-sites=
-for f in $(sort -u "$tmp/files"); do
-  s=$(basename "$f" .conf)
-  if [ "$s" = "$site" ]; then continue; fi
-  case "$f" in
-    /etc/apache2/sites-enabled/*) ;;
-    *) say "$f serves one of the vhost's names but is not an enabled site; nothing was changed."; exit 3 ;;
-  esac
-  sed -n -E 's/^[[:space:]]*Server(Name|Alias)[[:space:]]+//p' "$f" | tr -s ' \t\r' '\n\n\n' | sed '/^$/d' | sort -u > "$tmp/served"
-  other=$(grep -vxF -f "$tmp/names" "$tmp/served" | tr '\n' ' ' || true)
-  if [ -n "$other" ]; then say "$f also serves $other, which the new vhost does not; nothing was changed."; exit 3; fi
-  sites="$sites $s"
-done
-if [ -z "$sites" ]; then say "No enabled site serves $(tr '\n' ' ' < "$tmp/names"); nothing was changed."; exit 3; fi
-# Apache with the new vhost in place of those sites, tried on a copy of its config.
-mkdir "$tmp/apache2"
-cp -a /etc/apache2/. "$tmp/apache2/"
-for s in $sites; do rm -f "$tmp/apache2/sites-enabled/$s.conf"; done
-cp "$vhost" "$tmp/apache2/sites-available/$site.conf"
-ln -sfn "../sites-available/$site.conf" "$tmp/apache2/sites-enabled/$site.conf"
-if ! out=$(APACHE_CONFDIR="$tmp/apache2" apache2ctl -t 2>&1); then
-  say "Apache would refuse the new vhost in place of$sites, so nothing was changed:"; say "$out"; exit 5
-fi
-# Room for the backups, and for the move itself when it copies to another filesystem.
-need=0
-for d in $folders; do
-  if [ -e "$web/$d" ]; then need=$((need + $(du -sk "$web/$d" | awk '{print $1}'))); fi
-done
-free=$(df -Pk "$HOME" | awk 'NR == 2 {print $4}')
-if [ "$free" -lt $((need + 262144)) ]; then say "The backups need up to $((need / 1024)) MB and $HOME has $((free / 1024)) MB free; nothing was changed."; exit 3; fi
-if [ "$(stat -c %d "$web")" != "$(stat -c %d "$(dirname "$data")")" ]; then
-  free=$(df -Pk "$(dirname "$data")" | awk 'NR == 2 {print $4}')
-  if [ "$free" -lt $((need + 262144)) ]; then say "Moving the folders copies $((need / 1024)) MB to another filesystem with $((free / 1024)) MB free; nothing was changed."; exit 3; fi
-fi
-# The backups, compressed and checked, for root alone: each folder (the fonts with their
-# converted copies), Apache's config, the unit and the web root's .htaccess.
-umask 077
-bdir="$HOME/senpan-before-data-move-$(date -u +%Y%m%dT%H%M%SZ)"
-mkdir -p "$bdir"
-for d in $folders; do
-  if [ -e "$web/$d" ]; then tar -czf "$bdir/$d.tar.gz" -C "$web" "$d"; gzip -t "$bdir/$d.tar.gz"; fi
-done
-tar -czf "$bdir/apache2.tar.gz" -C /etc apache2
-gzip -t "$bdir/apache2.tar.gz"
-tar -czf "$bdir/unit.tar.gz" -C / "${unit#/}"
-gzip -t "$bdir/unit.tar.gz"
-if [ -f "$web/.htaccess" ]; then tar -czf "$bdir/webroot-htaccess.tar.gz" -C "$web" .htaccess; gzip -t "$bdir/webroot-htaccess.tar.gz"; fi
-if [ -d "$web/dist/sounds" ]; then tar -czf "$bdir/sounds.tar.gz" -C "$web/dist" sounds; gzip -t "$bdir/sounds.tar.gz"; fi
-# What a rollback needs to put each back.
-mkdir -p "$state"
-chmod 700 "$state"
-printf '%s\n' $sites > "$state/sites"
-printf '%s\n' "$unit" > "$state/unit"
-printf '%s\n' "$bdir" > "$state/backups"
-cp -p "$unit" "$state/unit.orig"
-rm -f "$state/moved" "$state/sounds"
-echo "Checked: the sites to switch are$sites, and Apache takes the new vhost in their place."
-if [ -e "$data/sounds" ]; then
-  echo "$data/sounds is there already, so the sounds in $web/dist/sounds stay where they are."
-elif [ -d "$web/dist/sounds" ]; then
-  echo "The sounds in $web/dist/sounds move too."
-else
-  say "There is no $web/dist/sounds, so the sounds stay silent until they are copied into $data/sounds by hand (docs/ops.md)."
-fi
-echo "Backed up the web root's folders, Apache's config and the unit to $bdir."
-'@
-        $prepare = "(`nset -e`n$vars`nsvc='$service'`n. `"`$bundle/data-move-prepare.sh`"`n)"
-        # After the stop (Install-ServiceBinary's -AfterStop): the folders move, the unit
-        # takes -data, the sites switch. A failure from here to the start puts it all back
-        # before the module restarts the previous release.
-        $moveBody = @'
-trap 'e_undo; abort_restart' EXIT
-sites=$(cat "$state/sites")
-unit=$(cat "$state/unit")
-if [ ! -d "$data" ]; then install -d -m 750 ${owner:+-o "$owner"} ${group:+-g "$group"} "$data"; fi
-for d in $folders; do
-  if [ -e "$web/$d" ]; then
-    mv "$web/$d" "$data/$d"
-    echo "$d" >> "$state/moved"
-    echo "Moved $web/$d to $data/$d."
-  fi
-done
-# The sounds, from the web root's dist/sounds, where Apache served the SPA's sounds
-# from, unless the data folder has its own already.
-if [ -d "$web/dist/sounds" ] && [ ! -e "$data/sounds" ]; then
-  : > "$state/sounds"
-  mv "$web/dist/sounds" "$data/sounds"
-  chmod -R a+rX "$data/sounds"
-  echo "Moved $web/dist/sounds to $data/sounds."
-fi
-if [ -e "$web/fonts" ]; then echo "$web/fonts is still there after the move." >&2; exit 1; fi
-# -data in place of -webroot, and the data folder writable in place of the web root's.
-sed -E "/^[[:space:]]*#/!s#(^|[[:space:]=])--?webroot(=|[[:space:]]+)[^[:space:]\\\\]+#\\1-data $data#" "$state/unit.orig" |
-awk -v web="$web" -v data="$data" '
-  { line[NR] = $0 }
-  /^[[:space:]]*ReadWritePaths=/ { rw[NR] = 1 }
-  END {
-    covered = 0
-    for (i = 1; i <= NR; i++) {
-      if (!(i in rw)) continue
-      v = line[i]; sub(/^[[:space:]]*ReadWritePaths=/, "", v)
-      n = split(v, p, /[[:space:]]+/); out = ""
-      for (j = 1; j <= n; j++) {
-        t = p[j]; if (t == "") continue
-        b = t; sub(/^[-+]+/, "", b)
-        if (b == web || index(b, web "/") == 1) continue
-        if (b == data || index(data, b "/") == 1) covered = 1
-        out = out (out == "" ? "" : " ") t
-      }
-      line[i] = out == "" ? "" : "ReadWritePaths=" out
-      if (out == "") drop[i] = 1
-    }
-    for (i = 1; i <= NR; i++) {
-      if (i in drop) {
-        if (!covered && (i in rw)) { print "ReadWritePaths=" data; covered = 1 }
-        continue
-      }
-      if (!covered && (i in rw)) { line[i] = line[i] " " data; covered = 1 }
-      print line[i]
-    }
-  }' > "$state/unit.new"
-cat "$state/unit.new" > "$unit"
-systemctl daemon-reload
-exec_line=" $(systemctl show "$main" -p ExecStart --value) "
-case "$exec_line" in *" -data $data "*) ;; *) echo "After the edit the unit's ExecStart names no -data $data:$exec_line" >&2; exit 1 ;; esac
-case "$exec_line" in *webroot*) echo "After the edit the unit's ExecStart still names -webroot:$exec_line" >&2; exit 1 ;; esac
-rw=$(systemctl show "$main" -p ReadWritePaths --value)
-covered=
-for p in $rw; do
-  p=${p#-}; p=${p#+}
-  case "$p" in "$web"|"$web"/*) echo "After the edit ReadWritePaths still names $p." >&2; exit 1 ;; esac
-  case "$data/" in "$p"/*) covered=1 ;; esac
-done
-if [ -z "$covered" ]; then echo "After the edit ReadWritePaths ($rw) does not cover $data." >&2; exit 1; fi
-echo "The unit runs the app with -data $data now."
-# The sites serving the vhost's names off, the vhost on. Apache takes them once the new release answers.
-for s in $sites; do a2dissite -q "$s"; done
-a2ensite -q "$site"
-if ! out=$(apache2ctl configtest 2>&1); then echo "$out" >&2; echo 'Apache refused the new vhost.' >&2; exit 5; fi
-echo "Apache's sites switched to $site; it takes them once the new release answers."
-'@
-        $move = "$vars`n. `"`$bundle/data-move-undo.sh`"`n. `"`$bundle/data-move.sh`""
-        $moveFiles = [ordered]@{
-            'data-move-prepare.sh' = $prepareBody
-            'data-move-undo.sh'    = $undoFunction
-            'data-move.sh'         = $moveBody
-        }
-        # A start that fails (Install-ServiceBinary's -OnRollback): the same undo, before
-        # the module starts the previous release. The function is the one -AfterStop defined.
-        $onRollback = 'e_undo'
-        # Apache takes the new sites now that the new release answers.
-        $afterSuccess = @'
-if systemctl reload apache2; then echo 'Apache took the new sites.'; else echo 'apache2 did not reload; the old sites still answer.' >&2; fi
-'@
-        # The smoke check's rollback (Restore-ServiceBinary's -OnRollback): the undo,
-        # then Apache back on the sites the move switched, before the previous release starts.
-        $undo = "$vars`n$undoFunction`ne_undo`nsystemctl reload apache2 || echo 'apache2 did not reload after the sites went back.' >&2"
-        # Every name the vhost serves, asked on the host through Apache for a font file
-        # as a plain file, by the paths that could reach it, redirects followed. Read only;
-        # prints one line per ask with the last answer's status (000: no answer).
-        $fontCheck = Format-RemoteScript -Value @{ DATA = $data; WEB = $webRoot; VHOST = $vhostPath } -Template @'
-data='__DATA__'
-web='__WEB__'
-if [ -e "$web/fonts" ]; then echo "present $web/fonts"; fi
-f=$(find "$data/fonts" -maxdepth 1 -type f ! -name '.*' 2>/dev/null | head -n 1)
-if [ -z "$f" ]; then echo 'nofont'; exit 0; fi
-name=$(basename "$f" | sed -e 's/%/%25/g' -e 's/ /%20/g' -e 's/#/%23/g' -e 's/?/%3F/g')
-for n in $(sed -n -E 's/^[[:space:]]*ServerName[[:space:]]+//p' '__VHOST__' | tr -d '\r' | sort -u); do
-  for p in "/fonts/$name" "/$name" "/carrd/../fonts/$name" "/images/../fonts/$name"; do
-    code=$(curl -s -k -L --max-redirs 5 --path-as-is -o /dev/null -w '%{http_code}' -m 10 --resolve "$n:443:127.0.0.1" "https://$n$p" || true)
-    echo "asked $code https://$n$p"
-  done
-done
-'@
+    $vhost = Expand-DeployTemplate -Template (Join-Path $tree 'deploy\apache-vhost.conf') -Destination (Join-Path $hostDir 'apache-vhost.conf') -Value @{
+        APP = $addr; CERT = $certName
     }
 
     # -- Pack the deploy -----------------------------------------------------------
-    $content = [ordered]@{ 'app-suite' = $binary; 'apache-vhost.conf' = $vhost }
-    if ($moving) {
-        foreach ($part in $moveFiles.GetEnumerator()) {
-            $path = Join-Path $hostDir $part.Key
-            [System.IO.File]::WriteAllText($path, ($part.Value -replace "`r", ''))
-            $content[$part.Key] = $path
-        }
-    }
     Write-Step 'Packing the deploy...'
-    $archive = Compress-DeployArchive -Content $content
+    $archive = Compress-DeployArchive -Content ([ordered]@{ 'app-suite' = $binary; $unitFile = $unit; 'apache-vhost.conf' = $vhost })
     Write-Ok ('{0} files, {1:N1} MB, one archive' -f $archive.FileCount, ($archive.Size / 1MB))
 
     # The database snapshot is the way back from a migration: starting the new binary
@@ -730,30 +464,19 @@ done
         ServiceName               = $service
         Binary                    = $remoteBinary
         Owner                     = $serviceOwner
+        Unit                      = $unitFile
         Database                  = $db
         Umask                     = '077'
         RestoreDatabaseOnRollback = $true
         HealthUrl                 = "http://$addr/healthz"
         Vhost                     = 'apache-vhost.conf'
-        VhostPath                 = $vhostPath
         NoBackup                  = $NoBackup
     }
-    if ($moving) {
-        $install.AfterStop = $move
-        $install.OnRollback = $onRollback
-        $install.AfterSuccess = $afterSuccess
-    }
-    $steps = @(
-        if ($moving) { $prepare }
-        Install-ServiceBinary -AsStep @install
-    )
-    # The smoke check's way back, built now so it is measured with the host run.
+    $steps = @(Install-ServiceBinary -AsStep @install)
+    # The smoke check's way back, built now so a mistake in it shows before anything changes.
     $rollbackScript = @(
-        Restore-ServiceBinary -ServiceName $service -Binary $remoteBinary -Owner $serviceOwner -Database $db -VhostPath $vhostPath -OnRollback $undo -AsScript
+        Restore-ServiceBinary -ServiceName $service -Binary $remoteBinary -Owner $serviceOwner -Unit $unitFile -Database $db -AsScript
     )
-    Assert-CommandFit -What 'The host run' -Script (Invoke-DeployBundle -AsScript -Archive 'senpan-deploy.tgz' -Sha256 $archive.Sha256 -ExpectedFileCount $archive.FileCount -Step $steps)
-    Assert-CommandFit -What 'The rollback' -Script ($rollbackScript -join "`n")
-    if ($moving) { Assert-CommandFit -What 'The font check' -Script $fontCheck }
 
     # -- Upload, then one remote run ---------------------------------------------
     Write-Step 'Uploading...'
@@ -762,32 +485,12 @@ done
     Write-Ok ('Uploaded in {0:mm\:ss}.' -f $upload.Elapsed)
     Write-Step "Deploying $version on the host..."
     Invoke-DeployBundle -Archive 'senpan-deploy.tgz' -Sha256 $archive.Sha256 -ExpectedFileCount $archive.FileCount -Step $steps
-    if ($moving) {
-        $readBackups = 'cat "$HOME/.shared-deploy/' + $record + '-data-move/backups"'
-        $backups = @(Invoke-Remote -Script $readBackups) | Select-Object -First 1
-    }
 
     # -- Smoke check, through Cloudflare -----------------------------------------
-    # The reverse of the deploy: the previous binary and vhost with the snapshot taken just
-    # before this deploy's start, since the new binary may have migrated the schema, and
-    # after a move, the web root's folders, the unit and the sites it switched. What was written in
-    # the seconds the new release ran is lost with it.
+    # The reverse of the deploy: the previous binary, unit and vhost with the snapshot taken
+    # just before this deploy's start, since the new binary may have migrated the schema.
+    # What was written in the seconds the new release ran is lost with it.
     $rollback = { Invoke-RemoteStep -Script $rollbackScript -FailureMessage 'Rolling back failed on the host' }
-
-    if ($moving) {
-        Write-Step 'Asking every name, through Apache on the host, for a font as a plain file...'
-        $asked = @(Invoke-Remote -Script $fontCheck)
-        $asked | ForEach-Object { Write-Host "     $_" -ForegroundColor DarkGray }
-        # Only a refusal (400, 403 or 404) shows a name keeps the fonts back. Any other
-        # status, 000 included, leaves it unproven, and so does a run that asked nothing.
-        $unproven = @($asked | Where-Object { $_ -match '^present ' -or ($_ -match '^asked (\d{3}) ' -and $Matches[1] -notin '400', '403', '404') })
-        if (-not ($asked | Where-Object { $_ -match '^asked ' }) -and $asked -notcontains 'nofont') { $unproven += 'No name was asked.' }
-        if ($unproven) {
-            & $rollback
-            throw "Not every name refused a font as a plain file, or the web root still holds fonts/:`n$($unproven -join "`n")`nThe move was put back."
-        }
-        if ($asked -contains 'nofont') { Write-Warning 'The data folder holds no font, so none was asked for.' }
-    }
 
     # A fresh token on each address, so no answer Cloudflare kept from before can pass.
     $token = [guid]::NewGuid().ToString('N').Substring(0, 12)
@@ -817,9 +520,6 @@ done
     # pruning touches only its own dated names.
     Write-Step 'Checking the daily database backup...'
     try {
-        if ($found['dynamic'] -eq 'yes') {
-            throw "$service.service runs with DynamicUser=yes, so there is no fixed user for the backup to run as."
-        }
         $backupName = ($service -replace '\.service$', '').ToLowerInvariant() -replace '[^a-z0-9-]', '-' -replace '^-+', ''
         Install-BackupTimer -Name $backupName -Database $db -Owner $serviceOwner -Description 'Senpan App Suite daily database backup'
     } catch {
@@ -837,9 +537,6 @@ done
 
 Write-Host "`n[OK] Deployed Senpan App Suite $version to $($connection.Target)" -ForegroundColor Green
 if (-not $NoBackup) {
-    Write-Host "     Previous binary kept at $remoteBinary.old, and the vhost before, if it changed, at $vhostPath.old." -ForegroundColor DarkGray
-}
-if ($moving) {
-    Write-Host "     The files moved from $webRoot to $data; the web root's folders, Apache's config and the unit as they were are in $backups." -ForegroundColor DarkGray
+    Write-Host "     Previous binary kept at $remoteBinary.old, and the unit and vhost before, if they changed, at $optDir/$unitFile.old and /etc/apache2/sites-available/$service.conf.old." -ForegroundColor DarkGray
 }
 Write-Host '     Assets are content-hashed and the PWA auto-updates, so no manual cache bust is needed.' -ForegroundColor DarkGray

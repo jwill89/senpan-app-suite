@@ -23,8 +23,9 @@ defineProps<{
 <template>
   <div class="field">
     <label v-if="label || $slots.label" class="field-label" :for="htmlFor">
-      <slot name="label">{{ label }}</slot
-      ><span v-if="required" class="req" aria-hidden="true">*</span>
+      <slot name="label">{{ label }}</slot><span v-if="required" class="req" aria-hidden="true"
+        >*</span
+      >
     </label>
     <slot />
     <small v-if="$slots.help || help" class="field-help">

@@ -168,8 +168,7 @@ function goLookup(): void {
           </h3>
           <p class="mb-16">
             Signed up as <strong class="code-highlight">{{ issued.name }}</strong> for
-            <strong>{{ issued.rallyTitle }}</strong
-            >.
+            <strong>{{ issued.rallyTitle }}</strong>.
           </p>
 
           <div class="stamp-signup-link">

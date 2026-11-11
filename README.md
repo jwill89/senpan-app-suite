@@ -33,7 +33,7 @@ it embeds: one binary, one version.
 
 - **Frontend:** Vue 3 (SFC, `<script setup>`) - TypeScript (strict) - Pinia -
   Vue Router (history mode, lazy routes) - Vite 8 - PWA - Vitest
-- **Backend:** Go 1.26+ (stdlib HTTP, method-pattern routing) - SQLite (WAL,
+- **Backend:** Go 1.27.4+ (stdlib HTTP, method-pattern routing) - SQLite (WAL,
   pure-Go `modernc.org/sqlite`) - `alexedwards/scs` sessions -
   argon2id + `go-webauthn` passkeys - structured JSON logging (`slog` +
   `timberjack` rotation)
@@ -121,11 +121,12 @@ shows both, and flags an open tab whose server now runs a different version.
 
 `scripts/deploy.ps1` ships the newest release CI tagged on main, built in a
 checkout of its own: the app (`-Target app`, the default: one binary, the SPA inside
-it) or the plugin (`-Target plugin`). It checks the live site through Cloudflare and
-rolls back what it changed if that fails. An app deploy also keeps the daily
+it) or the plugin (`-Target plugin`). An app deploy installs the service's systemd unit
+and the Apache vhost from `deploy/` with it. It checks the live site through Cloudflare
+and rolls back what it changed if that fails. An app deploy also keeps the daily
 database backup installed and pulls the live database into `devdata/` (`-NoDbPull`
 skips that). See [`docs/ops.md`](docs/ops.md) for the host layout (the data
-folder, the vhost) and host setup.
+folder, the vhost, the env file) and host setup.
 
 ## Testing & CI
 
@@ -171,6 +172,6 @@ backend/    Go backend                    - internal/{server,api,store,bingo,gam
 plugins/    FFXIV Dalamud plugin (C#)     - SenpanCompanion/ + pluginmaster.json (its custom repo)
 scripts/    check.ps1 (the local gate) + deploy.ps1
 shared/     shared-tooling (git submodule) - lint configs, CI workflows, the deploy module
-deploy/     Host artifacts                - the Apache vhost, the unit template + persistent images/
+deploy/     Host artifacts                - the systemd unit, the Apache vhost + persistent images/
 devdata/    Local dev sandbox: SQLite DBs + built binaries + the dev data folder (created at runtime, gitignored)
 ```

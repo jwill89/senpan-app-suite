@@ -1,17 +1,11 @@
 # Deployment (Apache)
 
-The `deploy/` folder holds what the host runs beside the binary: the Apache vhost the deploy
-installs (`apache-vhost.conf`), the systemd unit's template (`senpan.service`) and the
-persistent `images/` a new host's data folder starts from. The app is one Go binary that
-serves everything: the API, its live event streams, the SPA it embeds, and the public
-files of its data folder (the image library, the Carrd projects and the plugin
-repository). Apache terminates TLS and proxies every path of every name to it; nothing is
-served from a document root.
+The `deploy/` folder holds what the host runs beside the binary: the systemd unit (`senpan.service`) and the Apache vhost (`apache-vhost.conf`), both installed by every app deploy with the host's values filled in from the deploy config, and the persistent `images/` a new host's data folder starts from. The app is one Go binary that serves everything: the API, its live event streams, the SPA it embeds, and the public files of its data folder (the image library, the Carrd projects and the plugin repository). Apache terminates TLS and proxies every path of every name to it; nothing is served from a document root.
 
 ## The data folder
 
 ```text
-/opt/senpan/data/              <- the -data on the unit's ExecStart, beside the database
+/opt/senpan/data/              <- the unit's -data, beside the database
 +-- database.sqlite            <- the -db (and its -wal/-shm)
 +-- backups/                   <- the daily database backups (Install-BackupTimer)
 +-- images/                    <- PERSISTENT: served at /images/ (from deploy/images/ on a new host)
@@ -28,7 +22,7 @@ served from a document root.
 |   \-- .woff2/                <- the converted WOFF2 copies
 +-- carrd/                     <- PERSISTENT: the Carrd projects, served at carrd.senpan.cafe (see Carrd host)
 +-- plugin/                    <- the Dalamud custom repo, replaced whole by each plugin publish (previous kept as plugin.old)
-\-- sounds/                    <- the game's sound effects, moved in by the 5.2.0 deploy or copied in by hand (see below); served at /sounds/
+\-- sounds/                    <- the game's sound effects, copied in by hand (see below); served at /sounds/
 ```
 
 The app serves `/images/<path>` (the library's picture types: jpg, png, webp, gif, svg),
@@ -47,10 +41,8 @@ build strips its own `images/` and `sounds/`, so the binary never carries a copy
 **The sounds** (`level_up`, `moogle_noise`, `queue_pop` and `this_is_bad`, each `.mp3`) are
 the player's "game" sounds and the Yoever reaction (`frontend/src/lib/sound.ts`). They are
 kept out of the repository (`frontend/public/sounds/` is git-ignored, and holds them for
-`vite dev`), so no release carries them. The first 5.2.0 deploy moves them in from the web
-root's `dist/sounds/`, where Apache served the SPA's sounds before the app embedded it, when
-that is there and the data folder has no `sounds/`. Otherwise copy them into the data folder
-once, by hand, from a machine that has them:
+`vite dev`), so no release carries them. Copy them into the data folder once, by hand, from a
+machine that has them:
 
 ```powershell
 plink -i "<KeyPath>" <user>@<host> "install -d -m 755 /opt/senpan/data/sounds"
@@ -62,12 +54,7 @@ answers 404 and the sounds stay silent; nothing else breaks.
 
 ## The vhost
 
-`apache-vhost.conf` holds the three names' VirtualHosts, with the app's address filled in
-from the unit's `-addr`; every app deploy installs it as
-`/etc/apache2/sites-available/<service>.conf` where it differs, checks it with `apachectl
-configtest` before anything stops (the previous is kept as `.old` and put back if Apache
-refuses it), and reloads Apache once the new release answers. Edit it in the repo, never
-on the host.
+`apache-vhost.conf` holds the three names' VirtualHosts, with the app's address (`127.0.0.1` and the `AppPort` setting, the port in the unit's `-addr`) and the certificate's name filled in; every app deploy installs it as `/etc/apache2/sites-available/<service>.conf` where it differs. That one file holds both ports, and the deploy enables it, disables any other enabled site that serves its names (certbot's `-le-ssl` file, say), tries it on a copy of Apache's config and checks it with `apachectl configtest` before anything stops. A site that also serves a name the vhost does not, or a vhost that drops a port those names were served on, stops the run with nothing changed. The previous file is kept as `.old` and everything is put back if Apache refuses it or the release does not come up; Apache reloads once the new release answers. Certbot never edits the file. Edit it in the repo, never on the host.
 
 | Name | Proxied to |
 | --- | --- |
@@ -85,39 +72,34 @@ batches. Apache needs `mod_proxy`, `mod_proxy_http`, `mod_headers`, `mod_rewrite
 
 For a new host (the live one already has all of it):
 
-1. The service's account and folders: `useradd --system --no-create-home --shell
-   /usr/sbin/nologin senpan`, then `install -d -o senpan -g senpan -m 755 /opt/senpan
-   /opt/senpan/data`, and copy `deploy/images/` to `/opt/senpan/data/images/`, owned by
-   `senpan`.
-2. The unit: copy `deploy/senpan.service` to `/etc/systemd/system/senpan.service`, fill in
-   its placeholders, then `systemctl daemon-reload && systemctl enable senpan`; the
-   first app deploy installs the binary and starts it.
-3. The vhost: the first app deploy installs `senpan.conf` in `sites-available`; enable it
-   with `a2ensite senpan`, then `apachectl configtest && systemctl reload apache2`.
-4. The sounds: copy them into `/opt/senpan/data/sounds/` (see [The data folder](#the-data-folder)).
+1. The service's account and folders: `useradd --system --no-create-home --shell /usr/sbin/nologin senpan`, then `install -d -o senpan -g senpan -m 755 /opt/senpan /opt/senpan/data`, and copy `deploy/images/` to `/opt/senpan/data/images/`, owned by `senpan`. The account's name is the `ServiceUser` setting.
+2. The env file with the service's secrets, root's alone (see [The env file](#the-env-file)).
+3. The first app deploy installs the unit, enables it, installs the binary and starts it. The deploy needs no unit on the host before it.
+4. The vhost: the first app deploy installs `senpan.conf` in `sites-available` and enables it; nothing is enabled or reloaded by hand.
+5. The sounds: copy them into `/opt/senpan/data/sounds/` (see [The data folder](#the-data-folder)).
+
+## The env file
+
+The unit holds no secret. The service's secrets are the variables of `/etc/<service>/<service>.env` (the `EnvFile` setting names another path), which the unit loads with `EnvironmentFile=` (no leading `-`, so a missing file stops the start rather than starting the app with the Turnstile bot check off). The file is `root:root` mode `0600`, in a folder only root writes, and the deploy stops before it builds or changes anything if the file is missing or any other mode. It prints the variables' names that it finds there, never their values, and warns when `APPSUITE_TURNSTILE_SECRET` is not among them.
+
+```text
+APPSUITE_SESSION_SECRET=<a long random string>
+APPSUITE_TURNSTILE_SECRET=<Cloudflare Turnstile secret key>
+APPSUITE_TURNSTILE_SITEKEY=<Cloudflare Turnstile public site key>
+```
+
+Create it on the host, as root, so the values are typed there and nowhere else (`openssl rand -hex 32` makes the session secret): `install -d -m 755 /etc/senpan`, then `( umask 077; cat > /etc/senpan/senpan.env )`, paste the lines and end with Ctrl-D, then `chown root:root /etc/senpan/senpan.env && chmod 600 /etc/senpan/senpan.env`. `APPSUITE_CORS_ORIGINS`, for cross-origin browser clients (normally unset: the app is same-origin), goes in the same file. A change to the file takes effect on `systemctl restart senpan`.
 
 ## Running as a non-root user
 
-The standards run each service as its own locked system account, and the repo's
-`deploy/senpan.service` template does (`User=` and `Group=`, `<service-user>` there).
-Nothing in the server needs root - it binds `:8080` (non-privileged) and only touches
-ordinary files under `/opt/senpan` - so a dedicated account shrinks the blast radius of any
-compromise.
+The service runs as its own locked system account, the `ServiceUser` setting, in the unit's `User=` and `Group=`. Nothing in the server needs root: it binds a loopback port (the `AppPort` setting, 8080 by default, as `-addr 127.0.0.1:<port>`) and only writes inside its data folder, so a dedicated account shrinks the blast radius of any compromise. The binary belongs to that account too, and the daily backup runs as it.
 
-> **Important:** `scripts/deploy.ps1` does **NOT** ship the systemd unit - it updates the
-> binary and the vhost, publishes the plugin folder, and installs the daily backup's own
-> units. It **reads** the running unit (its `User=`, `Group=`, `-db`, `-addr` and
-> `-data`), so the binary it installs is owned by that account, as the standards have it,
-> and the backup runs as it too. The repo `deploy/senpan.service` is a template; the unit
-> that actually runs lives on the host at `/etc/systemd/system/senpan.service`, and a
-> change to it is made there by hand (the one exception was 5.2.0's move, which edited
-> its `-webroot` and `ReadWritePaths` lines once).
+`deploy/senpan.service` is the unit. Every app deploy installs it as `/etc/systemd/system/<service>.service` where it differs, keeps the previous as `<opt>/<service>.service.old` beside the binary, and puts it back if the new build does not come up. Nobody edits the unit on the host: a change goes into the template and ships with the next deploy. A drop-in in `<service>.service.d/` overrides the template, so the deploy names any it finds.
 
-Everything the process writes is under `/opt/senpan`, owned by `senpan`, so
-`ReadWritePaths=/opt/senpan` covers it all. Verify:
+Everything the process writes is in the data folder, `/opt/senpan/data`, owned by `senpan`, and `ReadWritePaths=/opt/senpan/data` is the only writable path the unit grants (the log, in `/var/log/senpan`, is `LogsDirectory`'s). The binary in `/opt/senpan` is the service's too, but read-only to the running process. Verify:
 
 ```bash
-systemctl show senpan -p User -p Group -p ReadWritePaths   # senpan / senpan / /opt/senpan
+systemctl show senpan -p User -p Group -p ReadWritePaths   # senpan / senpan / /opt/senpan/data
 ps -o user= -C app-suite                                   # not root
 # Smoke-test each writable folder from the admin UI: upload an image, a font (confirm
 # fonts/.woff2/ is written) and a Carrd project file; confirm an admin write succeeds
@@ -140,7 +122,7 @@ ps -o user= -C app-suite                                   # not root
   anyone out), and the `-secret` flag is gone: a unit still passing `-secret`
   fails to start, so keep it off `ExecStart`. But the Discord bot release seals the
   bot's token under a key derived from this value, so leave it in
-  `/etc/senpan/senpan.env`, unchanged, ready for that release. Changing or removing
+  [the env file](#the-env-file), unchanged, ready for that release. Changing or removing
   it after the bot ships would leave the stored token unreadable.
 - **`APPSUITE_TURNSTILE_SECRET` / `APPSUITE_TURNSTILE_SITEKEY`.** Configure the
   Cloudflare Turnstile pair (also settable as `-turnstile-secret`/`-turnstile-sitekey`
@@ -149,12 +131,10 @@ ps -o user= -C app-suite                                   # not root
   is disabled entirely (the server logs `Turnstile not configured` at boot and the
   frontend skips the widget), so a bad/rotated secret degrades to "no bot check,"
   not a lockout. The **secret** is sensitive; the **sitekey** is public (it is
-  served to browsers via `GET /api/v1/config`). Keep the secret out of the unit's
-  inline `Environment=` (visible via `systemctl show` / `/proc/<pid>/environ`) -
-  put both in a root-owned `chmod 600` file
-  loaded with `EnvironmentFile=-/etc/senpan/senpan.env` (see the commented block in
-  `deploy/senpan.service`). Rotate the secret from the Cloudflare dashboard and
-  update the env file.
+  served to browsers via `GET /api/v1/config`). Both are variables of
+  [the env file](#the-env-file), never an `Environment=` line of the unit (visible via
+  `systemctl show` / `/proc/<pid>/environ`). Rotate the secret from the Cloudflare
+  dashboard, update the env file and restart the service.
 
 ## Font host (protected serving)
 
@@ -238,32 +218,14 @@ and bounds retention (14 backups / 30 days / 100 MB safety cap). The admin
 `GET /api/v1/logs` tails it and every line also streams to connected admins over
 the staff event stream for a live tail, so most log inspection needs no SSH.
 
-**Required systemd setting (`LogsDirectory`).** `senpan.service` runs with
-`ProtectSystem=strict`, which mounts `/var/log` **read-only** for the service - so
-the app cannot create its own log dir (it falls back to stdout-only and logs a
-`file logging disabled ... read-only file system` warning). Grant it a writable log
-directory with systemd's `LogsDirectory`, which creates `/var/log/senpan` (owned
-by the service, writable inside the sandbox) on every start - this survives
-reboots and rebuilds:
-
-```ini
-# /etc/systemd/system/senpan.service.d/logdir.conf
-[Service]
-LogsDirectory=senpan
-```
-
-Then `systemctl daemon-reload && systemctl restart senpan`, and verify with
-`tail /var/log/senpan/senpan.log` (JSON lines). A drop-in keeps the change out of
-the packaged unit; equivalently add the `LogsDirectory=senpan` line to the unit's
-`[Service]` section directly. **Without this, only the live tail / journald work -
-the on-disk file, the Logs tab's historical snapshot, and `jlv` stay empty.**
+**The unit's `LogsDirectory`.** The unit runs with `ProtectSystem=strict`, which mounts `/var/log` **read-only** for the service - so the app cannot create its own log dir (it falls back to stdout-only and logs a `file logging disabled ... read-only file system` warning). The unit's `LogsDirectory=senpan` has systemd create `/var/log/senpan` (owned by the service, writable inside the sandbox) on every start. Verify with `tail /var/log/senpan/senpan.log` (JSON lines). **Without it, only the live tail / journald work - the on-disk file, the Logs tab's historical snapshot, and `jlv` stay empty.**
 
 On-box viewing: `jlv /var/log/senpan/senpan.log` (install the Linux `.deb` from
 <https://github.com/hedhyw/json-log-viewer/releases>).
 
 ### Systemd sandboxing
 
-`senpan.service` ships with a defense-in-depth sandbox: `NoNewPrivileges`, `ProtectSystem=strict` + `ProtectHome`, `PrivateTmp`/`PrivateDevices`, `ProtectKernel*`/`ProtectControlGroups`, `RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX`, `RestrictNamespaces`, `LockPersonality`, `SystemCallFilter=@system-service` + `SystemCallArchitectures=native`, and **`MemoryDenyWriteExecute=yes`** (W^X). Everything the app writes is under its opt folder (the database and the data folder's `images/`, `fonts/` and `carrd/`), so `ReadWritePaths=/opt/<app>` covers it, with `LogsDirectory=senpan` for the log; a path outside `ReadWritePaths` fails with `EACCES` under `ProtectSystem=strict`.
+The unit ships with a defense-in-depth sandbox: `NoNewPrivileges`, `ProtectSystem=strict` + `ProtectHome`, `PrivateTmp`/`PrivateDevices`, `ProtectKernel*`/`ProtectControlGroups`, `RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX`, `RestrictNamespaces`, `LockPersonality`, `SystemCallFilter=@system-service` + `SystemCallArchitectures=native`, and **`MemoryDenyWriteExecute=yes`** (W^X). Everything the app writes is in the data folder (the database and the `images/`, `fonts/`, `carrd/` and `plugin/` folders), so `ReadWritePaths=<opt>/data` covers it and the binary beside it stays read-only to the service, with `LogsDirectory=senpan` for the log; a path outside `ReadWritePaths` fails with `EACCES` under `ProtectSystem=strict`.
 
 > **`MemoryDenyWriteExecute` caveat.** W^X is safe here because the binary is pure
 > Go (no cgo, `CGO_ENABLED=0`) and so is its SQLite driver: `modernc.org/sqlite` is
@@ -305,60 +267,37 @@ Pulls) if you need it to be tamper-proof. Capability tokens in request
 paths/queries/Referer are redacted to a short correlation hash before logging, so
 draw/stamp/font links never appear verbatim in the log or the viewer.
 
+## Upgrading to 5.3.0
+
+5.3.0's deploy installs the service's unit itself and the unit reads the service's secrets from [the env file](#the-env-file). The live unit held them as `Environment=` lines, so the file had to exist before the deploy. With `scripts/deploy.config.ps1` filled in (`ServiceUser` is new), in order:
+
+1. **The env file** is on the live droplet since 2026-11-11, made from the unit's `Environment=` lines: `root:root` mode `0600`, holding the variables the unit set. On a host without it, make it as root; the shell copies the values and shows none of them:
+
+   ```bash
+   install -d -m 755 /etc/senpan
+   ( umask 077; sed -n 's/^Environment=//p' /etc/systemd/system/senpan.service > /etc/senpan/senpan.env )
+   chown root:root /etc/senpan/senpan.env && chmod 600 /etc/senpan/senpan.env
+   sed 's/=.*//' /etc/senpan/senpan.env   # the variables' names, no values
+   ```
+
+   The names should be the variables the unit sets: `APPSUITE_SESSION_SECRET` and the `APPSUITE_TURNSTILE_SECRET` and `APPSUITE_TURNSTILE_SITEKEY` pair. A name with a quote before it, or two names on one line, means the unit quoted or joined its assignments; edit the file until each line reads `NAME=value`.
+2. **Commit and push** to `main`. When CI is green it tags `v5.3.0`.
+3. **Run `task deploy`.** Before it builds anything it stops if the env file is missing or not `root:root` mode `0600`, if the service's account or the data folder is missing, or if the unit still passes `-webroot`. Otherwise it installs the unit, the vhost and the binary (disabling any other enabled site that serves the vhost's names), and puts all three back, with the database snapshot, if the new build does not answer. The plugin step skips: its version is unchanged.
+4. **Check on the host:**
+
+   ```bash
+   systemctl show senpan -p Environment -p EnvironmentFiles -p ExecStart -p ReadWritePaths   # no Environment=, the env file, -addr 127.0.0.1:8080, /opt/senpan/data
+   journalctl -u senpan -g Turnstile --no-pager | tail -n 3                                    # "bot check enabled", not "not configured"
+   ```
+
+   Then sign in at `/admin/login` (the Turnstile widget shows and the sign-in works) and upload a picture in System -> Images, so a write into the narrowed `ReadWritePaths` is proven.
+5. **Clean up a few days later**, once 5.3.0 has stayed, on the host. `/opt/senpan/senpan.service.old` is the previous unit with its secrets inline and readable by every local account; the next deploy removes it by itself when the unit has not changed, or remove it now with `rm`. The unit sets `LogsDirectory=senpan` itself, so the drop-in the deploy warns about is redundant: `rm /etc/systemd/system/senpan.service.d/logdir.conf && rmdir /etc/systemd/system/senpan.service.d && systemctl daemon-reload`.
+
 ## Upgrading to 5.2.0
 
-5.2.0 moves everything out of Apache's document root, and the deploy does the move itself:
-the first `task deploy` of 5.2.0 finds `-webroot` on the unit and, in the same run, moves
-`images/`, `fonts/`, `carrd/` and `plugin/` into `<RemoteOptDir>/data`, edits the unit to
-`-data` and its `ReadWritePaths` to the opt folder, and swaps the six apps/fonts/carrd site
-files for the one vhost (see [Each deploy](#each-deploy), "The move"). Every public URL
-stays as it is, `fonts.senpan.cafe/kit.css` and its token links included. In order:
+5.2.0 moved everything out of Apache's document root into the data folder (`<RemoteOptDir>/data`): `images/`, `fonts/`, `carrd/`, `plugin/` and, from the web root's `dist/sounds/`, `sounds/`. In the same first deploy it changed the unit's `-webroot` to `-data` and swapped the six apps, fonts and carrd site files for the one vhost. Every public URL stayed as it was, `fonts.senpan.cafe/kit.css` and its token links included. The move was `scripts/deploy.ps1` as of the `v5.2.0` tag; later deploys stop on a host whose unit still passes `-webroot`.
 
-1. **Push and deploy.** Add `$DeployCertName` (the certificate the three names use) to
-   `scripts/deploy.config.ps1` first. Once CI is green on `main` it tags `v5.2.0`;
-   `task deploy` ships it.
-   Watch for the backups line (`/root/senpan-before-data-move-<UTC>/`), the four `Moved`
-   lines (five with the sounds), the unit's `-data` line, `Apache took the new sites`, the font check (every line
-   `asked 404`; a 400 or 403 also counts as refused) and the smoke checks. Any failure puts 5.1.0, the folders, the unit and the
-   old sites back on its own. The plugin step skips: 4.0.0.0 is published already.
-2. **The sounds** move with the rest, from the web root's `dist/sounds/` (the fifth `Moved`
-   line). If the deploy says there is no `dist/sounds`, copy them into
-   `/opt/senpan/data/sounds/` by hand (see [The data folder](#the-data-folder)). Then
-   `/sounds/this_is_bad.mp3` answers 200 (`audio/mpeg`).
-3. **Check from outside:** a font link with an allowed site's `Origin` (200, echoed), with
-   its `Referer` alone, as Safari sends (200), with another site's `Origin` (403) and with
-   neither (403); a font file's name under `/fonts/` on each name (404); a picture under
-   `/images/` (200); a Carrd file with any `Origin` (200, `Access-Control-Allow-Origin: *`)
-   and its project's `.carrd.json` (404); `/plugin/pluginmaster.json` (200, `no-store`); the
-   tea-room API with `Origin: https://senpan.cafe` (the origin echoed); `/healthz`.
-4. **Check by hand:** a Carrd page shows its fonts (in Chrome and on an iPhone) and its tea
-   rooms; a board with game sounds on plays them on a draw; an upload to Images, Carrd
-   Upload and Font Upload each lands; System -> Logs shows
-   no `a public file could not be opened`.
-5. **Once 5.2.0 has stayed:** the old document root is read by nothing. Remove its `dist/`,
-   `dist.old/`, `.htaccess`, `.htaccess.old`, `.deploy-backup/` and `plugin.old/`, move
-   `themes.json` and `insert_styles.php` (`scripts/themes/`) to wherever they are run, and
-   remove the folder; delete the six disabled site files from `sites-available`; remove the
-   inert `fonts/.htaccess`, `carrd/.htaccess` and `plugin/.htaccess` from the data folder;
-   and, when nothing needs the way back, the backups folder and
-   `~/.shared-deploy/senpan-data-move/`.
-
-**Rolling the move back by hand**, after the deploy finished (on the host, as root). 5.2.0
-adds no migration, so 5.1.0 runs on the database as it is:
-
-```bash
-state=/root/.shared-deploy/senpan-data-move
-systemctl stop senpan
-install -m 755 -o senpan -g senpan /opt/senpan/app-suite.old /opt/senpan/app-suite
-for d in $(cat "$state/moved"); do mv "/opt/senpan/data/$d" "/var/www/apps.senpan.cafe/$d"; done
-cat "$state/unit.orig" > "$(cat "$state/unit")" && systemctl daemon-reload
-a2dissite senpan && a2ensite $(cat "$state/sites")
-apachectl configtest && systemctl reload apache2
-systemctl start senpan
-```
-
-The fonts go back with their `fonts/.htaccess` (`Require all denied`), which the move never
-removes. The host's record still names v5.2.0, so the next deploy skips it unless `-Force`.
+Once 5.2.0 has stayed, the old document root is read by nothing. Remove its `dist/`, `dist.old/`, `.htaccess`, `.htaccess.old`, `.deploy-backup/` and `plugin.old/`, move `themes.json` and `insert_styles.php` (`scripts/themes/`) to wherever they are run, and remove the folder; delete the six disabled site files from `sites-available`; remove the inert `fonts/.htaccess`, `carrd/.htaccess` and `plugin/.htaccess` from the data folder; and, when nothing needs the way back, the move's backups folder (`~/senpan-before-data-move-<UTC>/`) and `~/.shared-deploy/senpan-data-move/`.
 
 ## Each deploy
 
@@ -372,52 +311,46 @@ removes. The host's record still names v5.2.0, so the next deploy skips it unles
 
 The script is built on shared-tooling's SharedDeploy module (`shared/deploy/pwsh/`, from the `shared/` submodule; its README describes each function), so it takes the shape every deploy there takes: one archive, one SSH connection held for the whole run, one remote run.
 
-> **First-time setup:** the script is version-controlled, but **no** environment-specific value is baked into it - the host, SSH user, key path, service name, opt dir and certificate all live outside the repo. Copy `scripts/deploy.config.example.ps1` to `scripts/deploy.config.ps1` (untracked) and fill in the six required `$Deploy*` values. Each can instead be passed as a `-param` or set via its `$env:DEPLOY_*` variable (`DEPLOY_VPS_HOST`, `DEPLOY_VPS_USER`, `DEPLOY_KEY_PATH`, `DEPLOY_SERVICE_NAME`, `DEPLOY_REMOTE_OPT_DIR`, `DEPLOY_CERT_NAME`); the script fails fast, listing any that are unset, before it builds or connects. `CertName` is the certificate the vhost uses, its folder's name under `/etc/letsencrypt/live`; a plugin deploy doesn't need it. The site's address, which the smoke check fetches, is public already (`plugins/pluginmaster.json` links to it), so it defaults to `https://apps.senpan.cafe`; `-SiteUrl`, `DEPLOY_SITE_URL` or `$DeploySiteUrl` overrides it. `-ConfigPath` points it at another settings file. The live database and the data folder need no setting: they are read from the running unit (step 1). `RemoteDbPath` (`DEPLOY_REMOTE_DB_PATH`, `$DeployRemoteDbPath`) is only a cross-check, used on its own when the unit names no `-db`. A `$DeployWebRoot` left in an older `deploy.config.ps1` is ignored.
+> **First-time setup:** the script is version-controlled, but **no** environment-specific value is baked into it or into the unit and vhost templates - the host, SSH user, key path, service name, service account, opt dir and certificate all live outside the repo. Copy `scripts/deploy.config.example.ps1` to `scripts/deploy.config.ps1` (untracked) and fill in the seven required `$Deploy*` values. Each can instead be passed as a `-param` or set via its `$env:DEPLOY_*` variable (`DEPLOY_VPS_HOST`, `DEPLOY_VPS_USER`, `DEPLOY_KEY_PATH`, `DEPLOY_SERVICE_NAME`, `DEPLOY_SERVICE_USER`, `DEPLOY_REMOTE_OPT_DIR`, `DEPLOY_CERT_NAME`); the script fails fast, listing any that are unset, before it builds or connects. `ServiceUser` is the account the service runs as, never root: the unit's `User=` and `Group=` and the owner of the binary. `CertName` is the certificate the vhost uses, its folder's name under `/etc/letsencrypt/live`; a plugin deploy doesn't need it. `AppPort` (`DEPLOY_APP_PORT`, `$DeployAppPort`) is optional and is 8080 unset: the app listens on `127.0.0.1` at it. `EnvFile` (`DEPLOY_ENV_FILE`) is optional and is `/etc/<service>/<service>.env` unset. `HostKey` (`DEPLOY_HOST_KEY`) is the optional SSH host key fingerprint, passed to plink as `-hostkey`. The site's address, which the smoke check fetches, is public already (`plugins/pluginmaster.json` links to it), so it defaults to `https://apps.senpan.cafe`; `-SiteUrl`, `DEPLOY_SITE_URL` or `$DeploySiteUrl` overrides it. `-ConfigPath` points it at another settings file. The live database and the data folder need no setting: they are `<RemoteOptDir>/data/database.sqlite` and `<RemoteOptDir>/data`, the `-db` and `-data` the unit template gives the app.
 
 **What an app deploy does:**
 
-1. **Read the service on the host**, before anything is built. The unit must be installed. Its `User=` (and `Group=`) is who the backup runs as; the `-db` on its `ExecStart` is the live database; its `-addr` is where the app answers on the host (`:8080`, the binary's default, when it has none, asked on `127.0.0.1`), which `/healthz` is asked on and the vhost proxies to; its `-data` is the data folder. A `RemoteDbPath` that differs from `-db` stops the run with nothing changed. The host also says which release it last took (`~/.shared-deploy/senpan`): when that is this release, the run ends there, unless `-Force`.
-2. **Build the release, in its own checkout.** The front end first (`npm run build` in `frontend/`: vue-tsc + vite, into `backend/internal/web/dist/`), then a static `linux/amd64` binary that embeds it (`GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o app-suite .` in `backend/`). The release's `deploy/apache-vhost.conf` is filled in with the app's address and `CertName`. A broken build changes nothing. Both go into **one** `.tar.gz`: a truncated archive refuses to unpack, where a half-copied folder can look whole.
+1. **Check the host**, before anything is built or changed. The host says which release it last took (`~/.shared-deploy/senpan`): when that is this release, the run ends there, unless `-Force`. Otherwise one run asks the host that the service's account and the data folder are there, that [the env file](#the-env-file) is `root:root` mode `0600`, and that the unit does not pass `-webroot` (the app's files would still be in a web root, where the unit this deploy installs does not look). A failed check ends the run with its reason and nothing changed. The deploy prints the env file's variable names, never a value, warns when `APPSUITE_TURNSTILE_SECRET` is not among them (the login bot check would be off), and names any drop-in on the unit.
+2. **Build the release, in its own checkout.** The front end first (`npm run build` in `frontend/`: vue-tsc + vite, into `backend/internal/web/dist/`), then a static `linux/amd64` binary that embeds it (`GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o app-suite .` in `backend/`). The release's `deploy/senpan.service` and `deploy/apache-vhost.conf` are filled in from the settings (the unit: the service's name, account, opt dir, address and env file; the vhost: the address and `CertName`); a template that lacks a placeholder, or has one nothing fills, stops the run. A broken build changes nothing. The binary, unit and vhost go into **one** `.tar.gz`: a truncated archive refuses to unpack, where a half-copied folder can look whole.
 3. **Upload** the archive as one stream through plink, into the SSH user's home.
-4. **One remote run.** The host checks the archive's SHA-256 and file count, and only then: installs the vhost as `/etc/apache2/sites-available/<service>.conf` where it differs and checks it with `apachectl configtest` (a refusal puts the previous back and stops the run with nothing else changed); stops the service, keeps `app-suite.old`, snapshots the database with `sqlite3 .backup`, checked with `PRAGMA integrity_check`, compressed with gzip and checked with `gzip -t`, to `<db>.pre-<yyyyMMdd-HHmmss>.gz` (UTC; readable by root only; the newest three are kept), installs the binary, owned by the account the unit runs as, starts the service and waits up to 30 s for `/healthz` to answer on the host. If it does not, the previous binary and vhost go back with the snapshot and restart: the new binary may already have migrated the database, and the previous one refuses a newer schema (`database schema vN is newer than this binary`). Once it answers, Apache reloads if the vhost changed. Brief downtime (a few seconds) while the service is stopped. The data folder is never touched. Before the upload, the deploy checks that this run, its rollback and the font check each fit in one command over plink's shared connection (15,000 bytes; past about 16 KB the connection ends the pipe, `Error 109`, before the host runs anything), and stops with nothing changed if one does not.
-5. **Smoke check from this machine, through Cloudflare**, each URL tried three times: `<SiteUrl>/healthz` and `<SiteUrl>/api/v1/version` must name this release's version; `<SiteUrl>/` must name the build's entry script, which must load too; `/images/pwa-512x512.png` and `/plugin/pluginmaster.json` must answer. If any fails, the previous binary and vhost go back with the pre-deploy snapshot, so it starts on the schema it knows. Whatever was written in the seconds the new release ran is lost with it (decided 2026-11-06, as Kindred Nights does). Once the checks pass, the host records the release.
+4. **One remote run.** The host checks the archive's SHA-256 and file count, and only then: installs the vhost as `/etc/apache2/sites-available/<service>.conf` where it differs, enabled and with any other enabled site serving its names disabled, after trying it on a copy of Apache's config and checking it with `apachectl configtest` (a refusal puts everything back and stops the run with nothing else changed); stops the service, keeps `app-suite.old`, snapshots the database with `sqlite3 .backup`, checked with `PRAGMA integrity_check`, compressed with gzip and checked with `gzip -t`, to `<db>.pre-<yyyyMMdd-HHmmss>.gz` (UTC; readable by root only; the newest three are kept), installs the unit as `/etc/systemd/system/<service>.service` where it differs (the previous kept as `<opt>/<service>.service.old`, systemd reloaded, the service enabled), installs the binary, owned by the account the unit runs as, starts the service and waits up to 30 s for `/healthz` to answer on the host. If it does not, the previous binary, unit and vhost go back with the snapshot and restart: the new binary may already have migrated the database, and the previous one refuses a newer schema (`database schema vN is newer than this binary`). Once it answers, Apache reloads if the vhost changed. Brief downtime (a few seconds) while the service is stopped. The data folder is never touched.
+5. **Smoke check from this machine, through Cloudflare**, each URL tried three times: `<SiteUrl>/healthz` and `<SiteUrl>/api/v1/version` must name this release's version; `<SiteUrl>/` must name the build's entry script, which must load too; `/images/pwa-512x512.png` and `/plugin/pluginmaster.json` must answer. If any fails, the previous binary, unit and vhost go back with the pre-deploy snapshot, so it starts on the schema it knows. Whatever was written in the seconds the new release ran is lost with it (decided 2026-11-06, as Kindred Nights does). Once the checks pass, the host records the release.
 6. **Daily backup**, once the smoke check passes: see [Database backups](#database-backups). If it cannot be installed, the run fails saying the site is live but its backup is not.
 7. **Dev-database pull** (unless `-NoDbPull`): an online `sqlite3 .backup` on the host (the service keeps running), downloaded and checked against the host's SHA-256 into `devdata/database.sqlite`. The previous local copy is kept as `database.sqlite.bak-<time>` (the newest three), stale `-wal`/`-shm` files are removed, and the host's copy is deleted. While a local dev server holds the database open, the pull is skipped with a warning. These copies hold **live** data (accounts, password hashes, tokens, webhook URLs) - keep them local.
 
 The checkout under `%TEMP%` is removed at the end, whether the run passed or not.
 
-**The move** (a unit that still passes `-webroot`, which is how 5.2.0 found the live one). Its shell travels in the archive (`data-move-prepare.sh`, `data-move-undo.sh` and `data-move.sh`), and the steps source it, so the run's command stays small. The same run also:
+**What a plugin deploy does.** It checks out the plugin's newest release, reads the published `<SiteUrl>/plugin/pluginmaster.json` and stops before building when the release's version is not higher, since Dalamud updates to nothing else (with `-IfNewer`, the same version ends the run without error; if the index can't be read, the host's own check still stands). Then `dotnet build -c Release` from clean (its `bin/` and `obj/` deleted first, so the package can never lag the manifest), and its repository laid out: `SenpanCompanionAdmin/latest.zip` and `plugins/pluginmaster.json` with `?v=<version>` on its download links. The built version must equal `pluginmaster.json`'s `AssemblyVersion`. The host is checked as in step 1, without the env file; then the whole `plugin/` folder of the data folder is swapped in, owned by the service's account (the previous kept as `plugin.old`), and the published index must then carry the new `?v=`, or the previous folder goes back.
 
-- **before anything stops, changing nothing:** checks that the web root's `images/` is there, that the data folder (`<RemoteOptDir>/data`) holds none of the four folders, that the unit passes `-webroot` and no drop-in sets `ExecStart` or `ReadWritePaths`, that the sites now serving the vhost's names (found with `apachectl -S`) serve no other name, that Apache takes the vhost in their place (tried on a copy of `/etc/apache2`), and that there is room; then backs up each folder, all of `/etc/apache2`, the unit, the web root's `.htaccess` and its `dist/sounds/`, each a `tar.gz` checked with `gzip -t`, into `~/senpan-before-data-move-<UTC>/` (mode 0700), and records what a rollback needs in `~/.shared-deploy/senpan-data-move/`;
-- **after the stop:** moves each folder whole into the data folder (a rename on one filesystem; the fonts with their `.woff2/` copies) and the web root's `dist/sounds/` to the data folder's `sounds/` unless it has one, edits the unit (`-webroot <web root>` becomes `-data <data folder>`, the web root's paths leave `ReadWritePaths`, which keeps or gains one covering the data folder) and checks it with `systemctl show`, disables those sites, enables the vhost and runs `apachectl configtest`. A failure from here to the start moves everything back before the previous release restarts;
-- **after the start:** reloads Apache (graceful), then asks every name the vhost serves, through Apache on the host, for a real font file by four paths; anything but a refusal (400, 403 or 404, redirects followed; no answer is not a refusal), or a `fonts/` still in the web root, rolls the whole run back, as a failed smoke check does too: the previous binary and snapshot, the folders, the unit and the old sites, Apache reloaded.
+**Options.** `-Force` deploys the app's release even when the host already runs it. `-NoBackup` removes `app-suite.old`, the previous unit and vhost and `plugin.old` once the host run succeeds; the smoke check then has nothing to go back to, so a failure only stops the run. The database snapshot is still taken. `-NoDbPull` skips step 7.
 
-**What a plugin deploy does.** It checks out the plugin's newest release, reads the published `<SiteUrl>/plugin/pluginmaster.json` and stops before building when the release's version is not higher, since Dalamud updates to nothing else (with `-IfNewer`, the same version ends the run without error; if the index can't be read, the host's own check still stands). Then `dotnet build -c Release` from clean (its `bin/` and `obj/` deleted first, so the package can never lag the manifest), and its repository laid out: `SenpanCompanionAdmin/latest.zip` and `plugins/pluginmaster.json` with `?v=<version>` on its download links. The built version must equal `pluginmaster.json`'s `AssemblyVersion`. On the host, the data folder is read from the unit, the whole `plugin/` folder in it is swapped in, owned by the service's account (the previous kept as `plugin.old`), and the published index must then carry the new `?v=`, or the previous folder goes back.
+**The connection.** The droplet runs `ufw limit ssh`, which refuses an address after six connections in 30 s. The whole run is **one** SSH connection, held by a background `plink -share`; every command, the upload and the download ride it. If it drops, the module reconnects (one new connection) and retries the step once, resuming where it stopped; only a refused reconnect waits 35 s.
 
-**Options.** `-Force` deploys the app's release even when the host already runs it. `-NoBackup` removes `app-suite.old`, the previous vhost and `plugin.old` once the host run succeeds; the smoke check then has nothing to go back to, so a failure only stops the run. The database snapshot is still taken. The run that moves the files out of the web root refuses `-NoBackup`, since that move is undone through the previous release. `-NoDbPull` skips step 7.
-
-**The connection.** The droplet runs `ufw limit ssh`, which refuses an address after six connections in 30 s. The whole run is **one** SSH connection, held by a background `plink -share`; every command, the upload and the download ride it. If it drops, the module reconnects (one new connection) and retries the step once, resuming where it stopped; only a refused reconnect waits 35 s. Each part of the move is safe to run again.
-
-**Rolling back by hand** (on the host): the vhost with `mv -f /etc/apache2/sites-available/<service>.conf.old /etc/apache2/sites-available/<service>.conf && apachectl configtest && systemctl reload apache2`; the plugin with `mv plugin plugin.failed && mv plugin.old plugin && rm -rf plugin.failed` in the data folder; the binary with `systemctl stop <service> && install -m 755 -o <user> -g <group> app-suite.old app-suite && systemctl start <service>` in the opt dir (the unit's `User=` and `Group=`). If the previous binary refuses the database, decompress the newest snapshot over it in place, which keeps the file's owner: `systemctl stop <service> && rm -f <db>-wal <db>-shm && gunzip -c "$(ls -1t <db>.pre-*.gz | head -n 1)" > <db> && systemctl start <service>`. Going back past 5.2.0 means the move too (see [Upgrading to 5.2.0](#upgrading-to-520)). A rollback by hand leaves the host's record naming the release it rolled back from, so the next deploy skips that release unless `-Force`.
+**Rolling back by hand** (on the host): the vhost with `mv -f /etc/apache2/sites-available/<service>.conf.old /etc/apache2/sites-available/<service>.conf && apachectl configtest && systemctl reload apache2` (and `a2ensite` any site the deploy disabled, which it names); the plugin with `mv plugin plugin.failed && mv plugin.old plugin && rm -rf plugin.failed` in the data folder; the unit and binary with `systemctl stop <service> && mv -f <opt>/<service>.service.old /etc/systemd/system/<service>.service && systemctl daemon-reload && install -m 755 -o <user> -g <group> app-suite.old app-suite && systemctl start <service>` in the opt dir (the unit's `User=` and `Group=`; leave the `mv` out when the deploy did not change the unit, which leaves no `.old`). If the previous binary refuses the database, decompress the newest snapshot over it in place, which keeps the file's owner: `systemctl stop <service> && rm -f <db>-wal <db>-shm && gunzip -c "$(ls -1t <db>.pre-*.gz | head -n 1)" > <db> && systemctl start <service>`. A rollback by hand leaves the host's record naming the release it rolled back from, so the next deploy skips that release unless `-Force`.
 
 **Requirements.**
 
 - PowerShell 7.4 or later on Windows, with Windows' own `tar.exe` (shipped since Windows 10 1803), git, Node and Go.
 - PuTTY's `plink` 0.85 or later (connection sharing), on PATH or in `C:\Program Files\PuTTY`; pscp is no longer used. plink runs in batch mode, so a passphrase-protected `.ppk` must be loaded into Pageant first: run `pageant.exe "<KeyPath>"` once and enter the passphrase (it stays unlocked for the session; a `shell:startup` shortcut loads it at login). The first-ever connection from PuTTY also needs the host key cached once (`plink -i "<KeyPath>" <user>@<host>`, accept the fingerprint).
-- On the host: bash, systemd, GNU coreutils, `curl` (the on-host checks) and `sqlite3` (the snapshot, the backup and the pull); Apache with the modules [the vhost](#the-vhost) needs, and `a2ensite`/`a2dissite` and `tar` for the move.
+- On the host: bash, systemd, GNU coreutils, `getent`, `curl` (the on-host checks), `awk` and `apachectl` (the vhost check) and `sqlite3` (the snapshot, the backup and the pull); Apache with the modules [the vhost](#the-vhost) needs.
 - For the plugin: the .NET 10 SDK.
 
 **Manual fallback.**
 
 1. Locally, at the release's tag: `cd frontend && npm ci && npm run build`, then build the binary in `backend/` as in step 2.
-2. On the host: stop the service, install the binary over `app-suite`, start it, and check `/healthz`. When `deploy/apache-vhost.conf` changed, fill in its `__APP__` with the app's address and `__CERT__` with the certificate's name, copy it over `/etc/apache2/sites-available/<service>.conf`, and `apachectl configtest && systemctl reload apache2`.
+2. On the host: stop the service, install the binary over `app-suite`, start it, and check `/healthz`. When `deploy/senpan.service` changed, fill in its placeholders (the service's name, account, opt dir, address and env file), copy it over `/etc/systemd/system/<service>.service` before the start, and `systemctl daemon-reload`. When `deploy/apache-vhost.conf` changed, fill in its `__APP__` with the app's address and `__CERT__` with the certificate's name, copy it over `/etc/apache2/sites-available/<service>.conf`, and `apachectl configtest && systemctl reload apache2`.
 
 ## Database backups
 
 Every app deploy keeps a **daily backup** of the live database installed and checked: shared-tooling's `Install-BackupTimer` with its shared job. It is two systemd units named after the service, `<service>-backup.service` (oneshot) and `<service>-backup.timer`, and the job script `/usr/local/libexec/shared-deploy/<service>-backup`. All three are rewritten by the deploy, so change them in `scripts/deploy.ps1`, not on the host.
 
 - **When:** daily at 10:00 UTC, spread over up to 15 minutes; a missed run happens at the next boot.
-- **As whom:** the service's own `User=` and `Group=`, read from the running unit at each deploy, the account that owns the database. A unit with `DynamicUser=yes` has no fixed user, so the deploy refuses to install the backup; one with no `User=` runs it as root, with a warning.
+- **As whom:** the service's own account, the `ServiceUser` setting, which owns the database.
 - **What:** a `VACUUM INTO` copy of the live database, taken while the app keeps running (WAL included), checked with `PRAGMA integrity_check`, compressed with gzip and checked with `gzip -t` before it takes the day's name. No uncompressed copy is left behind.
 - **Where:** a `backups/` folder beside the database (created `0700`, owned by the service user), one file per UTC day: `<db folder>/backups/<service>-YYYY-MM-DD.sqlite.gz`. A second run the same day replaces that day's copy. **28 days** are kept; the job removes only its own dated names.
 - **Sandbox:** the same hardening as Kindred Nights' backup (`ProtectSystem=strict`, `UMask=0077`, no capabilities and the rest); it may write only to the database's folder.

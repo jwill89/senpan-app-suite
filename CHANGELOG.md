@@ -82,8 +82,9 @@ Every address stays as it was, `fonts.senpan.cafe/kit.css` and its font links in
 - **The game sounds play again.** Since 4.0.0 a release carried none of the four sound
   effects the "game" sound mode and the Yoever reaction play, so they were silent. They
   stay out of the repository, since they may be the game's own effects: the app now serves
-  `/sounds/*.mp3` from the data folder's `sounds/`, where they are copied once by hand, and
-  the build strips any copy of them so no binary carries one.
+  `/sounds/*.mp3` from the data folder's `sounds/`, where the first 5.2.0 deploy moves them
+  from the web root's old `dist/sounds/` (or they are copied once by hand), and the build
+  strips any copy of them so no binary carries one.
 
 #### Deploy
 
@@ -95,13 +96,13 @@ fails:
    Apache's config, the unit and the web root's `.htaccess` (compressed, root only, in
    `~/senpan-before-data-move-<time>`).
 2. It stops the service, moves `images/`, `fonts/`, `carrd/` and `plugin/` into the data
-   folder, edits the unit to `-data` and `ReadWritePaths` to the opt folder, swaps the
+   folder, and the web root's `dist/sounds/` to its `sounds/`, edits the unit to `-data` and `ReadWritePaths` to the opt folder, swaps the
    apps, fonts and carrd site files for the one vhost, starts 5.2.0 and reloads Apache.
 3. It asks every name, through Apache on the host, for a font file as a plain file (each
    must be refused with a 400, 403 or 404), then checks the site through Cloudflare.
 
-Copy the four sounds into the data folder's `sounds/` once, before or after the deploy
-(`deploy/README.md`, The data folder).
+If the deploy finds no `dist/sounds/` in the web root, copy the four sounds into the data
+folder's `sounds/` by hand (`deploy/README.md`, The data folder).
 
 Then check the font links from an allowed site (its `Origin`, and a `Referer` alone as
 Safari sends), that another site is refused, a picture, a Carrd file's CORS header, the

@@ -28,7 +28,7 @@ served from a document root.
 |   \-- .woff2/                <- the converted WOFF2 copies
 +-- carrd/                     <- PERSISTENT: the Carrd projects, served at carrd.senpan.cafe (see Carrd host)
 +-- plugin/                    <- the Dalamud custom repo, replaced whole by each plugin publish (previous kept as plugin.old)
-\-- sounds/                    <- the game's sound effects, copied in by hand (see below); served at /sounds/
+\-- sounds/                    <- the game's sound effects, moved in by the 5.2.0 deploy or copied in by hand (see below); served at /sounds/
 ```
 
 The app serves `/images/<path>` (the library's picture types: jpg, png, webp, gif, svg),
@@ -47,8 +47,10 @@ build strips its own `images/` and `sounds/`, so the binary never carries a copy
 **The sounds** (`level_up`, `moogle_noise`, `queue_pop` and `this_is_bad`, each `.mp3`) are
 the player's "game" sounds and the Yoever reaction (`frontend/src/lib/sound.ts`). They are
 kept out of the repository (`frontend/public/sounds/` is git-ignored, and holds them for
-`vite dev`), so no release carries them: copy them into the data folder once, by hand, from
-a machine that has them:
+`vite dev`), so no release carries them. The first 5.2.0 deploy moves them in from the web
+root's `dist/sounds/`, where Apache served the SPA's sounds before the app embedded it, when
+that is there and the data folder has no `sounds/`. Otherwise copy them into the data folder
+once, by hand, from a machine that has them:
 
 ```powershell
 plink -i "<KeyPath>" <user>@<host> "install -d -m 755 /opt/senpan/data/sounds"
@@ -316,12 +318,13 @@ stays as it is, `fonts.senpan.cafe/kit.css` and its token links included. In ord
    `scripts/deploy.config.ps1` first. Once CI is green on `main` it tags `v5.2.0`;
    `task deploy` ships it.
    Watch for the backups line (`/root/senpan-before-data-move-<UTC>/`), the four `Moved`
-   lines, the unit's `-data` line, `Apache took the new sites`, the font check (every line
+   lines (five with the sounds), the unit's `-data` line, `Apache took the new sites`, the font check (every line
    `asked 404`; a 400 or 403 also counts as refused) and the smoke checks. Any failure puts 5.1.0, the folders, the unit and the
    old sites back on its own. The plugin step skips: 4.0.0.0 is published already.
-2. **Copy the sounds** into `/opt/senpan/data/sounds/` (see [The data folder](#the-data-folder)),
-   before or after the deploy: the data folder is already there, and the move leaves a
-   `sounds/` in it alone. Then `/sounds/this_is_bad.mp3` answers 200 (`audio/mpeg`).
+2. **The sounds** move with the rest, from the web root's `dist/sounds/` (the fifth `Moved`
+   line). If the deploy says there is no `dist/sounds`, copy them into
+   `/opt/senpan/data/sounds/` by hand (see [The data folder](#the-data-folder)). Then
+   `/sounds/this_is_bad.mp3` answers 200 (`audio/mpeg`).
 3. **Check from outside:** a font link with an allowed site's `Origin` (200, echoed), with
    its `Referer` alone, as Safari sends (200), with another site's `Origin` (403) and with
    neither (403); a font file's name under `/fonts/` on each name (404); a picture under
@@ -385,8 +388,8 @@ The checkout under `%TEMP%` is removed at the end, whether the run passed or not
 
 **The move** (a unit that still passes `-webroot`, which is how 5.2.0 found the live one). The same run also:
 
-- **before anything stops, changing nothing:** checks that the web root's `images/` is there, that the data folder (`<RemoteOptDir>/data`) holds none of the four folders, that the unit passes `-webroot` and no drop-in sets `ExecStart` or `ReadWritePaths`, that the sites now serving the vhost's names (found with `apachectl -S`) serve no other name, that Apache takes the vhost in their place (tried on a copy of `/etc/apache2`), and that there is room; then backs up each folder, all of `/etc/apache2`, the unit and the web root's `.htaccess`, each a `tar.gz` checked with `gzip -t`, into `~/senpan-before-data-move-<UTC>/` (mode 0700), and records what a rollback needs in `~/.shared-deploy/senpan-data-move/`;
-- **after the stop:** moves each folder whole into the data folder (a rename on one filesystem; the fonts with their `.woff2/` copies), edits the unit (`-webroot <web root>` becomes `-data <data folder>`, the web root's paths leave `ReadWritePaths`, which keeps or gains one covering the data folder) and checks it with `systemctl show`, disables those sites, enables the vhost and runs `apachectl configtest`. A failure from here to the start moves everything back before the previous release restarts;
+- **before anything stops, changing nothing:** checks that the web root's `images/` is there, that the data folder (`<RemoteOptDir>/data`) holds none of the four folders, that the unit passes `-webroot` and no drop-in sets `ExecStart` or `ReadWritePaths`, that the sites now serving the vhost's names (found with `apachectl -S`) serve no other name, that Apache takes the vhost in their place (tried on a copy of `/etc/apache2`), and that there is room; then backs up each folder, all of `/etc/apache2`, the unit, the web root's `.htaccess` and its `dist/sounds/`, each a `tar.gz` checked with `gzip -t`, into `~/senpan-before-data-move-<UTC>/` (mode 0700), and records what a rollback needs in `~/.shared-deploy/senpan-data-move/`;
+- **after the stop:** moves each folder whole into the data folder (a rename on one filesystem; the fonts with their `.woff2/` copies) and the web root's `dist/sounds/` to the data folder's `sounds/` unless it has one, edits the unit (`-webroot <web root>` becomes `-data <data folder>`, the web root's paths leave `ReadWritePaths`, which keeps or gains one covering the data folder) and checks it with `systemctl show`, disables those sites, enables the vhost and runs `apachectl configtest`. A failure from here to the start moves everything back before the previous release restarts;
 - **after the start:** reloads Apache (graceful), then asks every name the vhost serves, through Apache on the host, for a real font file by four paths; anything but a refusal (400, 403 or 404, redirects followed; no answer is not a refusal), or a `fonts/` still in the web root, rolls the whole run back, as a failed smoke check does too: the previous binary and snapshot, the folders, the unit and the old sites, Apache reloaded.
 
 **What a plugin deploy does.** It checks out the plugin's newest release, reads the published `<SiteUrl>/plugin/pluginmaster.json` and stops before building when the release's version is not higher, since Dalamud updates to nothing else (with `-IfNewer`, the same version ends the run without error; if the index can't be read, the host's own check still stands). Then `dotnet build -c Release` from clean (its `bin/` and `obj/` deleted first, so the package can never lag the manifest), and its repository laid out: `SenpanCompanionAdmin/latest.zip` and `plugins/pluginmaster.json` with `?v=<version>` on its download links. The built version must equal `pluginmaster.json`'s `AssemblyVersion`. On the host, the data folder is read from the unit, the whole `plugin/` folder in it is swapped in, owned by the service's account (the previous kept as `plugin.old`), and the published index must then carry the new `?v=`, or the previous folder goes back.

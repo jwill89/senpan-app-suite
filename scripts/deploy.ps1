@@ -49,10 +49,11 @@
         (<RemoteOptDir>/data) holds none of them; the sites now serving the vhost's names
         are found from apachectl -S and serve no other name; Apache takes the new vhost in
         their place, tried on a copy of its config; and each folder, Apache's config, the
-        unit and the web root's .htaccess are backed up, compressed and checked, to
-        ~/senpan-before-data-move-<time> (root's alone).
+        unit, the web root's .htaccess and its dist/sounds are backed up, compressed and
+        checked, to ~/senpan-before-data-move-<time> (root's alone).
       - After the stop: images, fonts, carrd and plugin move whole into the data folder
-        (the fonts with their converted copies), the unit's -webroot becomes -data and
+        (the fonts with their converted copies), the web root's dist/sounds becomes the
+        data folder's sounds/ unless it has one, the unit's -webroot becomes -data and
         its ReadWritePaths drop the web root's folders for the data folder, those sites
         are disabled and the vhost enabled, and apachectl configtest must pass. Apache
         reloads once the new release answers.
@@ -470,6 +471,10 @@ e_undo() {
     done < "$state/moved"
     rm -f "$state/moved"
   fi
+  if [ -f "$state/sounds" ]; then
+    if [ -e "$data/sounds" ] && [ ! -e "$web/dist/sounds" ]; then mv "$data/sounds" "$web/dist/sounds" && echo "Moved $data/sounds back to $web/dist/sounds." >&2; fi
+    rm -f "$state/sounds"
+  fi
   if [ -n "$unit" ] && [ -f "$state/unit.orig" ] && ! cmp -s "$state/unit.orig" "$unit"; then
     cat "$state/unit.orig" > "$unit"
     systemctl daemon-reload
@@ -495,6 +500,7 @@ for d in $folders; do
   if [ -e "$web/$d" ] && [ -e "$data/$d" ]; then say "$data/$d is there already, and so is $web/$d; nothing was changed."; exit 3; fi
 done
 if [ ! -d "$(dirname "$data")" ]; then say "$(dirname "$data") is not there to hold $data; nothing was changed."; exit 3; fi
+if [ -L "$web/dist/sounds" ]; then say "$web/dist/sounds is a link, not a folder; nothing was changed."; exit 3; fi
 # The unit: -webroot outside a comment, and no drop-in that sets what the move edits.
 unit=$(systemctl show "$svc" -p FragmentPath --value)
 if [ ! -f "$unit" ] || ! grep -Ev '^[[:space:]]*#' "$unit" | grep -Eq -- '(^|[[:space:]=])--?webroot([[:space:]]|=)'; then
@@ -561,6 +567,7 @@ gzip -t "$bdir/apache2.tar.gz"
 tar -czf "$bdir/unit.tar.gz" -C / "${unit#/}"
 gzip -t "$bdir/unit.tar.gz"
 if [ -f "$web/.htaccess" ]; then tar -czf "$bdir/webroot-htaccess.tar.gz" -C "$web" .htaccess; gzip -t "$bdir/webroot-htaccess.tar.gz"; fi
+if [ -d "$web/dist/sounds" ]; then tar -czf "$bdir/sounds.tar.gz" -C "$web/dist" sounds; gzip -t "$bdir/sounds.tar.gz"; fi
 # What a rollback needs to put each back.
 mkdir -p "$state"
 chmod 700 "$state"
@@ -568,8 +575,15 @@ printf '%s\n' $sites > "$state/sites"
 printf '%s\n' "$unit" > "$state/unit"
 printf '%s\n' "$bdir" > "$state/backups"
 cp -p "$unit" "$state/unit.orig"
-rm -f "$state/moved"
+rm -f "$state/moved" "$state/sounds"
 echo "Checked: the sites to switch are$sites, and Apache takes the new vhost in their place."
+if [ -e "$data/sounds" ]; then
+  echo "$data/sounds is there already, so the sounds in $web/dist/sounds stay where they are."
+elif [ -d "$web/dist/sounds" ]; then
+  echo "The sounds in $web/dist/sounds move too."
+else
+  say "There is no $web/dist/sounds, so the sounds stay silent until they are copied into $data/sounds by hand (deploy/README.md)."
+fi
 echo "Backed up the web root's folders, Apache's config and the unit to $bdir."
 )
 '@
@@ -588,6 +602,14 @@ for d in $folders; do
     echo "Moved $web/$d to $data/$d."
   fi
 done
+# The sounds, from the web root's dist/sounds, where Apache served the SPA's sounds
+# before the app embedded it, unless the data folder has its own already.
+if [ -d "$web/dist/sounds" ] && [ ! -e "$data/sounds" ]; then
+  : > "$state/sounds"
+  mv "$web/dist/sounds" "$data/sounds"
+  chmod -R a+rX "$data/sounds"
+  echo "Moved $web/dist/sounds to $data/sounds."
+fi
 if [ -e "$web/fonts" ]; then echo "$web/fonts is still there after the move." >&2; exit 1; fi
 # -data in place of -webroot, and the data folder writable in place of the web root's.
 sed -E "/^[[:space:]]*#/!s#(^|[[:space:]=])--?webroot(=|[[:space:]]+)[^[:space:]\\\\]+#\\1-data $data#" "$state/unit.orig" |

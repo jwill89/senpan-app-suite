@@ -62,6 +62,8 @@
         followed) rolls the run back.
       - Any failure, from the stop to the smoke check, puts everything back: the folders,
         the unit and the sites with it.
+      The move's shell travels in the archive (data-move*.sh), and the steps source it, so
+      the host run's command stays within what plink's shared connection carries.
 
     plugin: build the release's plugin from clean and lay out its repository (latest.zip,
     and plugins/pluginmaster.json with ?v=<version> on its download links), refuse a
@@ -228,6 +230,19 @@ function Test-RemotePath {
     [OutputType([bool])]
     param([string]$Path)
     $Path -match '^/[A-Za-z0-9._/@+-]*[A-Za-z0-9._@+-]$' -and $Path -notmatch '(^|/)\.\.?(/|$)'
+}
+
+# plink carries a remote command in one packet over its shared connection, whose buffer
+# holds about 16 KB; a longer one ends the pipe (Error 109) before the host runs any of
+# it. The limit leaves room for the packet's own fields.
+$commandLimit = 15000
+function Assert-CommandFit {
+    [CmdletBinding()]
+    param([string]$Script, [string]$What)
+    $size = [System.Text.Encoding]::UTF8.GetByteCount(($Script -replace "`r", ''))
+    if ($size -gt $commandLimit) {
+        throw "$What is $size bytes, more than the $commandLimit plink's shared connection carries in one command; nothing was changed."
+    }
 }
 
 # The service as the host runs it: the unit lives only there, so it is the one place
@@ -439,10 +454,6 @@ try {
     }
     Set-Content -LiteralPath $vhost -Value ($template.Replace('__APP__', $addr).Replace('__CERT__', $certName)) -NoNewline
 
-    Write-Step 'Packing the deploy...'
-    $archive = Compress-DeployArchive -Content ([ordered]@{ 'app-suite' = $binary; 'apache-vhost.conf' = $vhost })
-    Write-Ok ('{0} files, {1:N1} MB, one archive' -f $archive.FileCount, ($archive.Size / 1MB))
-
     # -- The move out of the web root, as shell for the remote run -------------------
     $prepare = $null
     $move = $null
@@ -487,7 +498,7 @@ e_undo() {
 '@
         # Before anything stops, and changing nothing: what the move needs is checked,
         # and everything it touches is backed up.
-        $prepare = "(`nset -e`n$vars`nsvc='$service'`n" + @'
+        $prepareBody = @'
 vhost="$bundle/apache-vhost.conf"
 say() { printf '%s\n' "$*" >&2; }
 for t in a2ensite a2dissite apache2ctl tar gzip awk curl; do
@@ -512,7 +523,8 @@ done
 # The sites now serving the vhost's names (apachectl -S), each serving those names alone.
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
-sed -n -E 's/^[[:space:]]*Server(Name|Alias)[[:space:]]+//p' "$vhost" | tr -s ' \t' '\n\n' | sed '/^$/d' | sort -u > "$tmp/names"
+# A site file may end its lines with CRLF; the CR is no part of a name.
+sed -n -E 's/^[[:space:]]*Server(Name|Alias)[[:space:]]+//p' "$vhost" | tr -s ' \t\r' '\n\n\n' | sed '/^$/d' | sort -u > "$tmp/names"
 if [ ! -s "$tmp/names" ]; then say 'The new vhost names no host; nothing was changed.'; exit 3; fi
 if ! apache2ctl -S > "$tmp/dump" 2>&1; then cat "$tmp/dump" >&2; say 'apachectl -S failed; nothing was changed.'; exit 3; fi
 : > "$tmp/files"
@@ -528,7 +540,7 @@ for f in $(sort -u "$tmp/files"); do
     /etc/apache2/sites-enabled/*) ;;
     *) say "$f serves one of the vhost's names but is not an enabled site; nothing was changed."; exit 3 ;;
   esac
-  sed -n -E 's/^[[:space:]]*Server(Name|Alias)[[:space:]]+//p' "$f" | tr -s ' \t' '\n\n' | sed '/^$/d' | sort -u > "$tmp/served"
+  sed -n -E 's/^[[:space:]]*Server(Name|Alias)[[:space:]]+//p' "$f" | tr -s ' \t\r' '\n\n\n' | sed '/^$/d' | sort -u > "$tmp/served"
   other=$(grep -vxF -f "$tmp/names" "$tmp/served" | tr '\n' ' ' || true)
   if [ -n "$other" ]; then say "$f also serves $other, which the new vhost does not; nothing was changed."; exit 3; fi
   sites="$sites $s"
@@ -585,12 +597,12 @@ else
   say "There is no $web/dist/sounds, so the sounds stay silent until they are copied into $data/sounds by hand (deploy/README.md)."
 fi
 echo "Backed up the web root's folders, Apache's config and the unit to $bdir."
-)
 '@
+        $prepare = "(`nset -e`n$vars`nsvc='$service'`n. `"`$bundle/data-move-prepare.sh`"`n)"
         # After the stop (Install-ServiceBinary's -AfterStop): the folders move, the unit
         # takes -data, the sites switch. A failure from here to the start puts it all back
         # before the module restarts the previous release.
-        $move = "$vars`n$undoFunction`n" + @'
+        $moveBody = @'
 trap 'e_undo; abort_restart' EXIT
 sites=$(cat "$state/sites")
 unit=$(cat "$state/unit")
@@ -661,6 +673,12 @@ a2ensite -q "$site"
 if ! out=$(apache2ctl configtest 2>&1); then echo "$out" >&2; echo 'Apache refused the new vhost.' >&2; exit 5; fi
 echo "Apache's sites switched to $site; it takes them once the new release answers."
 '@
+        $move = "$vars`n. `"`$bundle/data-move-undo.sh`"`n. `"`$bundle/data-move.sh`""
+        $moveFiles = [ordered]@{
+            'data-move-prepare.sh' = $prepareBody
+            'data-move-undo.sh'    = $undoFunction
+            'data-move.sh'         = $moveBody
+        }
         # A start that fails (Install-ServiceBinary's -OnRollback): the same undo, before
         # the module starts the previous release. The function is the one -AfterStop defined.
         $onRollback = 'e_undo'
@@ -681,7 +699,7 @@ if [ -e "$web/fonts" ]; then echo "present $web/fonts"; fi
 f=$(find "$data/fonts" -maxdepth 1 -type f ! -name '.*' 2>/dev/null | head -n 1)
 if [ -z "$f" ]; then echo 'nofont'; exit 0; fi
 name=$(basename "$f" | sed -e 's/%/%25/g' -e 's/ /%20/g' -e 's/#/%23/g' -e 's/?/%3F/g')
-for n in $(sed -n -E 's/^[[:space:]]*ServerName[[:space:]]+//p' '__VHOST__' | sort -u); do
+for n in $(sed -n -E 's/^[[:space:]]*ServerName[[:space:]]+//p' '__VHOST__' | tr -d '\r' | sort -u); do
   for p in "/fonts/$name" "/$name" "/carrd/../fonts/$name" "/images/../fonts/$name"; do
     code=$(curl -s -k -L --max-redirs 5 --path-as-is -o /dev/null -w '%{http_code}' -m 10 --resolve "$n:443:127.0.0.1" "https://$n$p" || true)
     echo "asked $code https://$n$p"
@@ -690,11 +708,18 @@ done
 '@
     }
 
-    # -- Upload, then one remote run ---------------------------------------------
-    Write-Step 'Uploading...'
-    $upload = Invoke-Upload -Path $archive.Path -Destination 'senpan-deploy.tgz' -Activity "Uploading Senpan App Suite $version" -FileCount $archive.FileCount
-    if (-not $upload.Ok) { throw "Upload failed; nothing on the host changed.`n$($upload.Err)" }
-    Write-Ok ('Uploaded in {0:mm\:ss}.' -f $upload.Elapsed)
+    # -- Pack the deploy -----------------------------------------------------------
+    $content = [ordered]@{ 'app-suite' = $binary; 'apache-vhost.conf' = $vhost }
+    if ($moving) {
+        foreach ($part in $moveFiles.GetEnumerator()) {
+            $path = Join-Path $hostDir $part.Key
+            [System.IO.File]::WriteAllText($path, ($part.Value -replace "`r", ''))
+            $content[$part.Key] = $path
+        }
+    }
+    Write-Step 'Packing the deploy...'
+    $archive = Compress-DeployArchive -Content $content
+    Write-Ok ('{0} files, {1:N1} MB, one archive' -f $archive.FileCount, ($archive.Size / 1MB))
 
     # The database snapshot is the way back from a migration: starting the new binary
     # migrates the live database, and the previous binary refuses a schema newer than its
@@ -722,10 +747,24 @@ done
         if ($moving) { $prepare }
         Install-ServiceBinary -AsStep @install
     )
+    # The smoke check's way back, built now so it is measured with the host run.
+    $rollbackScript = @(
+        Restore-ServiceBinary -ServiceName $service -Binary $remoteBinary -Owner $serviceOwner -Database $db -VhostPath $vhostPath -OnRollback $undo -AsScript
+    )
+    Assert-CommandFit -What 'The host run' -Script (Invoke-DeployBundle -AsScript -Archive 'senpan-deploy.tgz' -Sha256 $archive.Sha256 -ExpectedFileCount $archive.FileCount -Step $steps)
+    Assert-CommandFit -What 'The rollback' -Script ($rollbackScript -join "`n")
+    if ($moving) { Assert-CommandFit -What 'The font check' -Script $fontCheck }
+
+    # -- Upload, then one remote run ---------------------------------------------
+    Write-Step 'Uploading...'
+    $upload = Invoke-Upload -Path $archive.Path -Destination 'senpan-deploy.tgz' -Activity "Uploading Senpan App Suite $version" -FileCount $archive.FileCount
+    if (-not $upload.Ok) { throw "Upload failed; nothing on the host changed.`n$($upload.Err)" }
+    Write-Ok ('Uploaded in {0:mm\:ss}.' -f $upload.Elapsed)
     Write-Step "Deploying $version on the host..."
     Invoke-DeployBundle -Archive 'senpan-deploy.tgz' -Sha256 $archive.Sha256 -ExpectedFileCount $archive.FileCount -Step $steps
     if ($moving) {
-        $backups = "$(@(Invoke-Remote -Script "cat ""`$HOME/.shared-deploy/$record-data-move/backups""") | Select-Object -First 1)"
+        $readBackups = 'cat "$HOME/.shared-deploy/' + $record + '-data-move/backups"'
+        $backups = @(Invoke-Remote -Script $readBackups) | Select-Object -First 1
     }
 
     # -- Smoke check, through Cloudflare -----------------------------------------
@@ -733,9 +772,6 @@ done
     # before this deploy's start, since the new binary may have migrated the schema, and
     # after a move, the web root's folders, the unit and the old sites. What was written in
     # the seconds the new release ran is lost with it.
-    $rollbackScript = @(
-        Restore-ServiceBinary -ServiceName $service -Binary $remoteBinary -Owner $serviceOwner -Database $db -VhostPath $vhostPath -OnRollback $undo -AsScript
-    )
     $rollback = { Invoke-RemoteStep -Script $rollbackScript -FailureMessage 'Rolling back failed on the host' }
 
     if ($moving) {

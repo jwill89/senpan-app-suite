@@ -26,7 +26,7 @@ const testWebhook = "https://discord.com/api/webhooks/1/test-token"
 // taking plaques now.
 type emaFestival struct {
 	mapID, boardID, windowID int
-	webRoot                  string
+	dataDir                  string
 	env                      *testEnv
 }
 
@@ -59,10 +59,10 @@ func day(over map[string]any) map[string]any {
 
 func newEmaFestival(t *testing.T) emaFestival {
 	t.Helper()
-	webRoot := t.TempDir()
-	env := newTestEnvWithWebRoot(t, webRoot)
+	dataDir := t.TempDir()
+	env := newTestEnvWithDataDir(t, dataDir)
 	env.loginAdmin(t)
-	f := emaFestival{mapID: env.createMap(t, "Obon Matsuri 2026"), webRoot: webRoot, env: env}
+	f := emaFestival{mapID: env.createMap(t, "Obon Matsuri 2026"), dataDir: dataDir, env: env}
 	env.publishMap(t, f.mapID)
 
 	var board map[string]any
@@ -122,7 +122,7 @@ func (f emaFestival) requestPlaque(t *testing.T, name, desc string) *http.Respon
 
 // plaqueFile is where a stored plaque image lives on disk.
 func (f emaFestival) plaqueFile(rel string) string {
-	return filepath.Join(f.webRoot, filepath.FromSlash(rel))
+	return filepath.Join(f.dataDir, filepath.FromSlash(rel))
 }
 
 // submitted sends a plaque and answers it as the visitor sees it.
@@ -300,7 +300,7 @@ func TestEma_OnePlaquePerPersonPerDayAcrossOptions(t *testing.T) {
 	if r := f.submitPlaque(t, "aria ashwood", plaquePNG(t)); r.StatusCode != http.StatusConflict {
 		t.Errorf("second design = %d; want 409", r.StatusCode)
 	}
-	files, _ := os.ReadDir(filepath.Join(f.webRoot, "images", "ema_plaques"))
+	files, _ := os.ReadDir(filepath.Join(f.dataDir, "images", "ema_plaques"))
 	if len(files) != 1 {
 		t.Errorf("%d plaque files kept; want the refused one removed again", len(files))
 	}
@@ -683,8 +683,8 @@ func TestEma_ArtistPostsTheFinishedPlaqueWithoutKeepingIt(t *testing.T) {
 	if want := "Requested by **Aria Ashwood @ Gilgamesh**, made by **Tara** - Day 1"; !strings.Contains(hook.posts[0], want) {
 		t.Errorf("payload = %s; want %q", hook.posts[0], want)
 	}
-	// Posted and dropped: no copy of it anywhere under the web root.
-	_ = filepath.WalkDir(f.webRoot, func(p string, d os.DirEntry, err error) error {
+	// Posted and dropped: no copy of it anywhere under the data folder.
+	_ = filepath.WalkDir(f.dataDir, func(p string, d os.DirEntry, err error) error {
 		if err == nil && !d.IsDir() {
 			if data, _ := os.ReadFile(p); bytes.Equal(data, img) { //nolint:gosec // a test walking its own temp dir
 				t.Errorf("the finished plaque was kept on the server at %s", p)

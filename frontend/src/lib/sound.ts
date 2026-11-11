@@ -49,12 +49,14 @@ export function setSoundVolume(v: number): void {
 }
 
 // -- Game sound samples (MP3s served from /sounds) ----------------------------
-// One reusable <audio> per file, played by resetting currentTime. Best-effort:
-// any failure (missing file, blocked autoplay) is swallowed.
+// The server serves them from its data folder, not from the build: they are kept
+// out of the repository, in `public/sounds/` for `vite dev`. One reusable <audio>
+// per file, played by resetting currentTime. Best-effort: any failure (missing
+// file, blocked autoplay) is swallowed.
 
 const sampleCache = new Map<string, HTMLAudioElement>()
 
-/** Public URL of a bundled sound effect (served from <base>/sounds/<name>.mp3). */
+/** Public URL of a sound effect (served from <base>/sounds/<name>.mp3). */
 function soundUrl(name: string): string {
   return `${import.meta.env.BASE_URL}sounds/${name}.mp3`
 }
@@ -73,7 +75,7 @@ function getSample(name: string): HTMLAudioElement | null {
   }
 }
 
-/** Plays a bundled MP3 sample at the current volume (no-op when muted). */
+/** Plays an MP3 sample at the current volume (no-op when muted). */
 function playSample(name: string): void {
   if (volume <= 0) {
     return
@@ -218,7 +220,7 @@ export type SoundEvent = 'draw' | 'minigame' | 'gameend'
 
 /**
  * Plays the sound for an event in the chosen mode: "basic" uses the synthesized
- * chimes above; "game" uses the bundled MP3 effects (moogle_noise / queue_pop /
+ * chimes above; "game" uses the MP3 effects (moogle_noise / queue_pop /
  * level_up). Callers gate on the player's mode being non-"off" first.
  */
 export function playEvent(event: SoundEvent, mode: 'basic' | 'game'): void {
@@ -234,7 +236,7 @@ export function playEvent(event: SoundEvent, mode: 'basic' | 'game'): void {
 }
 
 /**
- * Plays the "It's Yoever" reaction sound - the bundled this_is_bad.mp3 sample.
+ * Plays the "It's Yoever" reaction sound - the this_is_bad.mp3 sample.
  * Triggered for every connected client when a player fires the reaction, gated on
  * that client having game sounds enabled (and not having opted out of the effect).
  */

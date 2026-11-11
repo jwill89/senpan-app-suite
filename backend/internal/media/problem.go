@@ -1,6 +1,8 @@
 // Package media does the file work behind the image library, the Carrd projects and
-// the uploaded fonts, over a web root folder. Its rules about names and bytes are in
-// internal/uploads and internal/fonts; this package decides what to do with a folder.
+// the uploaded fonts, over the data folder, and serves the parts of it that are public:
+// the image library, the Carrd projects and the plugin repository (serve.go). Its
+// rules about names and bytes are in internal/uploads and internal/fonts; this
+// package decides what to do with a folder.
 package media
 
 import "errors"

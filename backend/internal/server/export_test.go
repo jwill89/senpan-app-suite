@@ -48,9 +48,9 @@ var (
 	ExpireDueTeaRoomLocksForTest = (*Server).expireDueTeaRoomLocks
 )
 
-// WebRootForTest exposes the server's webRoot so external tests can seed
+// DataDirForTest exposes the server's dataDir so external tests can seed
 // upload files mid-test (e.g. adding a font after the env is built).
-func (s *Server) WebRootForTest() string { return s.webRoot }
+func (s *Server) DataDirForTest() string { return s.dataDir }
 
 // FontSecretForTest is the key the font link tokens are made with, so a test can make
 // a token of an earlier time bucket.

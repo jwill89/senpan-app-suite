@@ -1,6 +1,6 @@
 /**
  * Images store: manages image "categories" (curated subdirectories of
- * <webRoot>/images) and the images within them - the System -> Images admin page.
+ * <data>/images) and the images within them - the System -> Images admin page.
  *
  * Every category is admin-managed (a display name + a directory) and can be
  * created, renamed, and deleted. Uploading an image whose name already exists

@@ -47,6 +47,68 @@ version is next bumped, under a `### App` or `### Plugin` heading here until the
 The SPA and the API, one binary, one version (since 4.0.0). The admin dashboard's
 changelog shows this section, then the Frontend history before it.
 
+### [5.2.0] - 2026-11-10
+
+Nothing is served from Apache's document root any more: the app serves its pictures, the
+Carrd sites and the plugin repository itself, from a data folder beside its database.
+Every address stays as it was, `fonts.senpan.cafe/kit.css` and its font links included.
+
+#### Changed
+
+- **The app serves the data folder's public files.** `/images/...` (the image library,
+  reading-list covers and plaques waiting for review), `/carrd/...` (the Carrd projects,
+  which `carrd.senpan.cafe` proxies its whole site to) and `/plugin/pluginmaster.json` with
+  `/plugin/SenpanCompanionAdmin/latest.zip` come from the app now, with the same headers
+  Apache sent: a Carrd file answers any site (`Access-Control-Allow-Origin: *`), a
+  project's `.carrd.json`, the image library's manifest and every other dotfile are never
+  served, no folder is listed, and the plugin's files are `no-store`. Pictures and Carrd
+  files are cached a day; a picture replaced under its name can show the old one until
+  then unless it is purged at Cloudflare.
+- **The fonts are never a plain file.** They move with the rest but no route serves the
+  fonts folder: they are reachable only through `kit.css` and its tokenized links, gated
+  by each font's allowed sites as before.
+- **`-webroot` is now `-data`**, the data folder holding `images/`, `fonts/`, `carrd/` and
+  `plugin/` (`/opt/senpan/data` on the droplet). A unit still passing `-webroot` will not
+  start; the deploy below changes it.
+- **The deploy ships the Apache vhost** (`deploy/apache-vhost.conf`, the three names in one
+  file), checked with `apachectl configtest` and kept in step with the repository on every
+  deploy. `deploy/.htaccess`, `fonts.htaccess`, `carrd.htaccess` and `plugin.htaccess` are
+  gone. The deploy no longer needs a web root setting, and needs a `CertName` instead:
+  the certificate under `/etc/letsencrypt/live` the vhost uses (`$DeployCertName` in
+  `scripts/deploy.config.ps1`, or `DEPLOY_CERT_NAME`).
+
+#### Fixed
+
+- **The game sounds play again.** Since 4.0.0 a release carried none of the four sound
+  effects the "game" sound mode and the Yoever reaction play, so they were silent. They
+  stay out of the repository, since they may be the game's own effects: the app now serves
+  `/sounds/*.mp3` from the data folder's `sounds/`, where they are copied once by hand, and
+  the build strips any copy of them so no binary carries one.
+
+#### Deploy
+
+Set `CertName` first. The first `task deploy` of 5.2.0 does the move itself, in one run,
+while the service is stopped, and puts everything back on its own if any step or check
+fails:
+
+1. Before anything stops, it checks what the move needs and backs up the four folders,
+   Apache's config, the unit and the web root's `.htaccess` (compressed, root only, in
+   `~/senpan-before-data-move-<time>`).
+2. It stops the service, moves `images/`, `fonts/`, `carrd/` and `plugin/` into the data
+   folder, edits the unit to `-data` and `ReadWritePaths` to the opt folder, swaps the
+   apps, fonts and carrd site files for the one vhost, starts 5.2.0 and reloads Apache.
+3. It asks every name, through Apache on the host, for a font file as a plain file (each
+   must be refused with a 400, 403 or 404), then checks the site through Cloudflare.
+
+Copy the four sounds into the data folder's `sounds/` once, before or after the deploy
+(`deploy/README.md`, The data folder).
+
+Then check the font links from an allowed site (its `Origin`, and a `Referer` alone as
+Safari sends), that another site is refused, a picture, a Carrd file's CORS header, the
+plugin index and the tea-room API's CORS, and that a Carrd page shows its fonts on an
+iPhone. Once 5.2.0 has stayed, the old document root can be removed (`deploy/README.md`,
+Deploy day: 5.2.0).
+
 ### [5.1.0] - 2026-11-10
 
 The artist's Ema requests are a table on the Ema Plaques page now, not a page of their

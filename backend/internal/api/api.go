@@ -82,11 +82,11 @@ type Deps struct {
 	// EmaLimit counts every public plaque submission and artist request, by client
 	// address, before the request is read.
 	EmaLimit Limiter
-	// WebRoot is the folder the uploads live under; the plaques waiting for review are
+	// DataDir is the folder the uploads live under; the plaques waiting for review are
 	// kept in images/ema_plaques within it.
-	WebRoot string
+	DataDir string
 	// Images is the image library, Carrd the Carrd projects and Fonts the uploaded
-	// fonts, each over the web root.
+	// fonts, each over the data folder.
 	Images *media.Images
 	Carrd  *media.Carrd
 	Fonts  *media.Fonts

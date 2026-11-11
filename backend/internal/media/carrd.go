@@ -12,7 +12,7 @@ import (
 	"app-suite/internal/uploads"
 )
 
-// A Carrd project is a folder under <webRoot>/carrd holding media files (pictures,
+// A Carrd project is a folder under <dataDir>/carrd holding media files (pictures,
 // .mp3 and .mp4) directly or in sub-folders of any depth, served publicly from the
 // carrd host for embedding in outside sites. The folder tree is the only record of
 // what is inside; only the project itself carries data, a title kept in the dotfile
@@ -52,11 +52,11 @@ type Listing struct {
 	Files   []File
 }
 
-// Carrd is the Carrd projects under a web root.
+// Carrd is the Carrd projects under a data folder.
 type Carrd struct{ root string }
 
-// NewCarrd is the Carrd projects under webRoot.
-func NewCarrd(webRoot string) *Carrd { return &Carrd{root: webRoot} }
+// NewCarrd is the Carrd projects under dataDir.
+func NewCarrd(dataDir string) *Carrd { return &Carrd{root: dataDir} }
 
 func (c *Carrd) dir() string { return filepath.Join(c.root, "carrd") }
 

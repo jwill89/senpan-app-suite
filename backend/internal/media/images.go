@@ -15,7 +15,7 @@ import (
 	"app-suite/internal/uploads"
 )
 
-// The image library is a set of categories, each a folder under <webRoot>/images
+// The image library is a set of categories, each a folder under <dataDir>/images
 // whose files are served publicly at /images/<dir>/<file>. A category has a display
 // name and a folder name; the pairs are kept in the dotfile manifest
 // images/.categories.json, so no database table is needed. Deleting a category
@@ -72,7 +72,7 @@ type manifest struct {
 	Categories []Category `json:"categories"`
 }
 
-// Images is the image library under a web root.
+// Images is the image library under a data folder.
 type Images struct {
 	root string
 	// mu serializes the manifest's read-modify-write, so two edits landing together
@@ -80,8 +80,8 @@ type Images struct {
 	mu sync.Mutex
 }
 
-// NewImages is the image library under webRoot.
-func NewImages(webRoot string) *Images { return &Images{root: webRoot} }
+// NewImages is the image library under dataDir.
+func NewImages(dataDir string) *Images { return &Images{root: dataDir} }
 
 func (m *Images) dir() string { return filepath.Join(m.root, "images") }
 

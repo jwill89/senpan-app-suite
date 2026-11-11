@@ -49,7 +49,7 @@ func main() {
 func run() error {
 	addr := flag.String("addr", ":8080", "HTTP listen address")
 	dbPath := flag.String("db", "/opt/app-suite/data/database.sqlite", "SQLite database path")
-	webRoot := flag.String("webroot", "/var/www/www.yoursite.com", "Web root directory for static assets (e.g. image uploads)")
+	dataDir := flag.String("data", "/opt/app-suite/data", "Data folder: the uploads (images/, fonts/, carrd/) and the plugin repository (plugin/), which the server serves itself (fonts/ only through its tokenized links)")
 	corsOrigins := flag.String("cors-origins", "", "Comma-separated CORS allowlist of cross-origin sites (env APPSUITE_CORS_ORIGINS; empty = same-origin only, no CORS headers)")
 	turnstileSecret := flag.String("turnstile-secret", "", "Cloudflare Turnstile secret key (env APPSUITE_TURNSTILE_SECRET; empty = login bot check disabled)")
 	turnstileSiteKey := flag.String("turnstile-sitekey", "", "Cloudflare Turnstile public site key (env APPSUITE_TURNSTILE_SITEKEY)")
@@ -71,7 +71,7 @@ func run() error {
 	}
 
 	// CORS allowlist: flag > env. Normally empty - the SPA and API are
-	// same-origin in both prod (Apache) and dev (Vite proxies /api).
+	// same-origin in both prod (one server behind the proxy) and dev (Vite proxies /api).
 	originsCSV := *corsOrigins
 	if originsCSV == "" {
 		originsCSV = os.Getenv("APPSUITE_CORS_ORIGINS")
@@ -120,7 +120,7 @@ func run() error {
 	}
 
 	hub := live.New()
-	srv := server.New(ctx, db, hub, *webRoot, allowedOrigins)
+	srv := server.New(ctx, db, hub, *dataDir, allowedOrigins)
 	srv.SetSite(site)
 	srv.SetTurnstile(tsSecret, tsSiteKey)
 	srv.SetLogFile(*logFile) // GET /api/logs tails this file

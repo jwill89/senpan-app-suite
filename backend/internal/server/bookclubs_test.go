@@ -461,7 +461,7 @@ func TestPublishDiscordFailures(t *testing.T) {
 func TestDeleteRemovesUnusedCovers(t *testing.T) {
 	e := newTestEnv(t)
 	e.loginAdmin(t)
-	dir := filepath.Join(e.srv.WebRootForTest(), "images", "bookclub")
+	dir := filepath.Join(e.srv.DataDirForTest(), "images", "bookclub")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -653,8 +653,8 @@ func TestLookUpTitleIgnoresAnEndpointOffTheAllowlist(t *testing.T) {
 // -- Cover uploads ------------------------------------------------------------
 
 func TestBookClubCoverUpload(t *testing.T) {
-	webRoot := t.TempDir()
-	env := newTestEnvWithWebRoot(t, webRoot)
+	dataDir := t.TempDir()
+	env := newTestEnvWithDataDir(t, dataDir)
 	yaoi := makeActiveUser(t, env, "yaoistaff", "correct horse battery", []string{"bookclub-yaoi"})
 	const path = "/api/v1/book-clubs/yaoi/covers"
 	// A browser labels a picture by its type.
@@ -694,7 +694,7 @@ func TestBookClubCoverUpload(t *testing.T) {
 	if !strings.HasPrefix(out.URL, "https://") || !strings.HasSuffix(out.URL, "/images/bookclub/my%20cover.jpg") {
 		t.Errorf("url = %q; want an absolute, escaped address", out.URL)
 	}
-	stored, err := os.ReadFile(filepath.Join(webRoot, "images", "bookclub", "my cover.jpg"))
+	stored, err := os.ReadFile(filepath.Join(dataDir, "images", "bookclub", "my cover.jpg"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -721,7 +721,7 @@ func TestBookClubCoverUpload(t *testing.T) {
 	if resp.StatusCode != http.StatusRequestEntityTooLarge {
 		t.Errorf("a 7 MB cover = %d; want 413", resp.StatusCode)
 	}
-	if entries, _ := os.ReadDir(filepath.Join(webRoot, "images", "bookclub")); len(entries) != 1 {
+	if entries, _ := os.ReadDir(filepath.Join(dataDir, "images", "bookclub")); len(entries) != 1 {
 		t.Errorf("the covers folder holds %d files; want only the one saved", len(entries))
 	}
 }

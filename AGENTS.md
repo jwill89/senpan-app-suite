@@ -9,8 +9,9 @@ The rules every project follows are in [`shared/standards/README.md`](shared/sta
 Go + SQLite backend serving a Vue 3 + TypeScript single-page frontend built with
 Vite. One binary, built from `backend/`, serves all of it on `:8080`: the API, its live
 event streams (server-sent events) and, since 4.0.0, the SPA, whose build it embeds (`backend/internal/web`).
-Apache proxies to it and serves only the web root's own folders (images, Carrd sites,
-the plugin repository). The app has one version (`frontend/package.json` and
+Since 5.2.0 it also serves the files of its data folder (`-data`, `/opt/senpan/data`): the
+image library, the Carrd sites and the plugin repository, and Apache proxies every path of
+every name to it, serving nothing from a document root. The app has one version (`frontend/package.json` and
 `internal/version`); the plugin keeps its own.
 
 Beyond bingo, the app is a small "suite" for a Discord community: **raffles**,
@@ -99,7 +100,7 @@ immediately**. See **Authentication & authorization** below.
 +-- shared/                           <- the shared-tooling submodule (lint configs, the CI workflows' scripts, SharedDeploy, repo files) - see **Shared tooling**
 +-- Taskfile.yml                      <- day-to-day commands (`task` lists them); includes shared/repo/Taskfile.yml as shared:*
 +-- scripts/                          <- check.ps1 (everything CI runs, on demand) + deploy.ps1 (on SharedDeploy; settings in the untracked deploy.config.ps1)
-+-- deploy/                           <- Apache deploy artifacts (the web root's .htaccess template + persistent images/ + README)
++-- deploy/                           <- host artifacts: apache-vhost.conf (the three names' VirtualHosts, installed by the deploy), senpan.service (the unit's template), persistent images/ + README
 +-- backend/                          <- Go backend
 |   +-- main.go                       <- Entry point: flags, DB init, the embedded SPA, server start
 |   +-- sqlc.yaml                     <- sqlc 1.31.1: internal/db/queries/*.sql against schema.sql -> internal/db (`task gen`)
@@ -109,7 +110,7 @@ immediately**. See **Authentication & authorization** below.
 |   +-- .golangci.local.yml           <- Senpan's own golangci-lint rules, merged into .golangci.yml by `go run -C shared/lint/go . -dir backend`
 |   \-- internal/
 |       +-- auth/                     <- the accounts' rules: argon2id Hash()/Verify() (PHC strings), the account limits and the reserved admin, personal access tokens (NewToken, HashToken), and SignIn (what a signed-in session carries); shared by store (seed), api (sign-in, accounts) and server (who a request is)
-|       +-- api/                      <- the API on huma under /api/v1, one file per domain (version, config, settings, logs, styles, sign-in, me, passkeys, users, patterns, presets, winners, cards, game, board, live, raffles, affiliates, tearooms, announcements, bookclubs, garapons, stamprallies, festivalmaps, festivals (the dashboard), ema, googlefonts, images, carrd, fonts) with thin handlers; discord.go holds what the operations that post to Discord share (the webhook schema, the Discord problem answers); uploads.go what the multipart operations share (the declared parts, the size caps, the skipped-file answer); api.go holds the config, the guards (public, signedIn, permitted, admin) and Deps (including the web root and the limiters); apitest/ checks every 2xx answer against the document
+|       +-- api/                      <- the API on huma under /api/v1, one file per domain (version, config, settings, logs, styles, sign-in, me, passkeys, users, patterns, presets, winners, cards, game, board, live, raffles, affiliates, tearooms, announcements, bookclubs, garapons, stamprallies, festivalmaps, festivals (the dashboard), ema, googlefonts, images, carrd, fonts) with thin handlers; discord.go holds what the operations that post to Discord share (the webhook schema, the Discord problem answers); uploads.go what the multipart operations share (the declared parts, the size caps, the skipped-file answer); api.go holds the config, the guards (public, signedIn, permitted, admin) and Deps (including the data folder and the limiters); apitest/ checks every 2xx answer against the document
 |       +-- db/                       <- sqlc's package, generated (DO NOT EDIT) from db/queries/<domain>.sql; reads on db.New(st.ReadDB()), writes on db.New(st.DB()) or a transaction's
 |       +-- themes/                   <- theme tokens: TokenOrder (the allowlist), Sanitize, CSS (the :root block), Marshal/Unmarshal, ValidFlourish
 |       +-- settings/                 <- the setting keys and their defaults
@@ -126,7 +127,7 @@ immediately**. See **Authentication & authorization** below.
 |       +-- fonts/                    <- the font rules, pure: NameUnsafe (a family that could break out of CSS), grouping files by base name, the served variant, the rotating token math, origin normalizing and the per-font access decision, the kit's CSS, the format and content-type tables
 |       +-- festival/                 <- the festival rules, pure: garapon prize sanitizing and the weighted pick, the rally's window, stamp availability and completion rules, shortcodes and event times, ema's days and board validation
 |       +-- uploads/                  <- what every upload is judged by, pure: names, slugs and extensions, byte sniffing (images, mp3, mp4), the SVG sanitizer, and `CheckImage` (size caps, the EXIF orientation parser, the JPEG and PNG re-encode, the GIF pre-scan)
-|       +-- media/                    <- the files on disk under the web root, tested over `t.TempDir()`: `Images` (the image library and its manifest), `Carrd` (projects, folders and files, with the path checks) and `Fonts` (uploads, the WOFF2 conversion and the per-font metadata)
+|       +-- media/                    <- the files on disk under the data folder, tested over `t.TempDir()`: `Images` (the image library and its manifest), `Carrd` (projects, folders and files, with the path checks), `Fonts` (uploads, the WOFF2 conversion and the per-font metadata), `Plugin` (the plugin repository), and serve.go, which serves the public ones at /images/, /carrd/ and /plugin/ (never fonts/)
 |       +-- model/                    <- the few types the API doesn't define itself: users.go, logs.go, participant.go (`ParticipantLabel` and its split) and stamprally.go (the stamp types)
 |       +-- store/                    <- Store struct wrapping *sql.DB, the migrations and what tests need
 |       |   +-- store.go              <- Store struct, New(ctx, path)/Close(), pragmas, shared helpers; cards.go, patterns.go and settings.go keep only `SaveCard`/`CardExists`, `SavePattern` and `GetSetting`/`SetSetting` for the tests and the few reads outside sqlc
@@ -180,16 +181,16 @@ immediately**. See **Authentication & authorization** below.
 |   |   \-- SenpanCompanion.csproj    <- Dalamud.NET.Sdk/15.0.0; <AssemblyName>SenpanCompanionAdmin; EnableWindowsTargeting (Linux CI)
 |   \-- SenpanCompanion.Tests/        <- xUnit v3 over Core/ and Api/, compiled in (no Dalamud): the client against Fixtures/ shaped as the document declares, the feed reader, the back-off, Problems, the pricing
 +-- .editorconfig / .gitattributes    <- from shared/repo (Sync-RepoFiles.ps1); Senpan's lines - the plugin's two C# exceptions - go below the project marker
-+-- devdata/                          <- Local dev sandbox: SQLite DBs + built binaries + webroot uploads (gitignored)
++-- devdata/                          <- Local dev sandbox: SQLite DBs + built binaries + the dev data folder, devdata/webroot (gitignored)
 ```
 
 ## Where this project departs from the standards
 
 Each place below is code that still does what the shared rules now rule out, checked against the code on 2026-11-07. The rest of this file describes the code as it is today. When a follow-up lands, its line here goes, and the lines that describe the old way change with it.
 
-Planned follow-ups, from shared-tooling's `PLAN.md` (step 3, and step 7's five releases):
+Decided, and staying:
 
-- **The document root.** The uploads (`images/`, `fonts/`), the Carrd sites and the plugin repository live in Apache's document root. Apache serves `images/`, the Carrd sites and the plugin repository straight from it; `fonts/` sits there unserved, streamed by the app. The goal is nothing served from it, as Home Library and Kindred Nights do (decided 2026-11-09): the app serves them from a data folder under `/opt/senpan`, and the vhost proxies everything to it. It comes after the move to huma, and the fonts need the most care: never reachable as plain files during the move, and `fonts.senpan.cafe/kit.css` and its token URLs unchanged.
+- **The vhost ships with the deploy.** Every app deploy installs `deploy/apache-vhost.conf` as `/etc/apache2/sites-available/<service>.conf` where it differs (`Install-ServiceBinary -Vhost`), checked with `apachectl configtest`, so the droplet runs what the repository says (shared-tooling `PLAN.md`, release E, as Home Library does). The standards keep the vhost on the host, changed there by hand, with a template in the repo (`deploy-and-ops.md`). The unit is still not shipped; 5.2.0's move edited its `-webroot` and `ReadWritePaths` lines once, and the template follows.
 
 Found in the docs and checked against the code, with no follow-up planned yet. The owner decides whether each moves or stays; one that stays gets its reason here:
 
@@ -210,11 +211,11 @@ All dependencies are wired in `main.go` and passed via structs (no globals, no s
 
 - `model` - The few types the API doesn't define itself (accounts, log entries, the participant label, a stamp's display name). No imports beyond stdlib.
 - `store` - Single `Store` struct wrapping the two pools, the migrations and the timestamp form; the queries themselves are sqlc's (`db`).
-- `festival`, `uploads`, `media`, `fonts` - the festival's rules (the garapon pick, the rally and map and ema rules), what every upload is judged by (names, byte sniffing, the SVG sanitizer, the image check and re-encode), the files under the web root (the image library, the Carrd projects, the fonts and their WOFF2 copies) and the font rules; the first two and the last are pure, `media` is tested over a temporary directory.
+- `festival`, `uploads`, `media`, `fonts` - the festival's rules (the garapon pick, the rally and map and ema rules), what every upload is judged by (names, byte sniffing, the SVG sanitizer, the image check and re-encode), the files under the data folder (the image library, the Carrd projects, the fonts and their WOFF2 copies, the plugin repository, and serving the public ones) and the font rules; the first two and the last are pure, `media` is tested over a temporary directory.
 - `bingo` - The pure rules: card/board generation, matching a card against a pattern, the draw columns, the half-time mark and the auto-draw interval.
 - `game` - The game engine: `Service` for the game's lifecycle (start, draw, end, winner computation, the half-time prompt, yoever, the auto-draw loop), its SQL on sqlc. Caches game state and card data in memory for performance, and sends the game's events to the hub.
 - `live` - The live feed's hub (server-sent events): publishes each event to the viewers it is for, keeps the last 1000 for `Last-Event-ID`, and owns each stream's queue and heartbeat. Self-contained: it knows nothing of bingo.
-- `server` - `Server` struct implementing `http.Handler`. Holds Store, the game Service, the live Hub, session store, web root. Registers no route under `/api/`: huma mounts every operation (`internal/api`) and the `/api` layer answers the rest. Owns the **session layer** (who a request is, by session or token, handed to huma as `api.WithWho`/`api.WithRequest`), the request log and its redaction, the SPA and `/healthz`, the announcement and tea-room-lock **background schedulers**, the `resource_changed` each write sends (`adminMutationResource`), and the start-up migrations of the image library and the fonts (`server.New`).
+- `server` - `Server` struct implementing `http.Handler`. Holds Store, the game Service, the live Hub, session store, the data folder. Registers no route under `/api/`: huma mounts every operation (`internal/api`) and the `/api` layer answers the rest. Owns the **session layer** (who a request is, by session or token, handed to huma as `api.WithWho`/`api.WithRequest`), the request log and its redaction, the SPA, the data folder's public files (`site.go`, over `internal/media`) and `/healthz`, the announcement and tea-room-lock **background schedulers**, the `resource_changed` each write sends (`adminMutationResource`), and the start-up migrations of the image library and the fonts (`server.New`).
 - `auth` - the accounts' rules: argon2id `Hash()` / `Verify()` over PHC-format strings (64 MB / t=1 / p=4, the OWASP baseline; `Verify` is constant-time), the account limits and the reserved `admin`, personal access tokens, and `SignIn`, which every way of signing in (and a password change) goes through. Shared by `store` (seeding the bootstrap admin), `api` (sign-in, accounts) and `server` (resolving who a request is).
 - `logging` - process-wide `slog` setup (leaf; imports only `model` + timberjack). Installs a JSON handler writing to stdout **and** a rotating file, holds the runtime level in a `slog.LevelVar` (`SetLevel`/`CurrentLevel`), and exposes a settable tail sink (`SetTailSink`) that forwards each finished log line to a callback. `main` wires that callback to `api.LogTail`, which publishes the line to the admins' streams for the live tail. See the **Server logs** operational note below.
 
@@ -316,13 +317,13 @@ The principles below are _why_ Senpan's own conventions exist - keep changes ali
 
 Indexes: `games(status)`, `called_numbers(game_id, call_order)`, `called_numbers(game_id, number)` (UNIQUE), `game_patterns(game_id)`, `raffle_entries(raffle_id)`, `winners_log(logged_at)`, `winners_log(player_name, logged_at)`, `cards(player_name)`, `reading_list_items(list_id)`, `announcements(type_id)`, `announcements(active, next_post_at)` (due sweep), `garapon_prizes(garapon_id)`, `garapon_players(garapon_id)`, `garapon_players(token)`, `garapon_draws(garapon_id)`, `garapon_draws(player_id)`, `stamp_rally_stamps(rally_id)`, `stamp_rally_prizes(rally_id)`, `stamp_rally_cards(rally_id)`, `stamp_rally_cards(token)`, `stamp_rally_collected(card_id)`, `stamp_rally_collected(stamp_id)`, `stamp_rally_collected(rally_id)`.
 
-**On-disk uploads (not in the DB)**, all under `<webRoot>`:
+**On-disk uploads (not in the DB)**, all under the data folder (`-data`; `/opt/senpan/data` in production, beside the database):
 
-- `images/<category>/` - the **central image host** (System -> Images). Each category is a subfolder served at `/images/<dir>/<file>`. The first start seeds ten editable categories (Announcement Main and Thumbnail, Raffle, Garapon, Flourishes, Affiliate Logos and Images, Stamp Cards, Stamps and Prizes); admins may rename, add or delete categories, all tracked in a dotfile manifest `<webRoot>/images/.categories.json` (no DB table). Renaming keeps the folder unless a new `dir` is sent, since stored paths name it; `bookclub`, `announcements` and `ema_plaques` are reserved for other features and can't be a category. Affiliate logos/screenshots, garapon/stamp-rally artwork, etc. are picked from these categories.
+- `images/<category>/` - the **central image host** (System -> Images). Each category is a subfolder served at `/images/<dir>/<file>`. The first start seeds ten editable categories (Announcement Main and Thumbnail, Raffle, Garapon, Flourishes, Affiliate Logos and Images, Stamp Cards, Stamps and Prizes); admins may rename, add or delete categories, all tracked in a dotfile manifest `<data>/images/.categories.json` (never served) (no DB table). Renaming keeps the folder unless a new `dir` is sent, since stored paths name it; `bookclub`, `announcements` and `ema_plaques` are reserved for other features and can't be a category. Affiliate logos/screenshots, garapon/stamp-rally artwork, etc. are picked from these categories.
 - `images/bookclub/` - reading-list item cover uploads (AniList covers stay remote)
 - `images/ema_plaques/` - Ema plaques designed on the site, held ONLY while they wait for staff review (unguessable names). Approving posts the image to Discord and deletes the file; rejecting deletes it; deleting the board or its festival deletes what's left. Not an image-library category.
 - `fonts/` - admin-uploaded **font files** (`.ttf/.otf/.woff/.woff2/.eot`); files sharing a base name group into one logical FONT (its format variants). Licensed assets - NOT served statically: the Go server streams them via rotating tokenized URLs gated **per font** by its own origin allowlist (`internal/fonts` rules, `internal/api/fonts.go` serving); the `https://fonts.senpan.cafe` vhost is a reverse proxy onto `/api/v1/fonts/pub/` and external sites embed `kit.css` (filtered per site - see Deployment). A font with no uploaded WOFF2 gets one auto-converted into `fonts/.woff2/` (`internal/media/fonts.go`, tdewolff/font; upload-time + startup backfill) - the served variant defaults to WOFF2, selectable per font
-- `carrd/<project>/...` - Carrd image-host projects (images + `.mp3`/`.mp4`), each with a `.carrd.json` title sidecar; served cross-origin from `https://carrd.senpan.cafe` (needs CORS - see Deployment)
+- `carrd/<project>/...` - Carrd image-host projects (images + `.mp3`/`.mp4`), each with a `.carrd.json` title sidecar; served by the app at `/carrd/`, which the `https://carrd.senpan.cafe` vhost proxies its whole site to, with `Access-Control-Allow-Origin: *` and a day's cache; the sidecars and folder listings are never served
 
 ## Frontend (Vue 3 + TypeScript + Vite)
 
@@ -413,7 +414,7 @@ are in `types/api.ts`.
 
 - Config is the `test` key of `vite.config.ts`, built on shared-tooling's `vitestDefaults` (`shared/test/web/vitest.js`), so the specs run on the build's Vue compiler, `@` alias, `__APP_VERSION__` define and changelog plugin; the plugins that apply to `build` alone (the PWA, the dist-image strip, the precache checks) do nothing under Vitest. `vitest.setup.ts` stubs `<font-awesome-icon>` globally.
 - **Coverage floor**: `npm run test:coverage` fails below 35.5% of statements, 25.5% of branches, 28% of functions and 35.5% of lines (the `floor` in `vite.config.ts`). CI and `scripts/check.ps1` run it.
-- Specs live in `src/__tests__/`, named `*.spec.ts`, in a tree that mirrors `src/` (`src/__tests__/stores/raffles.spec.ts` covers `src/stores/raffles.ts`), and import the code under test through the `@` alias. They cover `api/`, `lib/`, `composables/`, `stores/`, `views/` and the shared, admin and player components (`components/admin/AdminSidebar.spec.ts` mocks `vue-router`/`@/router` to assert accordion toggling + per-permission section hiding). Backend mirrors this with `internal/auth/password_test.go`, `internal/store/users_test.go`, `internal/server/users_test.go`, the pure rule packages' own tests (`internal/{discord,origins,raffles,affiliates,tearooms,schedule,announcements,anilist}`), and the existing per-domain `*_test.go`. Every domain's operations are tested through `/api/v1` against the document (a public tea-room read for its CORS headers, the preflight and the 304; the garapon draw's cap, the stamp card's guesses, the media uploads over a temporary web root, the public font gate). The festival's, uploads' and fonts' pure rules have their own tests (`internal/{festival,uploads,fonts,media}`).
+- Specs live in `src/__tests__/`, named `*.spec.ts`, in a tree that mirrors `src/` (`src/__tests__/stores/raffles.spec.ts` covers `src/stores/raffles.ts`), and import the code under test through the `@` alias. They cover `api/`, `lib/`, `composables/`, `stores/`, `views/` and the shared, admin and player components (`components/admin/AdminSidebar.spec.ts` mocks `vue-router`/`@/router` to assert accordion toggling + per-permission section hiding). Backend mirrors this with `internal/auth/password_test.go`, `internal/store/users_test.go`, `internal/server/users_test.go`, the pure rule packages' own tests (`internal/{discord,origins,raffles,affiliates,tearooms,schedule,announcements,anilist}`), and the existing per-domain `*_test.go`. Every domain's operations are tested through `/api/v1` against the document (a public tea-room read for its CORS headers, the preflight and the 304; the garapon draw's cap, the stamp card's guesses, the media uploads over a temporary data folder, the public font gate). The festival's, uploads' and fonts' pure rules have their own tests (`internal/{festival,uploads,fonts,media}`).
 - Run: `npm run test` (one-shot), `npm run test:watch`, `npm run test:coverage` (v8, with the floor - what CI runs).
 - Patterns: for a store or view, mock `@/api/client`'s `api` alone (spreading `importOriginal()` keeps the real `unwrap`), each fake answering `{ data, response }`; Pinia stores use `setActivePinia(createPinia())`; components use `mount()` from `@vue/test-utils`. Pure helpers tested directly (e.g. `exportCard.ts` exports `parseInlineRuns`/`parseDetailParagraphs` for this).
 
@@ -455,8 +456,8 @@ are in `types/api.ts`.
 - **System -> Settings tab**: app title, bingo join prompt, default draw delay, frequent-winner threshold/window, the **header/board font** picker (combo box with optgroups for uploaded fonts + Google Fonts, optional Google Fonts API key, live preview), the AniList API URL, and the allowed sites for the public tea-room API (the per-club webhooks are on each Book Club page)
 - **System -> Themes tab**: CRUD themes via a structured **token editor** (`ThemeTokenEditor.vue` - a swatch + value per `:root` design token, grouped, with a collapsible live preview), activate/deactivate live. A theme stores a **token map** (not CSS); the server generates the `:root{}` stylesheet (`store.TokensToCSS`). Alpha tokens (modal/shadow/glow) use the `@ckpack/vue-color` picker; solid tokens the native colour input
 - **System -> Users tab** (`UsersTab.vue`, **admin-only**): manage accounts - activate/deactivate pending registrations, grant/revoke admin, edit the per-page permission set (checkbox grid grouped by section, derived from `ADMIN_PERMISSIONS`), set a user's password - all in one `PATCH /api/v1/users/{id}` of what changed - and delete accounts. The seeded `admin` account is protected (its destructive actions are hidden in the UI and rejected server-side). Separately, **every** logged-in account can rotate its own password via the **Change Password** modal in the admin topbar (`AdminView.vue` -> `PUT /api/v1/me/password`)
-- **Atelier -> Font Upload tab** (`FontsTab.vue` + `FontEditModal.vue`): upload font files (`.ttf/.otf/.woff/.woff2/.eot`) to `<webRoot>/fonts/`; files sharing a base name are variants of ONE font (a font with no WOFF2 gets one auto-converted). The table is slim - **CSS Name** (the `font-family` used by the kit/app/picker), **Serves** (the served format; ✦ = the converted copy), **Modified**, actions - and the **Edit modal** holds the rest: CSS name, served-version picker (any variant type or Auto), the font's **per-font allowed sites**, and the files themselves (per-file rename/delete, sizes). The **live preview** (type any text, pick a font) can switch between the font's actual formats. Per-row **Copy URL** copies the served variant's tokenized URL (rotates every 1-2 weeks - the kit is for permanent embeds); an Embed panel shows the `kit.css` snippet. The app's own origin is always allowed implicitly (the font picker never breaks).
-- **Atelier -> Carrd Upload tab** (`CarrdUploadTab.vue`): manage image-hosting **projects** (folders under `<webRoot>/carrd`, each with a human-readable title) and nested sub-directories; upload images plus `.mp3`/`.mp4` (same-name **overwrites** so external Carrd sites pick up new versions), copy public URLs, delete files/dirs/projects. Served cross-origin from the carrd vhost.
+- **Atelier -> Font Upload tab** (`FontsTab.vue` + `FontEditModal.vue`): upload font files (`.ttf/.otf/.woff/.woff2/.eot`) to `<data>/fonts/`; files sharing a base name are variants of ONE font (a font with no WOFF2 gets one auto-converted). The table is slim - **CSS Name** (the `font-family` used by the kit/app/picker), **Serves** (the served format; ✦ = the converted copy), **Modified**, actions - and the **Edit modal** holds the rest: CSS name, served-version picker (any variant type or Auto), the font's **per-font allowed sites**, and the files themselves (per-file rename/delete, sizes). The **live preview** (type any text, pick a font) can switch between the font's actual formats. Per-row **Copy URL** copies the served variant's tokenized URL (rotates every 1-2 weeks - the kit is for permanent embeds); an Embed panel shows the `kit.css` snippet. The app's own origin is always allowed implicitly (the font picker never breaks).
+- **Atelier -> Carrd Upload tab** (`CarrdUploadTab.vue`): manage image-hosting **projects** (folders under `<data>/carrd`, each with a human-readable title) and nested sub-directories; upload images plus `.mp3`/`.mp4` (same-name **overwrites** so external Carrd sites pick up new versions), copy public URLs, delete files/dirs/projects. Served by the app to any site from `carrd.senpan.cafe` (the vhost proxies to `/carrd/`).
 
 **Key UI patterns**:
 
@@ -689,9 +690,9 @@ talks peer-to-peer.
   in the root `.editorconfig`. Note ImGui's namespace is `Dalamud.Bindings.ImGui`
   (not ImGuiNET).
 - **Distribution.** A **custom Dalamud repo**, not the official list:
-  `plugins/pluginmaster.json` + `latest.zip` are hosted at
-  `https://apps.senpan.cafe/plugin/...` (publish with
-  `scripts/deploy.ps1 -Target plugin`, or `task deploy`). Bump `AssemblyVersion` +
+  `plugins/pluginmaster.json` + `latest.zip` are published into the data folder's
+  `plugin/` and served by the app at `https://apps.senpan.cafe/plugin/...`, `no-store`
+  (publish with `scripts/deploy.ps1 -Target plugin`, or `task deploy`). Bump `AssemblyVersion` +
   `LastUpdate` in `pluginmaster.json` per release; the deploy reads the published version first and stops before building
   anything when the new one is not higher, since Dalamud updates to nothing else. A
   Dalamud API bump means bumping `DalamudApiLevel` (currently **15**).
@@ -761,7 +762,7 @@ cd backend; go build -o app-suite.exe .
 # REAL webhook URLs - without it, the announcement scheduler posts to production
 # channels on its own, no clicking required. Swap it for
 # -webhook-override <test-webhook-url> when you need to see a post actually land.
-cd backend; go run . -addr :8080 -db ../devdata/database.sqlite -webroot ../devdata/webroot -webhook-dry-run
+cd backend; go run . -addr :8080 -db ../devdata/database.sqlite -data ../devdata/webroot -webhook-dry-run
 
 # Auth is per-user now. On first run, migration v22 seeds a bootstrap account:
 #   username: admin   password: admin   (full admin) - ROTATE IT IMMEDIATELY
@@ -897,30 +898,53 @@ Since 4.0.0 the app has one version, for the SPA and the API together, since one
 
 Only the maintainer deploys, from the owner's PC, through `scripts/deploy.ps1` on SharedDeploy, and only releases ship: the newest `v<version>` CI tagged on main for the app, the newest `Plugin-v<version>` for the plugin, each built in a checkout of its own (shared-tooling's newest-release deploy). `task deploy` deploys the app, then the plugin when its version is new (`-IfNewer`); an app release the host already runs is skipped (`-Force` deploys it again). `task deploy:backend` and `task deploy:plugin` deploy one each, with flags after `--`. The settings live in the untracked `scripts/deploy.config.ps1`; `deploy/README.md` has the whole run.
 
-The Go binary serves the app: the API, its event streams and the SPA it embeds. The vhost's `/api/` ProxyPass has `timeout=3600` and `mod_deflate` must not compress `text/event-stream` (see `deploy/README.md`). The
-vhost's ProxyPass sends `/api/` to it, and the web root's `.htaccess` sends it
-everything else that isn't one of the web root's own folders. Uploads live in those
-folders, apart from the binary, so redeploys never wipe them (full guide in
+The Go binary serves everything: the API, its event streams, the SPA it embeds and the
+public files of its data folder. Apache serves nothing from a document root: the vhost
+(`deploy/apache-vhost.conf`, which every app deploy installs where it differs) proxies
+every path of `apps.senpan.cafe` to the app with `timeout=3600` for the streams (and
+`mod_deflate` kept off `text/event-stream`), `fonts.senpan.cafe` to `/api/v1/fonts/pub/`
+and `carrd.senpan.cafe` to `/carrd/`. The data folder holds the uploads and the plugin
+repository, beside the database, so redeploys never touch them (full guide in
 `deploy/README.md`):
 
 ```text
-<DocumentRoot>/
-+-- .htaccess        <- deploy/.htaccess, with the app's address filled in (serves the folders below; proxies everything else to the app)
-+-- images/          <- deploy/images/    (PERSISTENT: logo/favicon/banner + raffles/, announcements/, bookclub/ uploads)
-+-- fonts/           <- (PERSISTENT: admin-uploaded font files; NOT static - streamed by the Go server via tokenized URLs; fonts.senpan.cafe reverse-proxies to /api/v1/fonts/pub/)
-+-- carrd/           <- (PERSISTENT: Carrd image-host projects; served by the carrd.senpan.cafe vhost)
-\-- plugin/          <- the Dalamud custom repo: pluginmaster.json + SenpanCompanionAdmin/latest.zip + .htaccess (deploy/plugin.htaccess); replaced by -Target plugin, previous kept as plugin.old
+/opt/senpan/data/    <- -data on the unit's ExecStart (the deploy reads it)
++-- database.sqlite  <- -db; backups/ beside it holds the daily copies
++-- images/          <- deploy/images/ on a new host (PERSISTENT: logo/favicon/banner/PWA icons + every image category, bookclub/, ema_plaques/); served at /images/
++-- fonts/           <- (PERSISTENT: admin-uploaded font files + .woff2/; never served as files - streamed via tokenized URLs; fonts.senpan.cafe proxies to /api/v1/fonts/pub/)
++-- carrd/           <- (PERSISTENT: Carrd image-host projects; served at /carrd/, which carrd.senpan.cafe proxies to)
++-- plugin/          <- the Dalamud custom repo: pluginmaster.json + SenpanCompanionAdmin/latest.zip, served no-store; replaced by -Target plugin, previous kept as plugin.old
+\-- sounds/          <- the game's sound effects (4 MP3s), kept out of the repo and every build, copied in by hand; served at /sounds/
 ```
 
-Until 4.0.0 Apache served the SPA from `<DocumentRoot>/dist`; once 4.0.0 has stayed, `dist/` and `dist.old/` can go (`deploy/README.md`).
+Until 5.2.0 these folders were Apache's document root (`/var/www/apps.senpan.cafe`, passed
+as `-webroot`); 5.2.0's first deploy moved them (see **Deploy day: 5.2.0** in
+`deploy/README.md`). `-webroot` is gone: a unit still passing it fails to start.
 
-- Run the Go server with `-webroot <DocumentRoot>`; uploads are written under
-  `<DocumentRoot>/images/{raffles,announcements,bookclub}/`,
-  `<DocumentRoot>/fonts/`, and `<DocumentRoot>/carrd/<project>/`. Image/font/carrd
-  URLs are returned absolute (built from the request scheme+host).
-- `vite.config.ts` strips the build's `images/` (the `strip-dist-images`
-  plugin), so the binary never carries a copy of the persistent root `images/`,
-  which Apache serves.
+- Run the Go server with `-data <folder>`; uploads are written under
+  `<data>/images/<category>/`, `<data>/images/{bookclub,ema_plaques}/`,
+  `<data>/fonts/` and `<data>/carrd/<project>/`. Image/font/carrd URLs are returned
+  absolute (built from the request scheme+host).
+- **The public files** (`internal/media/serve.go`, routed in `server/site.go`): `/images/`
+  serves the library's picture types and `/carrd/` those plus mp3 and mp4, both with a
+  day's cache (`public, max-age=86400`), `/carrd/` also with `Access-Control-Allow-Origin: *`;
+  `/plugin/` serves only `pluginmaster.json` and `SenpanCompanionAdmin/latest.zip`, `no-store`;
+  `/sounds/` serves MP3s, a day's cache.
+  A path is served only when every segment is a plain name (no dotfile, so the manifest and
+  `.carrd.json` stay hidden, no `.` or `..`, no backslash), opened through `os.OpenInRoot` so a
+  link can't lead out, and a regular file (never a listing); a miss is a 404 sent
+  `no-store`. Every answer carries nosniff, `X-Frame-Options`, the Referrer-Policy and HSTS,
+  and an SVG a sandboxing CSP. Nothing routes to `fonts/`: a `/fonts/` path reaches the SPA's
+  handler, which answers it 404 (`TestDataFolderServesItsPublicFilesAndNeverTheFonts`).
+- `vite.config.ts` strips the build's `images/` and `sounds/` (the `strip-dist-images`
+  plugin), so the binary never carries a copy of the persistent `images/` or of the
+  sounds, which it serves from the data folder.
+- **The game sounds** (`lib/sound.ts`: `level_up`, `moogle_noise`, `queue_pop`,
+  `this_is_bad`, each `.mp3`) are kept out of the repository: they may be the game's own
+  effects. `frontend/public/sounds/` is git-ignored and holds them for `vite dev`; in
+  production they are copied once, by hand, into the data folder's `sounds/`
+  (`deploy/README.md`, The data folder). A release build carries none, so a host without
+  them answers `/sounds/*.mp3` 404 and the sounds stay silent.
 - **Which folder a new image goes in.** A consequence of that strip: `frontend/public/images/`
   is a **dev-time mirror of the server's persistent tree**, not a way to ship a file. Put an
   image there and it works on `npm run dev` and 404s on live until someone uploads it by hand -
@@ -933,7 +957,8 @@ Until 4.0.0 Apache served the SPA from `<DocumentRoot>/dist`; once 4.0.0 has sta
 - Schema migration v10 rewrites legacy `assets/images/raffles/...` prize paths
   to `images/raffles/...` automatically on first start.
 - **Font host (protected serving)**: uploaded fonts are licensed assets and are
-  NOT served statically. The Go server streams them via rotating tokenized URLs
+  never served as files: they sit in the data folder's `fonts/`, which no vhost names and
+  no route reads. The Go server streams them via rotating tokenized URLs
   (`/api/v1/fonts/pub/kit.css` + `/api/v1/fonts/pub/f/{token}`, `internal/api/fonts.go` over the `internal/fonts` rules) gated
   **per font** by its own origin allowlist (Font Upload -> Edit); Chrome and
   Firefox require the echoed CORS header on cross-origin `@font-face`, so
@@ -941,18 +966,15 @@ Until 4.0.0 Apache served the SPA from `<DocumentRoot>/dist`; once 4.0.0 has sta
   requesting site's allowed fonts. **Safari sends no `Origin` on font loads**
   (WebKit fetches `@font-face` in `no-cors` mode), so an Origin-less request is
   judged by its `Referer`'s site against the same allowlist - gate on `Origin`
-  alone and every iPhone gets a 403 while desktop looks fine. The `fonts.senpan.cafe` vhost is a **reverse proxy** (`ProxyPass / ->
-http://localhost:8080/api/v1/fonts/pub/`, edited on deploy day; the old `/api/fonts/pub/` no longer answers); external Carrd sites embed
-  `https://fonts.senpan.cafe/kit.css`. The SPA loads fonts same-origin through
-  the `/api` ProxyPass, so it never depends on any allowlist. Deploy
-  `deploy/fonts.htaccess` (deny-all, defense in depth) to
-  `<webRoot>/fonts/.htaccess`. See **Font host (protected serving)** in
+  alone and every iPhone gets a 403 while desktop looks fine. The `fonts.senpan.cafe`
+  vhost is a **reverse proxy** onto `/api/v1/fonts/pub/`; external Carrd sites embed
+  `https://fonts.senpan.cafe/kit.css`. The SPA loads fonts same-origin, so it never
+  depends on any allowlist. See **Font host (protected serving)** in `deploy/README.md`.
+- **Carrd host (CORS)**: Carrd projects are embedded by external Carrd sites from
+  `https://carrd.senpan.cafe/<project>/...`, which the vhost proxies to the app's
+  `/carrd/`; the app answers with `Access-Control-Allow-Origin: *`, never serves the
+  `.carrd.json` sidecars and never lists a folder. See **Carrd image host** in
   `deploy/README.md`.
-- **Carrd host (CORS)**: Carrd projects are served cross-origin from
-  `https://carrd.senpan.cafe` and embedded by external Carrd sites, so reads need
-  CORS. Deploy `deploy/carrd.htaccess` to `<webRoot>/carrd/.htaccess` (adds
-  `Access-Control-Allow-Origin`, hides the `.carrd.json` sidecars, disables
-  listings). See the **Carrd image host (CORS)** section of `deploy/README.md`.
 - **Scheduler**: the server runs a background goroutine that posts due
   announcements to Discord webhooks - no cron needed; it
   starts with the process and stops on graceful shutdown.

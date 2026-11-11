@@ -18,9 +18,9 @@ import (
 	"app-suite/internal/store/storetest"
 )
 
-// newTestEnvWithWebRoot builds a test env backed by a caller-provided webRoot, so
+// newTestEnvWithDataDir builds a test env backed by a caller-provided dataDir, so
 // a test can pre-seed files before the server (and its startup migration) run.
-func newTestEnvWithWebRoot(t *testing.T, webRoot string) *testEnv {
+func newTestEnvWithDataDir(t *testing.T, dataDir string) *testEnv {
 	t.Helper()
 	st, err := store.New(t.Context(), storetest.Path(t))
 	if err != nil {
@@ -28,7 +28,7 @@ func newTestEnvWithWebRoot(t *testing.T, webRoot string) *testEnv {
 	}
 	t.Cleanup(func() { st.Close() })
 
-	srv := server.New(t.Context(), st, live.New(), webRoot, nil)
+	srv := server.New(t.Context(), st, live.New(), dataDir, nil)
 	ts := httptest.NewTLSServer(srv)
 	t.Cleanup(ts.Close)
 
@@ -39,9 +39,9 @@ func newTestEnvWithWebRoot(t *testing.T, webRoot string) *testEnv {
 	return &testEnv{ts: ts, client: client, store: st, srv: srv}
 }
 
-// newTestEnvWithStore is newTestEnvWithWebRoot with settings stored before the server
+// newTestEnvWithStore is newTestEnvWithDataDir with settings stored before the server
 // starts, for the startup migrations that read them.
-func newTestEnvWithStore(t *testing.T, webRoot string, seed func(set func(key, value string))) *testEnv {
+func newTestEnvWithStore(t *testing.T, dataDir string, seed func(set func(key, value string))) *testEnv {
 	t.Helper()
 	st, err := store.New(t.Context(), storetest.Path(t))
 	if err != nil {
@@ -54,7 +54,7 @@ func newTestEnvWithStore(t *testing.T, webRoot string, seed func(set func(key, v
 		}
 	})
 
-	srv := server.New(t.Context(), st, live.New(), webRoot, nil)
+	srv := server.New(t.Context(), st, live.New(), dataDir, nil)
 	ts := httptest.NewTLSServer(srv)
 	t.Cleanup(ts.Close)
 
@@ -189,8 +189,8 @@ func TestImages_DefaultCategories(t *testing.T) {
 }
 
 func TestImages_CategoryCRUD(t *testing.T) {
-	webRoot := t.TempDir()
-	env := newTestEnvWithWebRoot(t, webRoot)
+	dataDir := t.TempDir()
+	env := newTestEnvWithDataDir(t, dataDir)
 	env.loginAdmin(t)
 
 	// The folder is derived from the name, or taken from the dir given.
@@ -199,7 +199,7 @@ func TestImages_CategoryCRUD(t *testing.T) {
 	if cat.Dir != "event_banners" || cat.Name != "Event Banners" {
 		t.Errorf("created %+v; want event_banners", cat)
 	}
-	if _, err := os.Stat(filepath.Join(webRoot, "images", "event_banners")); err != nil {
+	if _, err := os.Stat(filepath.Join(dataDir, "images", "event_banners")); err != nil {
 		t.Errorf("the folder wasn't made: %v", err)
 	}
 	decodeInto(t, env.postJSON(t, "/api/v1/image-categories", map[string]any{"name": "Misc", "dir": "My Own-Dir"}), http.StatusCreated, &cat)
@@ -247,7 +247,7 @@ func TestImages_CategoryCRUD(t *testing.T) {
 	if cat.Dir != "banners" || cat.Name != "Festival Banners" {
 		t.Errorf("moved %+v; want banners keeping the name", cat)
 	}
-	if _, err := os.Stat(filepath.Join(webRoot, "images", "banners", "a.png")); err != nil {
+	if _, err := os.Stat(filepath.Join(dataDir, "images", "banners", "a.png")); err != nil {
 		t.Errorf("the file didn't move with the folder: %v", err)
 	}
 	if names := env.imageNames(t, "banners"); len(names) != 1 {
@@ -278,7 +278,7 @@ func TestImages_CategoryCRUD(t *testing.T) {
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("delete = %d; want 204", resp.StatusCode)
 	}
-	if _, err := os.Stat(filepath.Join(webRoot, "images", "banners")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(dataDir, "images", "banners")); !os.IsNotExist(err) {
 		t.Errorf("the folder survived its category: %v", err)
 	}
 	resp = env.del(t, "/api/v1/image-categories/banners")
@@ -300,8 +300,8 @@ func TestImages_CategoryCRUD(t *testing.T) {
 }
 
 func TestImages_UploadListDelete(t *testing.T) {
-	webRoot := t.TempDir()
-	env := newTestEnvWithWebRoot(t, webRoot)
+	dataDir := t.TempDir()
+	env := newTestEnvWithDataDir(t, dataDir)
 	env.loginAdmin(t)
 
 	var up testImageUpload
@@ -339,7 +339,7 @@ func TestImages_UploadListDelete(t *testing.T) {
 	// A same-named upload replaces the file.
 	bigger := realPNG(t, 40, 30)
 	env.uploadImages(t, "raffles", map[string][]byte{"first.png": bigger}).Body.Close()
-	after, err := os.ReadFile(filepath.Join(webRoot, "images", "raffles", "first.png"))
+	after, err := os.ReadFile(filepath.Join(dataDir, "images", "raffles", "first.png"))
 	if err != nil || len(after) == 0 {
 		t.Fatal(err)
 	}
@@ -409,8 +409,8 @@ func TestImages_UploadRefusals(t *testing.T) {
 // TestImages_RasterIsSavedAgain checks the stored bytes: a JPEG or PNG loses its
 // metadata (a JPEG is turned upright by its orientation first), a GIF is kept as sent.
 func TestImages_RasterIsSavedAgain(t *testing.T) {
-	webRoot := t.TempDir()
-	env := newTestEnvWithWebRoot(t, webRoot)
+	dataDir := t.TempDir()
+	env := newTestEnvWithDataDir(t, dataDir)
 	env.loginAdmin(t)
 
 	gifData := smallGIF(t)
@@ -419,7 +419,7 @@ func TestImages_RasterIsSavedAgain(t *testing.T) {
 		"kept.gif":  gifData,
 	}).Body.Close()
 
-	jpg, err := os.ReadFile(filepath.Join(webRoot, "images", "raffles", "phone.jpg"))
+	jpg, err := os.ReadFile(filepath.Join(dataDir, "images", "raffles", "phone.jpg"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -431,15 +431,15 @@ func TestImages_RasterIsSavedAgain(t *testing.T) {
 	if err != nil || cfg.Width != 4 || cfg.Height != 8 {
 		t.Errorf("stored JPEG is %+v, %v; want 4x8 (turned upright)", cfg, err)
 	}
-	kept, err := os.ReadFile(filepath.Join(webRoot, "images", "raffles", "kept.gif"))
+	kept, err := os.ReadFile(filepath.Join(dataDir, "images", "raffles", "kept.gif"))
 	if err != nil || !bytes.Equal(kept, gifData) {
 		t.Errorf("the GIF should be kept as sent: %v", err)
 	}
 }
 
 func TestImages_SVGUploadPersistsTheSanitizedBytes(t *testing.T) {
-	webRoot := t.TempDir()
-	env := newTestEnvWithWebRoot(t, webRoot)
+	dataDir := t.TempDir()
+	env := newTestEnvWithDataDir(t, dataDir)
 	env.loginAdmin(t)
 
 	// A valid SVG carrying the things the sanitizer is there to strip.
@@ -455,7 +455,7 @@ func TestImages_SVGUploadPersistsTheSanitizedBytes(t *testing.T) {
 		t.Fatalf("upload = %+v; want the SVG saved and the broken one refused", up)
 	}
 
-	stored, err := os.ReadFile(filepath.Join(webRoot, "images", "flourishes", "evil.svg"))
+	stored, err := os.ReadFile(filepath.Join(dataDir, "images", "flourishes", "evil.svg"))
 	if err != nil {
 		t.Fatalf("read stored svg: %v", err)
 	}
@@ -471,11 +471,11 @@ func TestImages_SVGUploadPersistsTheSanitizedBytes(t *testing.T) {
 }
 
 func TestImages_SeedFlourishes(t *testing.T) {
-	webRoot := t.TempDir()
-	writeFile(t, webRoot, "images/corner_flourish.svg", []byte(`<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0"/></svg>`))
-	writeFile(t, webRoot, "images/called_flourish.svg", []byte(`<svg xmlns="http://www.w3.org/2000/svg"><path d="M1 1"/></svg>`))
+	dataDir := t.TempDir()
+	writeFile(t, dataDir, "images/corner_flourish.svg", []byte(`<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0"/></svg>`))
+	writeFile(t, dataDir, "images/called_flourish.svg", []byte(`<svg xmlns="http://www.w3.org/2000/svg"><path d="M1 1"/></svg>`))
 
-	env := newTestEnvWithWebRoot(t, webRoot)
+	env := newTestEnvWithDataDir(t, dataDir)
 	env.loginAdmin(t)
 	got := map[string]bool{}
 	for _, n := range env.imageNames(t, "flourishes") {
@@ -489,10 +489,10 @@ func TestImages_SeedFlourishes(t *testing.T) {
 // TestImages_Migration verifies the one-time copy of the old images/announcements
 // files into the announcements_main category on server start.
 func TestImages_Migration(t *testing.T) {
-	webRoot := t.TempDir()
-	writeFile(t, webRoot, "images/announcements/legacy.png", realPNG(t, 2, 2))
+	dataDir := t.TempDir()
+	writeFile(t, dataDir, "images/announcements/legacy.png", realPNG(t, 2, 2))
 
-	env := newTestEnvWithWebRoot(t, webRoot)
+	env := newTestEnvWithDataDir(t, dataDir)
 	env.loginAdmin(t)
 
 	if names := env.imageNames(t, "announcements_main"); len(names) != 1 || names[0] != "legacy.png" {
@@ -503,10 +503,10 @@ func TestImages_Migration(t *testing.T) {
 // TestImages_ManifestMigration verifies a manifest from before the defaults were
 // ordinary categories gets them folded in, keeping its own entries.
 func TestImages_ManifestMigration(t *testing.T) {
-	webRoot := t.TempDir()
-	writeFile(t, webRoot, "images/.categories.json", []byte(`{"categories":[{"name":"Event Banners","dir":"event_banners"}]}`))
+	dataDir := t.TempDir()
+	writeFile(t, dataDir, "images/.categories.json", []byte(`{"categories":[{"name":"Event Banners","dir":"event_banners"}]}`))
 
-	env := newTestEnvWithWebRoot(t, webRoot)
+	env := newTestEnvWithDataDir(t, dataDir)
 	env.loginAdmin(t)
 
 	cats := env.categories(t)
@@ -518,11 +518,11 @@ func TestImages_ManifestMigration(t *testing.T) {
 }
 
 // TestImages_ManifestMigration_RunsOnce verifies the migration doesn't bring back a
-// default staff deleted: a second start over the same web root leaves the manifest be.
+// default staff deleted: a second start over the same data folder leaves the manifest be.
 func TestImages_ManifestMigration_RunsOnce(t *testing.T) {
-	webRoot := t.TempDir()
+	dataDir := t.TempDir()
 
-	env := newTestEnvWithWebRoot(t, webRoot)
+	env := newTestEnvWithDataDir(t, dataDir)
 	env.loginAdmin(t)
 	resp := env.del(t, "/api/v1/image-categories/raffles")
 	resp.Body.Close()
@@ -530,7 +530,7 @@ func TestImages_ManifestMigration_RunsOnce(t *testing.T) {
 		t.Fatalf("delete status = %d; want 204", resp.StatusCode)
 	}
 
-	env2 := newTestEnvWithWebRoot(t, webRoot)
+	env2 := newTestEnvWithDataDir(t, dataDir)
 	env2.loginAdmin(t)
 	if _, ok := env2.categories(t)["raffles"]; ok {
 		t.Error("a deleted default category came back after a restart")
@@ -540,13 +540,13 @@ func TestImages_ManifestMigration_RunsOnce(t *testing.T) {
 // TestImages_ManifestMigration_CorruptNotWiped verifies a manifest that doesn't parse
 // is left alone rather than reseeded, which would silently drop any custom categories.
 func TestImages_ManifestMigration_CorruptNotWiped(t *testing.T) {
-	webRoot := t.TempDir()
+	dataDir := t.TempDir()
 	corrupt := []byte(`{"version":2,"categories":[{"name":"Keep",`)
-	writeFile(t, webRoot, "images/.categories.json", corrupt)
+	writeFile(t, dataDir, "images/.categories.json", corrupt)
 
-	_ = newTestEnvWithWebRoot(t, webRoot)
+	_ = newTestEnvWithDataDir(t, dataDir)
 
-	got, err := os.ReadFile(filepath.Join(webRoot, "images", ".categories.json"))
+	got, err := os.ReadFile(filepath.Join(dataDir, "images", ".categories.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

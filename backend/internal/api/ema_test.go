@@ -82,7 +82,7 @@ func TestEmaArtistLimitHoldsUnderARace(t *testing.T) {
 
 // A stored plaque image resolves only to a file directly inside the plaque folder.
 func TestEmaImagePathStaysInThePlaqueFolder(t *testing.T) {
-	h := handlers{Deps{WebRoot: t.TempDir()}}
+	h := handlers{Deps{DataDir: t.TempDir()}}
 	if h.emaImagePath(emaImageRelDir+"/1-abc.png") == "" {
 		t.Error("a plaque's own image should resolve")
 	}

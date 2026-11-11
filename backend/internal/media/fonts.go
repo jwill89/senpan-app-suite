@@ -21,7 +21,7 @@ import (
 	"app-suite/internal/fonts"
 )
 
-// Uploaded fonts live flat in <webRoot>/fonts and group into fonts by base name
+// Uploaded fonts live flat in <dataDir>/fonts and group into fonts by base name
 // (internal/fonts). A font with no WOFF2 among its files gets one converted into the
 // hidden fonts/.woff2 folder, named for the font; a font that has one uploaded never
 // is, and a stale copy is swept away. The metadata of every font (family, served
@@ -47,7 +47,7 @@ type Settings interface {
 	Set(ctx context.Context, key, value string) error
 }
 
-// Fonts is the uploaded fonts under a web root.
+// Fonts is the uploaded fonts under a data folder.
 type Fonts struct {
 	root     string
 	settings Settings
@@ -60,9 +60,9 @@ type Fonts struct {
 	metaMu sync.Mutex
 }
 
-// NewFonts is the uploaded fonts under webRoot, with their metadata in settings.
-func NewFonts(webRoot string, settings Settings) *Fonts {
-	return &Fonts{root: webRoot, settings: settings}
+// NewFonts is the uploaded fonts under dataDir, with their metadata in settings.
+func NewFonts(dataDir string, settings Settings) *Fonts {
+	return &Fonts{root: dataDir, settings: settings}
 }
 
 // Dir is the folder the font files are in.

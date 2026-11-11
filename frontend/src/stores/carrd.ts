@@ -1,5 +1,5 @@
 /**
- * Carrd store: manages image-hosting "projects" (folders under <webRoot>/carrd)
+ * Carrd store: manages image-hosting "projects" (folders under <data>/carrd)
  * and the images/sub-directories within them (the System -> Carrd Upload admin
  * tab).
  *

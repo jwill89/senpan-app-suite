@@ -47,7 +47,7 @@ export const PLUGIN_MASTER_PATH = '/plugin/pluginmaster.json'
  * deployed pluginmaster.json. Returns `null` on any failure (dev/offline/parse) so
  * the caller can fall back to the bundled changelog version. Never throws. Sends
  * `cache: 'no-store'` so a browser cache can't mask a fresh deploy (belt-and-braces
- * with the no-cache headers Apache serves for the plugin repo).
+ * with the no-store header the server sends on the plugin repo).
  */
 export async function fetchLivePluginVersion(): Promise<string | null> {
   try {

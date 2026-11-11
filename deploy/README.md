@@ -1,171 +1,126 @@
 # Deployment (Apache)
 
-This folder holds the files for the **Apache document root**: its `.htaccess`
-template and the persistent `images/`. Since 4.0.0 the app is one Go binary that
-serves the API, its live event streams and the SPA, whose build it embeds; Apache serves only
-the document root's own folders and proxies everything else to it.
+This folder holds what the host runs beside the binary: the Apache vhost the deploy
+installs (`apache-vhost.conf`), the systemd unit's template (`senpan.service`) and the
+persistent `images/` a new host's data folder starts from. The app is one Go binary that
+serves everything: the API, its live event streams, the SPA it embeds, and the public
+files of its data folder (the image library, the Carrd projects and the plugin
+repository). Apache terminates TLS and proxies every path of every name to it; nothing is
+served from a document root.
 
-## Document root layout
+## The data folder
 
 ```text
-<DocumentRoot>/                <- e.g. /var/www/senpan  (Apache DocumentRoot, also the Go -webroot)
-+-- .htaccess                  <- from deploy/.htaccess, with the app's address filled in (the deploy writes it)
-+-- images/                    <- from deploy/images/    (PERSISTENT - never wiped on redeploy)
-|   +-- logo.png
-|   +-- favicon.png
-|   +-- apple-touch-icon.png   <- iOS home-screen icon (180x180)
-|   +-- pwa-192x192.png        <- PWA install icons (manifest)
-|   +-- pwa-512x512.png
-|   +-- pwa-maskable-512x512.png
-|   +-- share_banner.png
-|   +-- raffles/               <- "Raffle" image category (prize images)
-|   +-- announcements_main/    <- "Announcement Main" image category (embed main image)
-|   +-- announcements_thumb/   <- "Announcement Thumbnail" image category (embed thumbnail)
-|   +-- garapons/, affiliate_logos/, affiliate_images/, stamp_cards/, stamp_stamps/, stamp_prizes/  <- the other seeded categories
-|   +-- flourishes/            <- "Flourishes" image category (SVG board/number flourishes; seeded from corner_flourish.svg + called_flourish.svg)
+/opt/senpan/data/              <- the -data on the unit's ExecStart, beside the database
++-- database.sqlite            <- the -db (and its -wal/-shm)
++-- backups/                   <- the daily database backups (Install-BackupTimer)
++-- images/                    <- PERSISTENT: served at /images/ (from deploy/images/ on a new host)
+|   +-- logo.png, favicon.png, apple-touch-icon.png, share_banner.png
+|   +-- pwa-192x192.png, pwa-512x512.png, pwa-maskable-512x512.png   <- the PWA's icons
+|   +-- raffles/, announcements_main/, announcements_thumb/, garapons/, affiliate_logos/,
+|   |   affiliate_images/, stamp_cards/, stamp_stamps/, stamp_prizes/, flourishes/
+|   |                          <- the seeded image categories (System -> Images), and any added
+|   +-- .categories.json       <- the categories' manifest (never served)
 |   +-- announcements/         <- legacy announcement images; copied into announcements_main on first start
-|   +-- <custom>/              <- any custom image categories added on System -> Images
-|   +-- .categories.json       <- manifest of the image categories (name <-> dir)
 |   +-- bookclub/              <- reading-list cover uploads (reserved: not an image category)
 |   \-- ema_plaques/           <- ema plaques awaiting review (reserved: not an image category)
-+-- fonts/                     <- admin-uploaded font files; NOT served statically - the Go server streams them via tokenized URLs (see Font host)
-+-- carrd/                     <- Carrd image-host projects; served by the carrd.senpan.cafe vhost (see Carrd host)
-\-- plugin/                    <- the Dalamud custom repo (pluginmaster.json, SenpanCompanionAdmin/latest.zip, .htaccess); replaced whole on each plugin publish
++-- fonts/                     <- PERSISTENT: uploaded fonts, never served as files (see Font host)
+|   \-- .woff2/                <- the converted WOFF2 copies
++-- carrd/                     <- PERSISTENT: the Carrd projects, served at carrd.senpan.cafe (see Carrd host)
++-- plugin/                    <- the Dalamud custom repo, replaced whole by each plugin publish (previous kept as plugin.old)
+\-- sounds/                    <- the game's sound effects, copied in by hand (see below); served at /sounds/
 ```
 
-`.htaccess` serves `images/`, `carrd/` and `plugin/` as they are (a file missing
-there is a 404), refuses `fonts/` (its own `.htaccess`) and every dotfile, and
-proxies every other path to the app: its pages, its content-hashed `assets/`, its
-sounds and the PWA files. The app sets their cache rules, security headers and
-Content-Security-Policy itself. A deploy replaces only the binary and `.htaccess`, so
-uploads are never touched. The build strips its own `images/`, so the binary never
-carries a copy of the persistent one.
+The app serves `/images/<path>` (the library's picture types: jpg, png, webp, gif, svg),
+`/carrd/<path>` (those and mp3, mp4) and `/plugin/pluginmaster.json` and
+`/plugin/SenpanCompanionAdmin/latest.zip`, and `/sounds/<name>.mp3`, from the data folder
+(`internal/media`, `serve.go`). It never serves a dotfile (the manifest, a project's `.carrd.json`), never
+lists a folder, never follows a link out of one, and has no route that reads `fonts/`.
+Pictures, Carrd files and sounds are cached a day (`public, max-age=86400`): a picture replaced
+under its name can show the old one until then unless purged at Cloudflare. The plugin's
+two files are `no-store`. A missing file is a 404 that nothing caches. Every stored path
+and public URL is the one it was when Apache served these from the document root.
 
-Before 4.0.0 Apache served the SPA from `<DocumentRoot>/dist/`, which the deploy
-replaced (keeping `dist.old/`). The 4.0.0 deploy leaves both in place, so a rollback
-to the previous `.htaccess` still finds the previous SPA. Once 4.0.0 has stayed, remove
-them on the host: `rm -rf <DocumentRoot>/dist <DocumentRoot>/dist.old`.
+A deploy never touches the data folder (the plugin publish swaps only `plugin/`). The
+build strips its own `images/` and `sounds/`, so the binary never carries a copy of either.
 
-All image uploads are now managed centrally on the **System -> Images** admin
-page, which writes into per-category subdirectories of `images/` (ten categories
-are seeded on first start, all editable, plus any custom ones; `bookclub`,
-`announcements` and `ema_plaques` belong to other features and can't be made a
-category). They all live under the persistent `images/` tree, so no extra vhost or one-time setup is needed. On
-first start the Go server copies any legacy `images/announcements/` files into
-`images/announcements_main/` (idempotent - safe to leave the legacy folder).
+**The sounds** (`level_up`, `moogle_noise`, `queue_pop` and `this_is_bad`, each `.mp3`) are
+the player's "game" sounds and the Yoever reaction (`frontend/src/lib/sound.ts`). They are
+kept out of the repository (`frontend/public/sounds/` is git-ignored, and holds them for
+`vite dev`), so no release carries them: copy them into the data folder once, by hand, from
+a machine that has them:
 
-Uploaded **fonts** live in a separate folder, `<webRoot>/fonts/`, but are NOT
-served statically: the `fonts.senpan.cafe` vhost reverse-proxies to the Go
-server's tokenized, origin-gated endpoints - see
-[Font host (protected serving)](#font-host-protected-serving).
+```powershell
+plink -i "<KeyPath>" <user>@<host> "install -d -m 755 /opt/senpan/data/sounds"
+pscp -i "<KeyPath>" frontend\public\sounds\*.mp3 <user>@<host>:/opt/senpan/data/sounds/
+```
+
+Readable is enough: the app never writes them. Until they are there, `/sounds/*.mp3`
+answers 404 and the sounds stay silent; nothing else breaks.
+
+## The vhost
+
+`apache-vhost.conf` holds the three names' VirtualHosts, with the app's address filled in
+from the unit's `-addr`; every app deploy installs it as
+`/etc/apache2/sites-available/<service>.conf` where it differs, checks it with `apachectl
+configtest` before anything stops (the previous is kept as `.old` and put back if Apache
+refuses it), and reloads Apache once the new release answers. Edit it in the repo, never
+on the host.
+
+| Name | Proxied to |
+| --- | --- |
+| `apps.senpan.cafe` | the app, every path (`timeout=3600` for the event streams) |
+| `fonts.senpan.cafe` | `/api/v1/fonts/pub/`: `kit.css` and `/f/<token>` |
+| `carrd.senpan.cafe` | `/carrd/`: `<project>/.../<file>` |
+
+Port 80 redirects all three to https. All three use the certificate the `CertName` setting
+names (`/etc/letsencrypt/live/<CertName>/`). `mod_deflate` is kept off the event streams
+(`SetEnvIfNoCase Request_URI "/events$" no-gzip`), or their events would arrive in
+batches. Apache needs `mod_proxy`, `mod_proxy_http`, `mod_headers`, `mod_rewrite`,
+`mod_setenvif` and `mod_ssl`.
 
 ## One-time server setup
 
-1. The deploy writes `<DocumentRoot>/.htaccess` from `deploy/.htaccess`; by hand,
-   copy it and replace `__APP__` with the app's address (`127.0.0.1:8080`).
-2. Upload `deploy/images/` -> `<DocumentRoot>/images/` (creates `images/raffles/`).
-3. Ensure Apache has `mod_rewrite`, `mod_headers`, `mod_proxy` and `mod_proxy_http`
-   enabled (the `.htaccess` proxies with `[P]`; the vhost's ProxyPass already needs
-   the last two) and the vhost allows `.htaccess` overrides for the doc root:
+For a new host (the live one already has all of it):
 
-   ```apache
-   <Directory /var/www/senpan>
-       AllowOverride All
-       Require all granted
-   </Directory>
-   ```
+1. The service's account and folders: `useradd --system --no-create-home --shell
+   /usr/sbin/nologin senpan`, then `install -d -o senpan -g senpan -m 755 /opt/senpan
+   /opt/senpan/data`, and copy `deploy/images/` to `/opt/senpan/data/images/`, owned by
+   `senpan`.
+2. The unit: copy `deploy/senpan.service` to `/etc/systemd/system/senpan.service`, fill in
+   its placeholders, then `systemctl daemon-reload && systemctl enable senpan`; the
+   first app deploy installs the binary and starts it.
+3. The vhost: the first app deploy installs `senpan.conf` in `sites-available`; enable it
+   with `a2ensite senpan`, then `apachectl configtest && systemctl reload apache2`.
+4. The sounds: copy them into `/opt/senpan/data/sounds/` (see [The data folder](#the-data-folder)).
 
-4. Confirm the vhost proxies the API to the Go server (already in place):
-
-   ```apache
-   ProxyPass        /api/   http://localhost:8080/api/ timeout=3600
-   ProxyPassReverse /api/   http://localhost:8080/api
-   ProxyPreserveHost On
-   ```
-
-   `timeout=3600` keeps a quiet live event stream (`/api/v1/events`,
-   `/api/v1/board/{id}/events`) from being cut; the app also sends a ping on each
-   every 25 seconds. This guide sets up no compression. If the host has `mod_deflate`
-   on, it must not compress `text/event-stream`, or the events arrive in batches: add
-   `SetEnvIfNoCase Request_URI "/events$" no-gzip` to the vhost.
-
-5. Run the Go server with `-webroot` pointing at the **document root** so uploads
-   land in `<DocumentRoot>/images/raffles/`:
-
-   ```text
-   /opt/senpan/app-suite -addr :8080 -db /opt/senpan/data/database.sqlite -webroot /var/www/senpan
-   ```
-
-   The web server (Apache) must have write access to `<DocumentRoot>/images/raffles/`
-   only if the Go process and Apache run as different users; the Go process is
-   what writes the files, so it needs write access to that directory.
-
-## Running as a non-root user (recommended)
+## Running as a non-root user
 
 The standards run each service as its own locked system account, and the repo's
 `deploy/senpan.service` template does (`User=` and `Group=`, `<service-user>` there).
 Nothing in the server needs root - it binds `:8080` (non-privileged) and only touches
-ordinary files - so a dedicated account shrinks the blast radius of any compromise.
+ordinary files under `/opt/senpan` - so a dedicated account shrinks the blast radius of any
+compromise.
 
-> **Important:** `scripts/deploy.ps1` does **NOT** ship the systemd unit - it only
-> updates the binary, the web root's `.htaccess` and the plugin folder, and installs the
-> daily backup's own units. It **reads** the running unit (its `User=`, `Group=`, `-db`
-> and `-addr`), so the binary it installs is owned by that account, as the standards
-> have it, and the backup runs as it too. The repo `deploy/senpan.service` is a
-> reference/template; the unit that actually runs lives on the host at
-> `/etc/systemd/system/senpan.service`. So editing `User=` in the repo and
-> redeploying does nothing to the running service - you must update the unit **on
-> the host** (step 3 below). This is why a `daemon-reload`/`restart` alone leaves
-> `systemctl show senpan -p User` reporting `root`.
+> **Important:** `scripts/deploy.ps1` does **NOT** ship the systemd unit - it updates the
+> binary and the vhost, publishes the plugin folder, and installs the daily backup's own
+> units. It **reads** the running unit (its `User=`, `Group=`, `-db`, `-addr` and
+> `-data`), so the binary it installs is owned by that account, as the standards have it,
+> and the backup runs as it too. The repo `deploy/senpan.service` is a template; the unit
+> that actually runs lives on the host at `/etc/systemd/system/senpan.service`, and a
+> change to it is made there by hand (the one exception was 5.2.0's move, which edited
+> its `-webroot` and `ReadWritePaths` lines once).
 
-One-time host setup:
-
-```bash
-# 1. Create a locked system account (no home, no login shell).
-useradd --system --no-create-home --shell /usr/sbin/nologin senpan
-
-# 2. Give it ownership of everything the process writes: its own dir (binary,
-#    DB + SQLite -wal/-shm) and EVERY document-root subtree it writes into.
-chown -R senpan:senpan /opt/senpan
-chown -R senpan:senpan /var/www/apps.senpan.cafe/images \
-                       /var/www/apps.senpan.cafe/fonts \
-                       /var/www/apps.senpan.cafe/carrd
-
-# 3. Update the UNIT FILE ON THE HOST. Inspect the current one first, then edit it:
-systemctl cat senpan                 # note the path + current User/ReadWritePaths
-systemctl edit --full senpan         # opens the effective unit for editing
-#   In the editor, set:
-#     User=senpan
-#     Group=senpan
-#     ReadWritePaths=/opt/senpan /var/www/apps.senpan.cafe/images \
-#                    /var/www/apps.senpan.cafe/fonts /var/www/apps.senpan.cafe/carrd
-#   (match the ExecStart -webroot to your host). Alternatively, copy the repo's
-#   deploy/senpan.service onto /etc/systemd/system/senpan.service and fill in its
-#   placeholders - <service-user>, /opt/<app>, <webroot>, <service-name> - with
-#   your values (the tracked template deliberately carries no concrete paths).
-
-# 4. Reload + restart.
-systemctl daemon-reload
-systemctl restart senpan
-```
-
-`ReadWritePaths` in the running unit must list every one of those subtrees or
-writes fail with `EACCES` under `ProtectSystem=strict`. Apache keeps serving the
-files as its own user (read is world-readable); only writes are the `senpan`
-user's concern. Verify:
+Everything the process writes is under `/opt/senpan`, owned by `senpan`, so
+`ReadWritePaths=/opt/senpan` covers it all. Verify:
 
 ```bash
-systemctl show senpan -p User -p Group          # senpan / senpan
-ps -o user= -C app-suite                         # not root
-# Smoke-test each writable subtree from the admin UI: upload an image, a font
-# (confirm fonts/.woff2/ is written), and a Carrd project image; confirm an
-# admin CRUD write succeeds and /var/log/senpan/senpan.log keeps growing.
+systemctl show senpan -p User -p Group -p ReadWritePaths   # senpan / senpan / /opt/senpan
+ps -o user= -C app-suite                                   # not root
+# Smoke-test each writable folder from the admin UI: upload an image, a font (confirm
+# fonts/.woff2/ is written) and a Carrd project file; confirm an admin write succeeds
+# and /var/log/senpan/senpan.log keeps growing.
 ```
-
-> If font/carrd uploads currently work in production, the **live** unit's
-> `ReadWritePaths` is already broader than an older repo copy - run
-> `systemctl cat senpan` and reconcile before shipping the repo unit so a
-> `daemon-reload` never *narrows* the writable set.
 
 ## Credential rotation
 
@@ -201,18 +156,17 @@ ps -o user= -C app-suite                         # not root
 
 ## Font host (protected serving)
 
-Uploaded fonts are licensed assets, so they are **never served as static
-files**. The Go server streams them itself through obfuscated token URLs that
-rotate every 1-2 weeks, gated by the requesting site's `Origin` against
-**that font's own allowlist** (Atelier -> Font Upload -> Edit -> Allowed sites).
-Chrome and Firefox hard-require CORS on cross-origin `@font-face`, so a site
-that isn't on a font's list cannot render it. Safari is the exception: it fetches
-fonts in `no-cors` mode, sending **no** `Origin`, so for an Origin-less request
-the gate checks the site in the `Referer` (the embedding page) against the same
-allowlist instead. Requests naming no site at all (pasting the URL into a
-browser, `wget`, casual scrapers) get a 403, and `kit.css` only emits each
-requesting site's allowed fonts. The SPA itself loads fonts
-**same-origin** via the existing `/api` ProxyPass
+Uploaded fonts are licensed assets, so they are **never served as files**: they live in
+the data folder's `fonts/`, which no vhost names and no route of the app reads. The Go
+server streams them itself through obfuscated token URLs that rotate every 1-2 weeks,
+gated by the requesting site's `Origin` against **that font's own allowlist** (Atelier ->
+Font Upload -> Edit -> Allowed sites). Chrome and Firefox hard-require CORS on
+cross-origin `@font-face`, so a site that isn't on a font's list cannot render it. Safari
+is the exception: it fetches fonts in `no-cors` mode, sending **no** `Origin`, so for an
+Origin-less request the gate checks the site in the `Referer` (the embedding page)
+against the same allowlist instead. Requests naming no site at all (pasting the URL into a
+browser, `wget`, casual scrapers) get a 403, and `kit.css` only emits each requesting
+site's allowed fonts. The SPA itself loads fonts **same-origin**
 (`/api/v1/fonts/pub/f/<token>`), so the app and its font picker always work - the
 allowlists only govern external sites.
 
@@ -222,76 +176,54 @@ External (Carrd) sites embed one stylesheet whose URL never changes:
 <link rel="stylesheet" href="https://fonts.senpan.cafe/kit.css">
 ```
 
-and then use `font-family: '<CSS Name>'` (shown per font on the Font Upload
-tab; defaults to the filename without extension). The kit's tokenized font
-URLs refresh automatically on rotation.
+and then use `font-family: '<CSS Name>'` (shown per font on the Font Upload tab; defaults
+to the filename without extension). The kit's tokenized font URLs refresh automatically on
+rotation. `fonts.senpan.cafe` is the vhost's proxy onto `/api/v1/fonts/pub/`, so
+`https://fonts.senpan.cafe/kit.css` is `/api/v1/fonts/pub/kit.css` and
+`https://fonts.senpan.cafe/f/<token>` is `/api/v1/fonts/pub/f/<token>`.
 
-Files sharing a base name (e.g. `Jasper.otf` + `Jasper.woff2`) are format
-variants of **one font**. A font with no uploaded WOFF2 gets one
-**auto-converted** (stored in the hidden `<webRoot>/fonts/.woff2/`
-sub-directory; a startup backfill converts pre-existing fonts and sweeps
-stale copies). The WOFF2 is served by default - uploads stay on disk
-untouched, and the served version is selectable per font in the Edit modal.
+Files sharing a base name (e.g. `Jasper.otf` + `Jasper.woff2`) are format variants of
+**one font**. A font with no uploaded WOFF2 gets one **auto-converted** (stored in the
+hidden `fonts/.woff2/` sub-folder; a startup backfill converts pre-existing fonts and
+sweeps stale copies). The WOFF2 is served by default - uploads stay on disk untouched, and
+the served version is selectable per font in the Edit modal.
 
-One-time setup for the font host:
-
-1. Make the `fonts.senpan.cafe` vhost a **reverse proxy** to the Go server
-   (replacing any DocumentRoot-based static config):
-
-   ```apache
-   ProxyPass        / http://localhost:8080/api/v1/fonts/pub/
-   ProxyPassReverse / http://localhost:8080/api/v1/fonts/pub/
-   ProxyPreserveHost On
-   ```
-
-   `https://fonts.senpan.cafe/kit.css` -> `/api/v1/fonts/pub/kit.css` and
-   `https://fonts.senpan.cafe/f/<token>` -> `/api/v1/fonts/pub/f/<token>`. A vhost
-   already proxying to the old `/api/fonts/pub/` must be edited the day the release
-   deploys: that path no longer answers, and there is no alias for it. The external
-   addresses (`kit.css`, `/f/<token>`) do not change.
-2. Upload `deploy/fonts.htaccess` -> `<webRoot>/fonts/.htaccess`. It now DENIES
-   all direct access - pure defense in depth in case the vhost is ever
-   reverted to serving the folder statically. The Go server only adds/removes
-   font files in that folder, so the `.htaccess` persists across uploads.
-
-> **Migration note:** legacy direct URLs
-> (`https://fonts.senpan.cafe/My%20Font.ttf`) stop working the moment the
-> vhost becomes a proxy. Any external site using them must switch to the
-> kit stylesheet above, and its origin must be added to the allowlist.
-
-**Verify the cutover** (the repo can't confirm host-side vhost state):
+**Checking it** (from any machine):
 
 ```bash
-# The gated responses MUST carry Cache-Control: private, or Cloudflare (which
-# ignores Vary) can serve one origin's kit to another. Check this FIRST -
-# it is a blocking precondition before migrating any external site.
-curl -sI https://fonts.senpan.cafe/kit.css | grep -i cache-control     # -> private
-
-apachectl -S | grep fonts.senpan.cafe                                  # a proxy vhost, no DocumentRoot
-curl -s -o /dev/null -w '%{http_code}\n' https://fonts.senpan.cafe/AnyFont.ttf   # -> 403/404 (legacy URL dead)
-curl -s -o /dev/null -w '%{http_code}\n' https://fonts.senpan.cafe/f/anytoken    # -> 403 (no Origin)
-curl -s -H 'Origin: https://<allowed-site>' https://fonts.senpan.cafe/kit.css    # -> that site's fonts
+# The gated responses MUST carry Cache-Control: private, or Cloudflare (which ignores
+# Vary) can serve one site's kit to another.
+curl -sI https://fonts.senpan.cafe/kit.css | grep -i cache-control                      # -> private
+curl -s -H 'Referer: https://<allowed-site>/' https://fonts.senpan.cafe/kit.css          # -> that site's fonts
+curl -s -o /dev/null -w '%{http_code}\n' -H 'Origin: https://<allowed-site>' https://fonts.senpan.cafe/f/<token>   # -> 200
+curl -s -o /dev/null -w '%{http_code}\n' -H 'Referer: https://<allowed-site>/' https://fonts.senpan.cafe/f/<token> # -> 200 (Safari)
+curl -s -o /dev/null -w '%{http_code}\n' -H 'Origin: https://elsewhere.example' https://fonts.senpan.cafe/f/<token> # -> 403
+curl -s -o /dev/null -w '%{http_code}\n' https://fonts.senpan.cafe/f/<token>             # -> 403 (no site named)
+curl -s -o /dev/null -w '%{http_code}\n' 'https://apps.senpan.cafe/fonts/<File>.ttf'     # -> 404 (never a file)
 ```
 
-## Carrd image host (CORS)
+## Carrd image host
 
-The **System -> Carrd Upload** admin tab creates per-project folders under
-`<webRoot>/carrd/` (each of which may contain arbitrarily nested sub-folders)
-and writes uploaded images to them. They are served by a separate vhost at
-`https://carrd.senpan.cafe/<folder>/.../<image>` and embedded by external Carrd
-sites (a different origin), so cross-origin reads must be allowed.
+The **Atelier -> Carrd Upload** admin tab creates per-project folders under the data
+folder's `carrd/` (each of which may contain arbitrarily nested sub-folders) and writes
+uploaded pictures, `.mp3` and `.mp4` files to them. They are served at
+`https://carrd.senpan.cafe/<project>/.../<file>`, the vhost's proxy onto the app's
+`/carrd/`, and embedded by external Carrd sites, so every file goes out with
+`Access-Control-Allow-Origin: *` and a day's cache; audio and video answer range
+requests. A project's `.carrd.json` (its title) is never served, and neither is a folder
+listing. A file uploaded under a name already there replaces it, so a site referencing
+its address picks up the new one (within the day's cache, or at once after a Cloudflare
+purge).
 
-One-time setup for the carrd host (same pattern as the font host):
+## Plugin repository
 
-1. Upload `deploy/carrd.htaccess` -> `<webRoot>/carrd/.htaccess`. It adds
-   `Access-Control-Allow-Origin: *` (plus a cache header) for image files, hides
-   the per-project `.carrd.json` metadata sidecar, and disables directory
-   listings. The Go server only adds/removes project folders and images in that
-   tree, so the `.htaccess` persists across uploads.
-2. Ensure the carrd vhost has `mod_headers` enabled and allows `.htaccess`
-   overrides (`AllowOverride All` or at least `FileInfo`). If overrides are
-   disabled, put the `<FilesMatch>` blocks from `deploy/carrd.htaccess` directly
-   in the vhost's `<Directory>` instead.
+The FFXIV plugin's custom Dalamud repository is `https://apps.senpan.cafe/plugin/pluginmaster.json`,
+whose download links are `https://apps.senpan.cafe/plugin/SenpanCompanionAdmin/latest.zip?v=<version>`.
+The app serves those two files from the data folder's `plugin/`, read on every request and
+sent `no-store`: Cloudflare would otherwise keep an old `latest.zip` while the index
+already names the new version, and Dalamud refuses a package whose version differs from
+the index's. The `?v=` on the links is the second guard. `.\scripts\deploy.ps1 -Target
+plugin` publishes the folder (see [Each deploy](#each-deploy)).
 
 ## Server logs
 
@@ -329,7 +261,7 @@ On-box viewing: `jlv /var/log/senpan/senpan.log` (install the Linux `.deb` from
 
 ### Systemd sandboxing
 
-`senpan.service` ships with a defense-in-depth sandbox: `NoNewPrivileges`, `ProtectSystem=strict` + `ProtectHome`, `PrivateTmp`/`PrivateDevices`, `ProtectKernel*`/`ProtectControlGroups`, `RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX`, `RestrictNamespaces`, `LockPersonality`, `SystemCallFilter=@system-service` + `SystemCallArchitectures=native`, and **`MemoryDenyWriteExecute=yes`** (W^X). Every directory the app writes (the DB dir + the `-webroot` `images/`, `fonts/`, `carrd/` subtrees, plus `LogsDirectory=senpan`) must be listed in `ReadWritePaths` or writes fail with `EACCES` under `ProtectSystem=strict` - keep `ReadWritePaths` in sync with your deployed `-webroot`.
+`senpan.service` ships with a defense-in-depth sandbox: `NoNewPrivileges`, `ProtectSystem=strict` + `ProtectHome`, `PrivateTmp`/`PrivateDevices`, `ProtectKernel*`/`ProtectControlGroups`, `RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX`, `RestrictNamespaces`, `LockPersonality`, `SystemCallFilter=@system-service` + `SystemCallArchitectures=native`, and **`MemoryDenyWriteExecute=yes`** (W^X). Everything the app writes is under its opt folder (the database and the data folder's `images/`, `fonts/` and `carrd/`), so `ReadWritePaths=/opt/<app>` covers it, with `LogsDirectory=senpan` for the log; a path outside `ReadWritePaths` fails with `EACCES` under `ProtectSystem=strict`.
 
 > **`MemoryDenyWriteExecute` caveat.** W^X is safe here because the binary is pure
 > Go (no cgo, `CGO_ENABLED=0`) and so is its SQLite driver: `modernc.org/sqlite` is
@@ -371,67 +303,59 @@ Pulls) if you need it to be tamper-proof. Capability tokens in request
 paths/queries/Referer are redacted to a short correlation hash before logging, so
 draw/stamp/font links never appear verbatim in the log or the viewer.
 
-## Deploy day: 5.0.0
+## Deploy day: 5.2.0
 
-5.0.0 moves the whole API to `/api/v1` with camelCase fields, and the live feed from the
-WebSocket to server-sent events. Nothing answers at the old addresses, so the plugin
-(4.0.0.0), the font host and the Carrd pages move the same day. In order:
+5.2.0 moves everything out of Apache's document root, and the deploy does the move itself:
+the first `task deploy` of 5.2.0 finds `-webroot` on the unit and, in the same run, moves
+`images/`, `fonts/`, `carrd/` and `plugin/` into `<RemoteOptDir>/data`, edits the unit to
+`-data` and its `ReadWritePaths` to the opt folder, and swaps the six apps/fonts/carrd site
+files for the one vhost (see [Each deploy](#each-deploy), "The move"). Every public URL
+stays as it is, `fonts.senpan.cafe/kit.css` and its token links included. In order:
 
-1. **Push and deploy.** Once CI is green on `main` it tags `v5.0.0` and
-   `Plugin-v4.0.0.0`. `task deploy` then ships the app and publishes the plugin, since
-   its version is new. The smoke check asks `/api/v1/version`. Migration 74 seeds the
-   tea-room CORS allowlist (`teaRoomOrigins`) with `https://senpan.cafe` and
-   `https://*.senpan.cafe`, so there is nothing to enter first. If the smoke check fails,
-   the deploy puts 4.1.0 back with its database: stop there and change nothing below.
-2. **The font host, straight away.** Public fonts now answer only at
-   `/api/v1/fonts/pub/` (no alias for the old `/api/fonts/pub/`), so
-   `fonts.senpan.cafe` is down, and the Carrd pages' fonts with it, until its vhost
-   points there:
+1. **Push and deploy.** Add `$DeployCertName` (the certificate the three names use) to
+   `scripts/deploy.config.ps1` first. Once CI is green on `main` it tags `v5.2.0`;
+   `task deploy` ships it.
+   Watch for the backups line (`/root/senpan-before-data-move-<UTC>/`), the four `Moved`
+   lines, the unit's `-data` line, `Apache took the new sites`, the font check (every line
+   `asked 404`; a 400 or 403 also counts as refused) and the smoke checks. Any failure puts 5.1.0, the folders, the unit and the
+   old sites back on its own. The plugin step skips: 4.0.0.0 is published already.
+2. **Copy the sounds** into `/opt/senpan/data/sounds/` (see [The data folder](#the-data-folder)),
+   before or after the deploy: the data folder is already there, and the move leaves a
+   `sounds/` in it alone. Then `/sounds/this_is_bad.mp3` answers 200 (`audio/mpeg`).
+3. **Check from outside:** a font link with an allowed site's `Origin` (200, echoed), with
+   its `Referer` alone, as Safari sends (200), with another site's `Origin` (403) and with
+   neither (403); a font file's name under `/fonts/` on each name (404); a picture under
+   `/images/` (200); a Carrd file with any `Origin` (200, `Access-Control-Allow-Origin: *`)
+   and its project's `.carrd.json` (404); `/plugin/pluginmaster.json` (200, `no-store`); the
+   tea-room API with `Origin: https://senpan.cafe` (the origin echoed); `/healthz`.
+4. **Check by hand:** a Carrd page shows its fonts (in Chrome and on an iPhone) and its tea
+   rooms; a board with game sounds on plays them on a draw; an upload to Images, Carrd
+   Upload and Font Upload each lands; System -> Logs shows
+   no `a public file could not be opened`.
+5. **Once 5.2.0 has stayed:** the old document root is read by nothing. Remove its `dist/`,
+   `dist.old/`, `.htaccess`, `.htaccess.old`, `.deploy-backup/` and `plugin.old/`, move
+   `themes.json` and `insert_styles.php` (`scripts/themes/`) to wherever they are run, and
+   remove the folder; delete the six disabled site files from `sites-available`; remove the
+   inert `fonts/.htaccess`, `carrd/.htaccess` and `plugin/.htaccess` from the data folder;
+   and, when nothing needs the way back, the backups folder and
+   `~/.shared-deploy/senpan-data-move/`.
 
-   ```apache
-   ProxyPass        / http://localhost:8080/api/v1/fonts/pub/
-   ProxyPassReverse / http://localhost:8080/api/v1/fonts/pub/
-   ```
+**Rolling the move back by hand**, after the deploy finished (on the host, as root). 5.2.0
+adds no migration, so 5.1.0 runs on the database as it is:
 
-   Then `sudo apachectl configtest && sudo systemctl reload apache2`, and check that
-   `https://fonts.senpan.cafe/kit.css` answers from a page that embeds it. The public
-   addresses (`kit.css`, `/f/<token>`) don't change.
-3. **The site's vhost.** Drop the `/api/ws` ProxyPass (and a WebSocket `RewriteRule` for
-   it, if there is one): nothing answers there any more. Give the `/api/` ProxyPass
-   `timeout=3600`, so a quiet event stream isn't cut:
+```bash
+state=/root/.shared-deploy/senpan-data-move
+systemctl stop senpan
+install -m 755 -o senpan -g senpan /opt/senpan/app-suite.old /opt/senpan/app-suite
+for d in $(cat "$state/moved"); do mv "/opt/senpan/data/$d" "/var/www/apps.senpan.cafe/$d"; done
+cat "$state/unit.orig" > "$(cat "$state/unit")" && systemctl daemon-reload
+a2dissite senpan && a2ensite $(cat "$state/sites")
+apachectl configtest && systemctl reload apache2
+systemctl start senpan
+```
 
-   ```apache
-   ProxyPass        /api/   http://localhost:8080/api/ timeout=3600
-   ProxyPassReverse /api/   http://localhost:8080/api
-   ```
-
-   If `mod_deflate` is on, keep it off the streams (`SetEnvIfNoCase Request_URI
-   "/events$" no-gzip`), or events arrive in batches. Reload Apache as above. The app
-   pings each stream every 25 seconds, so the streams work before this step; the
-   timeout is the belt to it.
-4. **The Carrd pages' tea-room scripts.** The public API moved and is camelCase:
-   - `GET /api/tea-rooms/public` is now `GET /api/v1/tea-rooms/public`, answering
-     `{ teaRooms: [...] }` (was `tea_rooms`).
-   - `GET /api/tea-rooms/public/{number}` is now `GET /api/v1/tea-rooms/public/{number}`,
-     answering the room itself (was wrapped in `tea_room`); an unknown number is a 404.
-   - A room's `room_number`, `room_owner`, `cost_per_half_hour`, `locked_until`,
-     `sort_order` and `created_at` are `roomNumber`, `roomOwner`, `costPerHalfHour`,
-     `lockedUntil`, `sortOrder` and `createdAt`; `lockedUntil` and `createdAt` are
-     `null` for none (were `""`).
-   - The browser reads it cross-origin only from an origin on the allowlist
-     (System -> Settings, "Allowed sites for the public tea-room API"). A page served
-     anywhere but `senpan.cafe` or one of its subdomains needs its origin added there.
-5. **The public stamp-card and drawing-link API.** The links players hold don't change
-   (`/stamp-card/<token>` and `/garapon/<token>` on the site), but the API behind them
-   moved from `/api/stamp-card/` and `/api/garapon/` to `/api/v1/stamp-cards/` and
-   `/api/v1/garapon-players/`. Anything that names the old paths, such as a Cloudflare
-   rule or a saved log filter, takes the new ones.
-6. **Staff update the plugin** in Dalamud (`/xlplugins`, then update). Until they do,
-   its calls fail with "Request failed (404)". Once updated, its status bar shows
-   **Live**.
-7. **Check by hand:** a board receives a draw, a second admin console and the plugin
-   both close the half-time prompt when one answers it, a Carrd page shows its rooms and
-   its fonts, and a stamp card opens from its link.
+The fonts go back with their `fonts/.htaccess` (`Require all denied`), which the move never
+removes. The host's record still names v5.2.0, so the next deploy skips it unless `-Force`.
 
 ## Each deploy
 
@@ -445,41 +369,45 @@ WebSocket to server-sent events. Nothing answers at the old addresses, so the pl
 
 The script is built on shared-tooling's SharedDeploy module (`shared/deploy/pwsh/`, from the `shared/` submodule; its README describes each function), so it takes the shape every deploy there takes: one archive, one SSH connection held for the whole run, one remote run.
 
-> **First-time setup:** the script is version-controlled, but **no** environment-specific value is baked into it - the host, SSH user, key path, webroot, service name and opt dir all live outside the repo. Copy `scripts/deploy.config.example.ps1` to `scripts/deploy.config.ps1` (untracked) and fill in the six required `$Deploy*` values. Each can instead be passed as a `-param` or set via its `$env:DEPLOY_*` variable (`DEPLOY_VPS_HOST`, `DEPLOY_VPS_USER`, `DEPLOY_KEY_PATH`, `DEPLOY_WEB_ROOT`, `DEPLOY_SERVICE_NAME`, `DEPLOY_REMOTE_OPT_DIR`); the script fails fast, listing any that are unset, before it builds or connects. The site's address, which the smoke check fetches, is public already (`plugins/pluginmaster.json` links to it), so it defaults to `https://apps.senpan.cafe`; `-SiteUrl`, `DEPLOY_SITE_URL` or `$DeploySiteUrl` overrides it. `-ConfigPath` points it at another settings file. The live database needs no setting: it is read from the running unit (step 1). `RemoteDbPath` (`DEPLOY_REMOTE_DB_PATH`, `$DeployRemoteDbPath`) is only a cross-check, used on its own when the unit names no `-db`.
+> **First-time setup:** the script is version-controlled, but **no** environment-specific value is baked into it - the host, SSH user, key path, service name, opt dir and certificate all live outside the repo. Copy `scripts/deploy.config.example.ps1` to `scripts/deploy.config.ps1` (untracked) and fill in the six required `$Deploy*` values. Each can instead be passed as a `-param` or set via its `$env:DEPLOY_*` variable (`DEPLOY_VPS_HOST`, `DEPLOY_VPS_USER`, `DEPLOY_KEY_PATH`, `DEPLOY_SERVICE_NAME`, `DEPLOY_REMOTE_OPT_DIR`, `DEPLOY_CERT_NAME`); the script fails fast, listing any that are unset, before it builds or connects. `CertName` is the certificate the vhost uses, its folder's name under `/etc/letsencrypt/live`; a plugin deploy doesn't need it. The site's address, which the smoke check fetches, is public already (`plugins/pluginmaster.json` links to it), so it defaults to `https://apps.senpan.cafe`; `-SiteUrl`, `DEPLOY_SITE_URL` or `$DeploySiteUrl` overrides it. `-ConfigPath` points it at another settings file. The live database and the data folder need no setting: they are read from the running unit (step 1). `RemoteDbPath` (`DEPLOY_REMOTE_DB_PATH`, `$DeployRemoteDbPath`) is only a cross-check, used on its own when the unit names no `-db`. A `$DeployWebRoot` left in an older `deploy.config.ps1` is ignored.
 
 **What an app deploy does:**
 
-1. **Read the service on the host**, before anything is built. The unit must be installed. Its `User=` (and `Group=`) is who the backup runs as; the `-db` on its `ExecStart` is the live database; its `-addr` is where the app answers on the host (`:8080`, the binary's default, when it has none, asked on `127.0.0.1`), which `/healthz` is asked on and the `.htaccess` proxies to. A `RemoteDbPath` that differs from `-db` stops the run with nothing changed. The host also says which release it last took (`~/.shared-deploy/senpan`): when that is this release, the run ends there, unless `-Force`.
-2. **Build the release, in its own checkout.** The front end first (`npm run build` in `frontend/`: vue-tsc + vite, into `backend/internal/web/dist/`), then a static `linux/amd64` binary that embeds it (`GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o app-suite .` in `backend/`). The release's `deploy/.htaccess` is filled in with the app's address. A broken build changes nothing. Both go into **one** `.tar.gz`: a truncated archive refuses to unpack, where a half-copied folder can look whole.
+1. **Read the service on the host**, before anything is built. The unit must be installed. Its `User=` (and `Group=`) is who the backup runs as; the `-db` on its `ExecStart` is the live database; its `-addr` is where the app answers on the host (`:8080`, the binary's default, when it has none, asked on `127.0.0.1`), which `/healthz` is asked on and the vhost proxies to; its `-data` is the data folder. A `RemoteDbPath` that differs from `-db` stops the run with nothing changed. The host also says which release it last took (`~/.shared-deploy/senpan`): when that is this release, the run ends there, unless `-Force`.
+2. **Build the release, in its own checkout.** The front end first (`npm run build` in `frontend/`: vue-tsc + vite, into `backend/internal/web/dist/`), then a static `linux/amd64` binary that embeds it (`GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o app-suite .` in `backend/`). The release's `deploy/apache-vhost.conf` is filled in with the app's address and `CertName`. A broken build changes nothing. Both go into **one** `.tar.gz`: a truncated archive refuses to unpack, where a half-copied folder can look whole.
 3. **Upload** the archive as one stream through plink, into the SSH user's home.
-4. **One remote run.** The host checks the archive's SHA-256 and file count, and only then:
-   - **the binary:** stops the service, keeps `app-suite.old`, snapshots the database with `sqlite3 .backup`, checked with `PRAGMA integrity_check`, compressed with gzip and checked with `gzip -t`, to `<db>.pre-<yyyyMMdd-HHmmss>.gz` (UTC; readable by root only; the newest three are kept), installs the binary, owned by the account the unit runs as, starts the service and waits up to 30 s for `/healthz` to answer on the host. If it does not, the previous binary goes back with the snapshot and restarts: the new binary may already have migrated the database, and the previous one refuses a newer schema (`database schema vN is newer than this binary`). Brief downtime (a few seconds) while the service is stopped.
-   - **then `.htaccess`:** swapped in by renames, the previous kept in `<DocumentRoot>/.deploy-backup/`. The repo's `deploy/.htaccess` is the source of truth - edit it there, not on the host. `images/` and the other folders are never touched.
-5. **Smoke check from this machine, through Cloudflare**, each URL tried three times: `<SiteUrl>/healthz` and `<SiteUrl>/api/version` must name this release's version; `<SiteUrl>/` must name the build's entry script, which must load too. If any fails, the previous `.htaccess` goes back, then the previous binary with the pre-deploy snapshot, so it starts on the schema it knows. Whatever was written in the seconds the new release ran is lost with it (decided 2026-11-06, as Kindred Nights does). Once the checks pass, the host records the release.
+4. **One remote run.** The host checks the archive's SHA-256 and file count, and only then: installs the vhost as `/etc/apache2/sites-available/<service>.conf` where it differs and checks it with `apachectl configtest` (a refusal puts the previous back and stops the run with nothing else changed); stops the service, keeps `app-suite.old`, snapshots the database with `sqlite3 .backup`, checked with `PRAGMA integrity_check`, compressed with gzip and checked with `gzip -t`, to `<db>.pre-<yyyyMMdd-HHmmss>.gz` (UTC; readable by root only; the newest three are kept), installs the binary, owned by the account the unit runs as, starts the service and waits up to 30 s for `/healthz` to answer on the host. If it does not, the previous binary and vhost go back with the snapshot and restart: the new binary may already have migrated the database, and the previous one refuses a newer schema (`database schema vN is newer than this binary`). Once it answers, Apache reloads if the vhost changed. Brief downtime (a few seconds) while the service is stopped. The data folder is never touched.
+5. **Smoke check from this machine, through Cloudflare**, each URL tried three times: `<SiteUrl>/healthz` and `<SiteUrl>/api/v1/version` must name this release's version; `<SiteUrl>/` must name the build's entry script, which must load too; `/images/pwa-512x512.png` and `/plugin/pluginmaster.json` must answer. If any fails, the previous binary and vhost go back with the pre-deploy snapshot, so it starts on the schema it knows. Whatever was written in the seconds the new release ran is lost with it (decided 2026-11-06, as Kindred Nights does). Once the checks pass, the host records the release.
 6. **Daily backup**, once the smoke check passes: see [Database backups](#database-backups). If it cannot be installed, the run fails saying the site is live but its backup is not.
 7. **Dev-database pull** (unless `-NoDbPull`): an online `sqlite3 .backup` on the host (the service keeps running), downloaded and checked against the host's SHA-256 into `devdata/database.sqlite`. The previous local copy is kept as `database.sqlite.bak-<time>` (the newest three), stale `-wal`/`-shm` files are removed, and the host's copy is deleted. While a local dev server holds the database open, the pull is skipped with a warning. These copies hold **live** data (accounts, password hashes, tokens, webhook URLs) - keep them local.
 
 The checkout under `%TEMP%` is removed at the end, whether the run passed or not.
 
-**What a plugin deploy does.** It checks out the plugin's newest release, reads the published `<SiteUrl>/plugin/pluginmaster.json` and stops before building when the release's version is not higher, since Dalamud updates to nothing else (with `-IfNewer`, the same version ends the run without error; if the index can't be read, the host's own check still stands). Then `dotnet build -c Release` from clean (its `bin/` and `obj/` deleted first, so the package can never lag the manifest), and its repository laid out: `SenpanCompanionAdmin/latest.zip`, `plugins/pluginmaster.json` with `?v=<version>` on its download links, and `deploy/plugin.htaccess`. The built version must equal `pluginmaster.json`'s `AssemblyVersion`. On the host the whole `plugin/` folder is swapped in (the previous kept as `plugin.old`), and the published index must then carry the new `?v=`, or the previous folder goes back.
+**The move** (a unit that still passes `-webroot`, which is how 5.2.0 found the live one). The same run also:
 
-**Options.** `-Force` deploys the app's release even when the host already runs it. `-NoBackup` removes `app-suite.old`, the previous `.htaccess` and `plugin.old` once the host run succeeds; the smoke check then has nothing to go back to, so a failure only stops the run. The database snapshot is still taken. `-NoDbPull` skips step 7.
+- **before anything stops, changing nothing:** checks that the web root's `images/` is there, that the data folder (`<RemoteOptDir>/data`) holds none of the four folders, that the unit passes `-webroot` and no drop-in sets `ExecStart` or `ReadWritePaths`, that the sites now serving the vhost's names (found with `apachectl -S`) serve no other name, that Apache takes the vhost in their place (tried on a copy of `/etc/apache2`), and that there is room; then backs up each folder, all of `/etc/apache2`, the unit and the web root's `.htaccess`, each a `tar.gz` checked with `gzip -t`, into `~/senpan-before-data-move-<UTC>/` (mode 0700), and records what a rollback needs in `~/.shared-deploy/senpan-data-move/`;
+- **after the stop:** moves each folder whole into the data folder (a rename on one filesystem; the fonts with their `.woff2/` copies), edits the unit (`-webroot <web root>` becomes `-data <data folder>`, the web root's paths leave `ReadWritePaths`, which keeps or gains one covering the data folder) and checks it with `systemctl show`, disables those sites, enables the vhost and runs `apachectl configtest`. A failure from here to the start moves everything back before the previous release restarts;
+- **after the start:** reloads Apache (graceful), then asks every name the vhost serves, through Apache on the host, for a real font file by four paths; anything but a refusal (400, 403 or 404, redirects followed; no answer is not a refusal), or a `fonts/` still in the web root, rolls the whole run back, as a failed smoke check does too: the previous binary and snapshot, the folders, the unit and the old sites, Apache reloaded.
 
-**The connection.** The droplet runs `ufw limit ssh`, which refuses an address after six connections in 30 s. The whole run is **one** SSH connection, held by a background `plink -share`; every command, the upload and the download ride it. If it drops, the module reconnects (one new connection) and retries the step once, resuming where it stopped; only a refused reconnect waits 35 s.
+**What a plugin deploy does.** It checks out the plugin's newest release, reads the published `<SiteUrl>/plugin/pluginmaster.json` and stops before building when the release's version is not higher, since Dalamud updates to nothing else (with `-IfNewer`, the same version ends the run without error; if the index can't be read, the host's own check still stands). Then `dotnet build -c Release` from clean (its `bin/` and `obj/` deleted first, so the package can never lag the manifest), and its repository laid out: `SenpanCompanionAdmin/latest.zip` and `plugins/pluginmaster.json` with `?v=<version>` on its download links. The built version must equal `pluginmaster.json`'s `AssemblyVersion`. On the host, the data folder is read from the unit, the whole `plugin/` folder in it is swapped in, owned by the service's account (the previous kept as `plugin.old`), and the published index must then carry the new `?v=`, or the previous folder goes back.
 
-**Rolling back by hand** (on the host): `.htaccess` with `mv -f <DocumentRoot>/.deploy-backup/.htaccess <DocumentRoot>/.htaccess`; the plugin with `mv plugin plugin.failed && mv plugin.old plugin && rm -rf plugin.failed` in the webroot; the binary with `systemctl stop <service> && install -m 755 -o <user> -g <group> app-suite.old app-suite && systemctl start <service>` in the opt dir (the unit's `User=` and `Group=`). If the previous binary refuses the database, decompress the newest snapshot over it in place, which keeps the file's owner: `systemctl stop <service> && rm -f <db>-wal <db>-shm && gunzip -c "$(ls -1t <db>.pre-*.gz | head -n 1)" > <db> && systemctl start <service>`. Going back past 4.0.0 means the 3.x `.htaccess`, which serves `dist/`, as well as the 3.x binary. A rollback by hand leaves the host's record naming the release it rolled back from, so the next deploy skips that release unless `-Force`.
+**Options.** `-Force` deploys the app's release even when the host already runs it. `-NoBackup` removes `app-suite.old`, the previous vhost and `plugin.old` once the host run succeeds; the smoke check then has nothing to go back to, so a failure only stops the run. The database snapshot is still taken. The run that moves the files out of the web root refuses `-NoBackup`, since that move is undone through the previous release. `-NoDbPull` skips step 7.
+
+**The connection.** The droplet runs `ufw limit ssh`, which refuses an address after six connections in 30 s. The whole run is **one** SSH connection, held by a background `plink -share`; every command, the upload and the download ride it. If it drops, the module reconnects (one new connection) and retries the step once, resuming where it stopped; only a refused reconnect waits 35 s. Each part of the move is safe to run again.
+
+**Rolling back by hand** (on the host): the vhost with `mv -f /etc/apache2/sites-available/<service>.conf.old /etc/apache2/sites-available/<service>.conf && apachectl configtest && systemctl reload apache2`; the plugin with `mv plugin plugin.failed && mv plugin.old plugin && rm -rf plugin.failed` in the data folder; the binary with `systemctl stop <service> && install -m 755 -o <user> -g <group> app-suite.old app-suite && systemctl start <service>` in the opt dir (the unit's `User=` and `Group=`). If the previous binary refuses the database, decompress the newest snapshot over it in place, which keeps the file's owner: `systemctl stop <service> && rm -f <db>-wal <db>-shm && gunzip -c "$(ls -1t <db>.pre-*.gz | head -n 1)" > <db> && systemctl start <service>`. Going back past 5.2.0 means the move too (see [Deploy day: 5.2.0](#deploy-day-520)). A rollback by hand leaves the host's record naming the release it rolled back from, so the next deploy skips that release unless `-Force`.
 
 **Requirements.**
 
 - PowerShell 7.4 or later on Windows, with Windows' own `tar.exe` (shipped since Windows 10 1803), git, Node and Go.
 - PuTTY's `plink` 0.85 or later (connection sharing), on PATH or in `C:\Program Files\PuTTY`; pscp is no longer used. plink runs in batch mode, so a passphrase-protected `.ppk` must be loaded into Pageant first: run `pageant.exe "<KeyPath>"` once and enter the passphrase (it stays unlocked for the session; a `shell:startup` shortcut loads it at login). The first-ever connection from PuTTY also needs the host key cached once (`plink -i "<KeyPath>" <user>@<host>`, accept the fingerprint).
-- On the host: bash, systemd, GNU coreutils, `curl` (the on-host health check) and `sqlite3` (the snapshot, the backup and the pull); Apache with `mod_proxy_http`.
+- On the host: bash, systemd, GNU coreutils, `curl` (the on-host checks) and `sqlite3` (the snapshot, the backup and the pull); Apache with the modules [the vhost](#the-vhost) needs, and `a2ensite`/`a2dissite` and `tar` for the move.
 - For the plugin: the .NET 10 SDK.
 
 **Manual fallback.**
 
 1. Locally, at the release's tag: `cd frontend && npm ci && npm run build`, then build the binary in `backend/` as in step 2.
-2. On the host: stop the service, install the binary over `app-suite`, start it, and check `/healthz`. Fill in and copy `.htaccess` as in [One-time server setup](#one-time-server-setup) when it changed.
+2. On the host: stop the service, install the binary over `app-suite`, start it, and check `/healthz`. When `deploy/apache-vhost.conf` changed, fill in its `__APP__` with the app's address and `__CERT__` with the certificate's name, copy it over `/etc/apache2/sites-available/<service>.conf`, and `apachectl configtest && systemctl reload apache2`.
 
 ## Database backups
 
@@ -507,17 +435,14 @@ systemctl stop <service> && rm -f <db>-wal <db>-shm && gunzip -c '<db folder>/ba
 
 ## Notes
 
-- Image URLs are absolute (`/images/...`), served by Apache straight from the
-  root `images/` folder - both the static assets and uploaded raffle prizes.
+- Image URLs are root-absolute (`/images/...`), served by the app from the data folder's
+  `images/`: the static art and the uploads alike.
 - Existing databases are auto-migrated (schema v10) to rewrite old
   `assets/images/raffles/...` prize paths to `images/raffles/...` on first start.
-- `/api/*` is never handled by `.htaccess`; the vhost ProxyPass intercepts it
-  first.
-- **PWA**: the build also emits `sw.js`, `registerSW.js`, and
-  `manifest.webmanifest` at its root; the app serves them at the site's root,
-  `sw.js` and `registerSW.js` with `no-store` and the manifest with `no-cache`,
-  never the 1-year immutable cache its hashed `assets/` get, so the app can update
-  (`backend/internal/web`). The PWA icons (`pwa-192x192.png`, `pwa-512x512.png`,
-  `pwa-maskable-512x512.png`) and the iOS `apple-touch-icon.png` are served from
-  the persistent root `images/` folder - make sure they're present there (they
-  ship in `deploy/images/`).
+- **PWA**: the build also emits `sw.js`, `registerSW.js`, and `manifest.webmanifest` at its
+  root; the app serves them at the site's root, `sw.js` and `registerSW.js` with
+  `no-store` and the manifest with `no-cache`, never the 1-year immutable cache its hashed
+  `assets/` get, so the app can update (`backend/internal/web`). The PWA icons
+  (`pwa-192x192.png`, `pwa-512x512.png`, `pwa-maskable-512x512.png`) and the iOS
+  `apple-touch-icon.png` are served from the data folder's `images/` - make sure they're
+  present there (they ship in `deploy/images/`).

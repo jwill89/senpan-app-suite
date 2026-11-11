@@ -4,9 +4,9 @@
 // lint; without it, compiling this package fails on "pattern all:dist: no matching
 // files found".
 //
-// Before 4.0.0 Apache served the build from the web root (deploy/.htaccess); the
-// headers and cache rules it set are here now. Apache still serves the web root's
-// upload folders, and this handler never answers for them.
+// The headers and cache rules the page and its files get are set here. The data
+// folder's public files (internal/media) are served beside this handler, which never
+// answers for their paths.
 package web
 
 import (
@@ -36,11 +36,11 @@ func Dist() fs.FS {
 	return sub
 }
 
-// webRootFolders are the web root's own folders, which Apache serves (images and the
-// raffle uploads, the Carrd sites, the plugin repository) or refuses (fonts, streamed
-// by the API instead). A request for one that reaches the binary is for a file Apache
-// doesn't have.
-var webRootFolders = []string{"/images/", "/fonts/", "/carrd/", "/plugin/"}
+// dataFolders are the paths of the data folder's own folders. The server serves the
+// image library, the Carrd sites, the plugin repository and the sound effects from
+// them, and the fonts never (the API streams those), so a path in one that reaches
+// this handler names a file, never one of the app's pages.
+var dataFolders = []string{"/images/", "/fonts/", "/carrd/", "/plugin/", "/sounds/"}
 
 // contentSecurityPolicy lets in Google Fonts and cross-origin images over https:, the
 // themes' inline CSS, data: exports, Turnstile (script and frame) and Cloudflare's Web
@@ -138,7 +138,7 @@ func cachePolicy(name string) string {
 }
 
 // ServeHTTP answers GET and HEAD: a file of the build, a 404 for a file it lacks (a
-// path with an extension, or one in an API or web-root folder), and the app's page for
+// path with an extension, or one in an API or data folder), and the app's page for
 // anything else.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
@@ -161,12 +161,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // missingFile reports whether a path not in the build names a file rather than one of
-// the app's own pages: it has an extension, or it is in the API's or a web-root folder.
+// the app's own pages: it has an extension, or it is in the API's or a data folder.
 func missingFile(clean string) bool {
 	if clean == "/api" || strings.HasPrefix(clean, "/api/") || path.Ext(clean) != "" {
 		return true
 	}
-	for _, folder := range webRootFolders {
+	for _, folder := range dataFolders {
 		if strings.HasPrefix(clean+"/", folder) {
 			return true
 		}
@@ -184,7 +184,7 @@ func serve(w http.ResponseWriter, r *http.Request, name string, f file) {
 	http.ServeContent(w, r, name, time.Time{}, bytes.NewReader(f.body))
 }
 
-// setSecurityHeaders sets what deploy/.htaccess set on the page and its files.
+// setSecurityHeaders sets the headers the page and every file of the build get.
 func setSecurityHeaders(h http.Header) {
 	h.Set("Content-Security-Policy", contentSecurityPolicy)
 	h.Set("X-Content-Type-Options", "nosniff")

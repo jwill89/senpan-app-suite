@@ -1,7 +1,5 @@
-import { existsSync } from 'node:fs'
-import { resolve, sep } from 'node:path'
 import { test as base, expect, type APIRequestContext, type APIResponse } from '@playwright/test'
-import { SITE_URL, STAFF, WEB_ROOT } from './env.ts'
+import { SITE_URL, STAFF } from './env.ts'
 
 /** The name the run's bingo card is issued to. */
 export const PLAYER = 'Mochi Teacup'
@@ -47,42 +45,15 @@ async function body<T>(response: Promise<APIResponse>): Promise<T> {
 }
 
 /**
- * Playwright's test, with what the pages need from the run's server:
+ * Playwright's test, with what the pages need from the run's server, which serves
+ * `/images/` from its data folder as production's does:
  *
- * - `/images/` answered from the run's web root, as Apache answers it from the
- *   document root (deploy/.htaccess); the app itself answers a 404 there.
  * - `staff`: the API, signed in as the bootstrap admin, which seeds the rest through
  *   the endpoints the admin pages call.
  * - `bingo`: a game that has just started, with a card in it.
  * - `raffle`: an open raffle, removed again after the test.
  */
-export const test = base.extend<
-  { images: undefined; bingo: Bingo; raffle: Raffle },
-  { staff: APIRequestContext }
->({
-  images: [
-    async ({ page }, use) => {
-      const images = resolve(WEB_ROOT, 'images')
-      await page.route(
-        (url) => url.origin === SITE_URL && url.pathname.startsWith('/images/'),
-        async (route) => {
-          const { pathname } = new URL(route.request().url())
-          const file = resolve(images, decodeURIComponent(pathname.slice('/images/'.length)))
-          // Inside images/, and no dotfile: the .htaccess denies those.
-          const served =
-            file.startsWith(images + sep) &&
-            !file.slice(images.length).includes(`${sep}.`) &&
-            existsSync(file)
-          await (served
-            ? route.fulfill({ path: file })
-            : route.fulfill({ status: 404, body: 'Not Found' }))
-        },
-      )
-      await use(undefined)
-    },
-    { auto: true },
-  ],
-
+export const test = base.extend<{ bingo: Bingo; raffle: Raffle }, { staff: APIRequestContext }>({
   staff: [
     async ({ playwright }, use) => {
       const staff = await playwright.request.newContext({ baseURL: SITE_URL })

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * Admin Carrd Upload tab (Atelier Yao section) - image hosting for external Carrd
- * sites. The admin creates "projects" (folders under <webRoot>/carrd, served at
+ * sites. The admin creates "projects" (folders under <data>/carrd, served at
  * carrd.senpan.cafe/<folder>/...), then uploads images into the project root or
  * into arbitrarily nested sub-directories.
  *

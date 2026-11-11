@@ -63,7 +63,7 @@ cd backend
 # of the live database and carries real webhook URLs, so the announcement scheduler
 # would otherwise post to production channels by itself. Use
 # -webhook-override <url> to send everything to a test channel instead.
-go run . -addr :8080 -db ../devdata/database.sqlite -webroot ../devdata/webroot -log-file "" -webhook-dry-run
+go run . -addr :8080 -db ../devdata/database.sqlite -data ../devdata/webroot -log-file "" -webhook-dry-run
 
 # 2. Frontend (in a second terminal)
 cd frontend
@@ -124,8 +124,8 @@ checkout of its own: the app (`-Target app`, the default: one binary, the SPA in
 it) or the plugin (`-Target plugin`). It checks the live site through Cloudflare and
 rolls back what it changed if that fails. An app deploy also keeps the daily
 database backup installed and pulls the live database into `devdata/` (`-NoDbPull`
-skips that). See [`deploy/README.md`](deploy/README.md) for the Apache layout and
-host setup.
+skips that). See [`deploy/README.md`](deploy/README.md) for the host layout (the data
+folder, the vhost) and host setup.
 
 ## Testing & CI
 
@@ -156,8 +156,8 @@ host setup.
 - **[`CONTRIBUTING.md`](CONTRIBUTING.md)** - dev workflow, the local checks that
   mirror CI, and versioning/changelog rules.
 - **[`CHANGELOG.md`](CHANGELOG.md)** - the app's and the plugin's version history.
-- **[`deploy/README.md`](deploy/README.md)** - Apache deployment (document-root
-  layout, persistent uploads, the font host + CORS, PWA caching).
+- **[`deploy/README.md`](deploy/README.md)** - deployment (the data folder and the
+  vhost, persistent uploads, the font and Carrd hosts, PWA caching).
 
 ## License
 
@@ -171,6 +171,6 @@ backend/    Go backend                    - internal/{server,api,store,bingo,gam
 plugins/    FFXIV Dalamud plugin (C#)     - SenpanCompanion/ + pluginmaster.json (its custom repo)
 scripts/    check.ps1 (the local gate) + deploy.ps1
 shared/     shared-tooling (git submodule) - lint configs, CI workflows, the deploy module
-deploy/     Apache artifacts              - the web root's .htaccess + fonts.htaccess + persistent images/
-devdata/    Local dev sandbox: SQLite DBs + built binaries + webroot uploads (created at runtime, gitignored)
+deploy/     Host artifacts                - the Apache vhost, the unit template + persistent images/
+devdata/    Local dev sandbox: SQLite DBs + built binaries + the dev data folder (created at runtime, gitignored)
 ```

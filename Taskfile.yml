@@ -32,7 +32,7 @@ tasks:
     dir: backend
     cmds:
       # devdata is a copy of the live database, real webhook URLs included.
-      - 'go run . -addr :8080 -db ../devdata/database.sqlite -webroot ../devdata/webroot -log-file "" -webhook-dry-run'
+      - 'go run . -addr :8080 -db ../devdata/database.sqlite -data ../devdata/webroot -log-file "" -webhook-dry-run'
 
   dev:frontend:
     dir: frontend

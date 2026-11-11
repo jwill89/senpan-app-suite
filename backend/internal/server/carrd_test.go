@@ -91,8 +91,8 @@ func TestCarrd_Guards(t *testing.T) {
 }
 
 func TestCarrd_Projects(t *testing.T) {
-	webRoot := t.TempDir()
-	env := newTestEnvWithWebRoot(t, webRoot)
+	dataDir := t.TempDir()
+	env := newTestEnvWithDataDir(t, dataDir)
 	env.loginAdmin(t)
 
 	p := env.carrdProject(t, "My Cool Project!", "")
@@ -102,7 +102,7 @@ func TestCarrd_Projects(t *testing.T) {
 	if p := env.carrdProject(t, "Spring Sale", "Spring 2026 Promo"); p.Folder != "spring-2026-promo" {
 		t.Errorf("folder = %q; want it normalized", p.Folder)
 	}
-	if _, err := os.Stat(filepath.Join(webRoot, "carrd", "my-cool-project", ".carrd.json")); err != nil {
+	if _, err := os.Stat(filepath.Join(dataDir, "carrd", "my-cool-project", ".carrd.json")); err != nil {
 		t.Errorf("no title sidecar: %v", err)
 	}
 
@@ -145,7 +145,7 @@ func TestCarrd_Projects(t *testing.T) {
 	if got.Title != "Renamed" || got.Folder != "new-name" {
 		t.Errorf("moved %+v; want the title kept and the folder renamed", got)
 	}
-	if _, err := os.Stat(filepath.Join(webRoot, "carrd", "new-name")); err != nil {
+	if _, err := os.Stat(filepath.Join(dataDir, "carrd", "new-name")); err != nil {
 		t.Errorf("the folder wasn't renamed: %v", err)
 	}
 	for name, tc := range map[string]struct {
@@ -171,7 +171,7 @@ func TestCarrd_Projects(t *testing.T) {
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("delete = %d; want 204", resp.StatusCode)
 	}
-	if _, err := os.Stat(filepath.Join(webRoot, "carrd", "new-name")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(dataDir, "carrd", "new-name")); !os.IsNotExist(err) {
 		t.Errorf("the folder survived its project: %v", err)
 	}
 	for _, folder := range []string{"new-name", "..%2F..%2Fx", "Bad_Folder"} {
@@ -184,8 +184,8 @@ func TestCarrd_Projects(t *testing.T) {
 }
 
 func TestCarrd_FilesFoldersAndUploads(t *testing.T) {
-	webRoot := t.TempDir()
-	env := newTestEnvWithWebRoot(t, webRoot)
+	dataDir := t.TempDir()
+	env := newTestEnvWithDataDir(t, dataDir)
 	env.loginAdmin(t)
 	env.carrdProject(t, "Site", "site")
 
@@ -215,7 +215,7 @@ func TestCarrd_FilesFoldersAndUploads(t *testing.T) {
 		t.Errorf("reasons = %v", reasons)
 	}
 	// The sidecar can't be replaced through an upload.
-	sidecar, _ := os.ReadFile(filepath.Join(webRoot, "carrd", "site", ".carrd.json"))
+	sidecar, _ := os.ReadFile(filepath.Join(dataDir, "carrd", "site", ".carrd.json"))
 	if !strings.Contains(string(sidecar), "Site") {
 		t.Errorf("sidecar = %s; want the project's title", sidecar)
 	}
@@ -329,7 +329,7 @@ func TestCarrd_FilesFoldersAndUploads(t *testing.T) {
 	if code := delDir("spring-art"); code != http.StatusNoContent {
 		t.Errorf("deleting a folder = %d; want 204", code)
 	}
-	if _, err := os.Stat(filepath.Join(webRoot, "carrd", "site", "spring-art", "nested", "deep.png")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(dataDir, "carrd", "site", "spring-art", "nested", "deep.png")); !os.IsNotExist(err) {
 		t.Errorf("a deleted folder's files survived: %v", err)
 	}
 	resp = env.get(t, "/api/v1/carrd-projects/site/files?path=gone")

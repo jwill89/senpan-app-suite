@@ -43,15 +43,15 @@ type testFontUpload struct {
 	Warnings []string `json:"warnings"`
 }
 
-// fontEnv builds a test env whose web root's fonts folder holds the given files and
+// fontEnv builds a test env whose data folder's fonts folder holds the given files and
 // signs the admin in (managing fonts needs it; the public operations need nothing).
 func fontEnv(t *testing.T, files map[string][]byte) *testEnv {
 	t.Helper()
-	webRoot := t.TempDir()
+	dataDir := t.TempDir()
 	for name, data := range files {
-		writeFile(t, webRoot, "fonts/"+name, data)
+		writeFile(t, dataDir, "fonts/"+name, data)
 	}
-	env := newTestEnvWithWebRoot(t, webRoot)
+	env := newTestEnvWithDataDir(t, dataDir)
 	env.loginAdmin(t)
 	return env
 }
@@ -426,7 +426,7 @@ func TestFonts_DeleteRemovesEverything(t *testing.T) {
 		t.Errorf("fonts = %+v; want none", list)
 	}
 	for _, rel := range []string{"fonts/Gone.ttf", "fonts/Gone.woff", "fonts/.woff2/gone.woff2"} {
-		if _, err := os.Stat(filepath.Join(env.srv.WebRootForTest(), rel)); !os.IsNotExist(err) {
+		if _, err := os.Stat(filepath.Join(env.srv.DataDirForTest(), rel)); !os.IsNotExist(err) {
 			t.Errorf("%s survived its font: %v", rel, err)
 		}
 	}
@@ -447,11 +447,11 @@ func TestFonts_StartupBackfillAndMetaMigration(t *testing.T) {
 	// stale conversion in the old naming, metadata keyed by file with the old
 	// "original" flag, and the old single origin list. The startup migrations must
 	// reconcile all of it.
-	webRoot := t.TempDir()
-	writeFile(t, webRoot, "fonts/Legacy.ttf", goregular.TTF)
-	writeFile(t, webRoot, "fonts/.woff2/Legacy.ttf.woff2", []byte("stale"))
+	dataDir := t.TempDir()
+	writeFile(t, dataDir, "fonts/Legacy.ttf", goregular.TTF)
+	writeFile(t, dataDir, "fonts/.woff2/Legacy.ttf.woff2", []byte("stale"))
 
-	env := newTestEnvWithStore(t, webRoot, func(set func(key, value string)) {
+	env := newTestEnvWithStore(t, dataDir, func(set func(key, value string)) {
 		set("font_meta", `{"Legacy.ttf":{"family":"Old Style","original":true}}`)
 		set("font_allowed_origins", `["https://mysite.carrd.co"]`)
 	})
@@ -470,7 +470,7 @@ func TestFonts_StartupBackfillAndMetaMigration(t *testing.T) {
 	if len(f.Origins) != 1 || f.Origins[0] != "https://mysite.carrd.co" {
 		t.Errorf("origins = %v; want the migrated list", f.Origins)
 	}
-	if _, err := os.Stat(filepath.Join(webRoot, "fonts", ".woff2", "Legacy.ttf.woff2")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(dataDir, "fonts", ".woff2", "Legacy.ttf.woff2")); !os.IsNotExist(err) {
 		t.Error("the stale conversion file was not swept")
 	}
 }
@@ -506,7 +506,7 @@ func TestFontKit(t *testing.T) {
 	}
 
 	// It needs no sign-in, Origin or credentials.
-	anon := newTestEnvWithWebRoot(t, env.srv.WebRootForTest())
+	anon := newTestEnvWithDataDir(t, env.srv.DataDirForTest())
 	if got := anon.kitCSS(t, nil); !strings.Contains(got, "font-family:'My Font'") {
 		t.Errorf("kit.css for nobody:\n%s", got)
 	}
@@ -614,7 +614,7 @@ func TestFontFile_OriginGate(t *testing.T) {
 	})
 
 	t.Run("allowlists are per font", func(t *testing.T) {
-		writeFile(t, env.srv.WebRootForTest(), "fonts/Locked.woff2", []byte("locked"))
+		writeFile(t, env.srv.DataDirForTest(), "fonts/Locked.woff2", []byte("locked"))
 		locked := env.fontByBase(t, "Locked")
 		resp := env.getWithHeaders(t, "/api/v1/fonts/pub/f/"+locked.ServedToken, map[string]string{"Origin": "https://mysite.carrd.co"})
 		resp.Body.Close()

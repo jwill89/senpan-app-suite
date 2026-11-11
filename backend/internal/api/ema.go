@@ -35,7 +35,7 @@ import (
 var emaTags = []string{"Ema"}
 
 const (
-	// emaImageRelDir is where site plaques wait for review, under the web root. These
+	// emaImageRelDir is where site plaques wait for review, under the data folder. These
 	// are visitors' uploads, kept only until they are posted or rejected.
 	emaImageRelDir = "images/ema_plaques"
 	// maxEmaImageBytes bounds a plaque upload. The designer exports at most 2048 px
@@ -1258,13 +1258,13 @@ func (h handlers) buildFestivalEma(ctx context.Context, q *db.Queries, mapID int
 // -- Files ---------------------------------------------------------------------------
 
 // saveEmaImage writes a plaque's PNG under emaImageRelDir with an unguessable name,
-// returning its web-root-relative path.
+// returning its path relative to the data folder.
 func (h handlers) saveEmaImage(boardID int64, data []byte) (string, error) {
 	token := make([]byte, 16)
 	if _, err := rand.Read(token); err != nil {
 		return "", err
 	}
-	dir := filepath.Join(h.WebRoot, filepath.FromSlash(emaImageRelDir))
+	dir := filepath.Join(h.DataDir, filepath.FromSlash(emaImageRelDir))
 	if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec // the web server reads the pictures back from here
 		return "", err
 	}
@@ -1282,7 +1282,7 @@ func (h handlers) emaImagePath(rel string) string {
 	if rel != path.Join(emaImageRelDir, base) || base == "." || strings.HasPrefix(base, ".") || strings.ContainsRune(base, '\\') {
 		return ""
 	}
-	return filepath.Join(h.WebRoot, filepath.FromSlash(emaImageRelDir), base)
+	return filepath.Join(h.DataDir, filepath.FromSlash(emaImageRelDir), base)
 }
 
 func (h handlers) readPlaqueImage(rel string) ([]byte, error) {

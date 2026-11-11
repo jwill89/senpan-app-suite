@@ -15,21 +15,24 @@ import { vitestDefaults } from '../shared/test/web/vitest.js'
 // SPA. So the front end builds before any Go build, test or lint.
 const outDir = '../backend/internal/web/dist'
 
-// Static images (logo/favicon/share_banner) live in `public/images/` so they
-// are available during `vite dev`. In production, they are served from a
-// PERSISTENT `images/` folder at the Apache document root (see deploy/.htaccess),
-// beside the raffle uploads, so the copies Vite would otherwise bake into the
-// build's `images/` are redundant. This plugin removes them after the build so
-// the binary embeds only the SPA shell + hashed `assets/`.
+// Static images (logo/favicon/share_banner) live in `public/images/`, and the game's
+// sound effects in `public/sounds/` (git-ignored), so they are available during
+// `vite dev`. In production, the server serves both from the PERSISTENT `images/` and
+// `sounds/` folders in its data folder (see deploy/README.md), so the copies Vite
+// would otherwise bake into the build are redundant, and the sounds must never ship
+// in the binary. This plugin removes them after the build so the binary embeds only
+// the SPA shell + hashed `assets/`.
 function stripDistImages(): Plugin {
   return {
     name: 'strip-dist-images',
     apply: 'build',
     async closeBundle() {
-      await rm(fileURLToPath(new URL(`./${outDir}/images`, import.meta.url)), {
-        recursive: true,
-        force: true,
-      })
+      for (const folder of ['images', 'sounds']) {
+        await rm(fileURLToPath(new URL(`./${outDir}/${folder}`, import.meta.url)), {
+          recursive: true,
+          force: true,
+        })
+      }
     },
   }
 }
@@ -39,7 +42,7 @@ function stripDistImages(): Plugin {
 // one. This plugin appends a `?v=<hash>` cache-buster to the og:image/
 // twitter:image URLs in index.html (replacing the `__OG_VERSION__` placeholder),
 // derived from the SHA-256 of the actual share_banner.png. The query string
-// doesn't affect file serving (Apache ignores it), but a new hash is a new URL
+// doesn't affect file serving (the server ignores it), but a new hash is a new URL
 // to scrapers - so the card refreshes exactly when the image changes, and stays
 // stable (no needless re-scrapes) when it doesn't. Falls back to a build
 // timestamp if the file can't be read.
@@ -238,15 +241,15 @@ const frontendVersion = JSON.parse(
 //
 // During development the Vite dev server serves the SPA and proxies `/api/*`
 // (REST + the live event streams) to the Go server (default :8080), so the SPA talks to it
-// without CORS friction. In production the Go binary serves both: the build is
-// embedded in it (outDir above), and Apache proxies everything but the web root's
-// upload folders to it.
+// without CORS friction. In production the Go binary serves everything: the build
+// is embedded in it (outDir above), the uploads come from its data folder, and
+// Apache proxies every path to it.
 //
 // Static assets (logo, favicon, share banner) and uploaded raffle images live
-// under `/images/` - in `public/` for development; production's are the web root's.
-// For uploaded-image preview to work in dev, run the Go server with
-// `-webroot ../frontend/public` so uploads land in `public/images/raffles/`,
-// which Vite serves directly (the proxy below is a fallback for other setups).
+// under `/images/` - in `public/` for development; production's are the data
+// folder's. For uploaded-image preview to work in dev, run the Go server with
+// `-data ../frontend/public` so uploads land in `public/images/raffles/`, which
+// Vite serves directly.
 export default defineConfig({
   plugins: [
     vue(),
@@ -257,7 +260,7 @@ export default defineConfig({
     // Installable PWA + offline app-shell. The service worker auto-updates on
     // each deploy (new precache manifest). The API (its event streams included) and
     // the persistent root images/ are explicitly excluded from the SPA navigation fallback so
-    // they always hit the network (and Apache's proxy/static handling).
+    // they always hit the network (and the server's own handling of them).
     VitePWA({
       registerType: 'autoUpdate',
       // Static images live in the persistent root images/ folder (stripped from
@@ -367,8 +370,8 @@ export default defineConfig({
   },
   // Absolute base: required for Vue Router history mode so deep-link refreshes
   // (e.g. /admin/cards) resolve hashed assets from the document root /assets/
-  // rather than relative to the current path. Apache serves the SPA at the
-  // document root and falls back to index.html for unknown paths (deploy/.htaccess).
+  // rather than relative to the current path. The server serves the SPA at the
+  // site's root and falls back to index.html for unknown paths (internal/web).
   base: '/',
   server: {
     port: 5173,

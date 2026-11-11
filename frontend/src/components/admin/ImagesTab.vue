@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * Admin Images tab (System section) - central image hosting. The admin picks a
- * category (which maps to a subdirectory of <webRoot>/images) and uploads any
+ * category (which maps to a subdirectory of <data>/images) and uploads any
  * number of images at once (drag-and-drop or click to browse), browses the
  * images in that category, and deletes them.
  *

@@ -37,7 +37,7 @@ type Server struct {
 	// apiHandler is everything under /api past the CORS and CSRF checks: the caching
 	// baseline, then sessHandler (apilayer.go).
 	apiHandler http.Handler
-	webRoot    string
+	dataDir    string
 	// allowedOrigins is the CORS allowlist (exact origin strings). Normally
 	// empty - the SPA and API are same-origin - so no CORS headers are sent.
 	allowedOrigins map[string]bool
@@ -92,11 +92,16 @@ type Server struct {
 	// logFile is the path to the rotating JSON log file the admin log viewer
 	// (GET /api/logs) tails. Empty disables the viewer. Injected via SetLogFile.
 	logFile string
-	// images, carrd and fonts are the uploads under webRoot; the operations in
-	// internal/api and the startup migrations below share them.
+	// images, carrd and fonts are the uploads under dataDir, plugin the plugin
+	// repository and sounds the game's sound effects beside them. The operations in
+	// internal/api and the startup migrations below share the uploads; site.go serves
+	// the images, the Carrd projects, the plugin repository and the sounds, and never
+	// the fonts.
 	images *media.Images
 	carrd  *media.Carrd
 	fonts  *media.Fonts
+	plugin *media.Plugin
+	sounds *media.Sounds
 
 	// Consecutive failed Discord posts per announcement id, used to stop the
 	// scheduler retrying a permanently-broken webhook every 30 seconds forever (see
@@ -155,7 +160,7 @@ func (s *Server) SetLogFile(path string) {
 // ctx is used only for the startup migrations below that touch the database; the
 // Server keeps no context of its own. hub is the live feed the changes are published
 // to and the event streams read.
-func New(ctx context.Context, st *store.Store, hub *live.Hub, webRoot string, allowedOrigins []string) *Server {
+func New(ctx context.Context, st *store.Store, hub *live.Hub, dataDir string, allowedOrigins []string) *Server {
 	sm := scs.New()
 	sm.Store = newSessionStore(st.DB())
 	sm.Lifetime = 24 * time.Hour
@@ -178,10 +183,12 @@ func New(ctx context.Context, st *store.Store, hub *live.Hub, webRoot string, al
 		game:           game.New(st.ReadDB(), st.DB(), hub),
 		live:           hub,
 		sessions:       sm,
-		webRoot:        webRoot,
-		images:         media.NewImages(webRoot),
-		carrd:          media.NewCarrd(webRoot),
-		fonts:          media.NewFonts(webRoot, media.StoreSettings(st)),
+		dataDir:        dataDir,
+		images:         media.NewImages(dataDir),
+		carrd:          media.NewCarrd(dataDir),
+		fonts:          media.NewFonts(dataDir, media.StoreSettings(st)),
+		plugin:         media.NewPlugin(dataDir),
+		sounds:         media.NewSounds(dataDir),
 		allowedOrigins: origins,
 		mux:            http.NewServeMux(),
 		limiter:        newRateLimiter(5, 15*time.Minute),  // 5 failed logins per 15 minutes
@@ -230,7 +237,7 @@ func New(ctx context.Context, st *store.Store, hub *live.Hub, webRoot string, al
 		RallyLimit:        s.rallyLimiter,
 		DashboardLimit:    s.dashboardLimiter,
 		EmaLimit:          s.emaLimiter,
-		WebRoot:           webRoot,
+		DataDir:           dataDir,
 		Images:            s.images,
 		Carrd:             s.carrd,
 		Fonts:             s.fonts,
@@ -305,8 +312,8 @@ func (s *Server) withUserCache(next http.Handler) http.Handler {
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// CORS: only echo the Origin (and allow credentials) for explicitly
 	// allow-listed cross-origin sites. The SPA and API are same-origin in both
-	// prod (Apache) and dev (Vite proxies /api), so the allowlist is normally
-	// empty and these headers are simply not sent - the browser doesn't consult
+	// prod (one server behind the proxy) and dev (Vite proxies /api), so the
+	// allowlist is normally empty and these headers are simply not sent - the browser doesn't consult
 	// CORS for same-origin requests. This replaces a previous "reflect ANY Origin
 	// with credentials" policy, under which any website could make credentialed
 	// cross-origin requests to the API.
@@ -324,9 +331,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Everything outside /api/ - the SPA and its files, and GET /healthz - skips the
-	// API's session, CSRF and access-log layers: a page load is dozens of asset
-	// requests, which Apache served (and logged) before 4.0.0.
+	// Everything outside /api/ - the SPA and its files, the data folder's public files
+	// and GET /healthz - skips the API's session, CSRF and access-log layers: a page
+	// load is dozens of asset requests, which the reverse proxy's access log records.
 	if r.URL.Path != "/api" && !strings.HasPrefix(r.URL.Path, "/api/") {
 		s.siteMux.ServeHTTP(w, r)
 		return

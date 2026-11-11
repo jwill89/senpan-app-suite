@@ -512,8 +512,8 @@ func TestHeartbeatChecksTheAccount(t *testing.T) {
 }
 
 // A stream reopened with Last-Event-ID gets what it missed, of what it may hear, in
-// order, then carries on; one whose id the server no longer keeps is told to read
-// everything again.
+// order, then carries on; one whose id has fallen out of the server's replay window
+// is told to read everything again.
 func TestStreamResumesFromLastEventID(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)

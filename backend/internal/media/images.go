@@ -127,7 +127,7 @@ func (m *Images) read() []Category {
 // manifest, so a crash mid-write can't leave one that doesn't parse, which would
 // disable the whole library.
 func (m *Images) write(cats []Category) error {
-	if err := os.MkdirAll(m.dir(), 0o755); err != nil { //nolint:gosec // a public folder, served by the web server
+	if err := os.MkdirAll(m.dir(), 0o755); err != nil { //nolint:gosec // a public folder, served by the app
 		return err
 	}
 	data, err := json.Marshal(manifest{Version: manifestVersion, Categories: cats})
@@ -189,9 +189,9 @@ func (m *Images) MigrateManifest() {
 	}
 }
 
-// MigrateAnnouncementImages copies the files of the old images/announcements folder
-// into the announcements_main category, once each, so earlier announcement pictures
-// stay in the picker. Safe to run at every start.
+// MigrateAnnouncementImages copies the files of the images/announcements folder into
+// the announcements_main category, once each, so the pictures announcements already
+// use stay in the picker. Safe to run at every start.
 func (m *Images) MigrateAnnouncementImages() {
 	srcDir := filepath.Join(m.dir(), "announcements")
 	entries, err := os.ReadDir(srcDir)
@@ -207,7 +207,7 @@ func (m *Images) MigrateAnnouncementImages() {
 		if _, err := os.Stat(dst); err == nil {
 			continue
 		}
-		if err := os.MkdirAll(dstDir, 0o755); err != nil { //nolint:gosec // a public folder, served by the web server
+		if err := os.MkdirAll(dstDir, 0o755); err != nil { //nolint:gosec // a public folder, served by the app
 			return
 		}
 		data, err := os.ReadFile(filepath.Join(srcDir, e.Name())) //nolint:gosec // a directory entry's own name, in a fixed folder
@@ -232,7 +232,7 @@ func (m *Images) SeedFlourishes() {
 		if err != nil {
 			continue
 		}
-		if err := os.MkdirAll(dstDir, 0o755); err != nil { //nolint:gosec // a public folder, served by the web server
+		if err := os.MkdirAll(dstDir, 0o755); err != nil { //nolint:gosec // a public folder, served by the app
 			return
 		}
 		_ = os.WriteFile(dst, data, 0o644) //nolint:gosec // a fixed folder and a fixed name
@@ -259,7 +259,7 @@ func (m *Images) stats(dir string) (count int, total int64) {
 
 // Categories lists the categories with their file counts and sizes.
 func (m *Images) Categories() ([]Category, error) {
-	if err := os.MkdirAll(m.dir(), 0o755); err != nil { //nolint:gosec // a public folder, served by the web server
+	if err := os.MkdirAll(m.dir(), 0o755); err != nil { //nolint:gosec // a public folder, served by the app
 		return nil, err
 	}
 	cats := m.read()
@@ -482,7 +482,7 @@ func (m *Images) Delete(dir, reqName string) error {
 // SaveCover stores a book-club cover under name, replacing one of that name.
 func (m *Images) SaveCover(name string, data []byte) error {
 	dest := filepath.Join(m.dir(), CoverDir)
-	if err := os.MkdirAll(dest, 0o755); err != nil { //nolint:gosec // a public folder, served by the web server
+	if err := os.MkdirAll(dest, 0o755); err != nil { //nolint:gosec // a public folder, served by the app
 		return err
 	}
 	return os.WriteFile(filepath.Join(dest, name), data, 0o644) //nolint:gosec // name passed uploads.SafeName

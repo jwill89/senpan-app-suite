@@ -1,7 +1,7 @@
-// Package main is the entry point for the App Suite server: the API and, since
-// 4.0.0, the SPA, embedded in the binary (internal/web).
-// It parses configuration flags, initializes the SQLite database,
-// creates the live events' hub, and starts the HTTP server.
+// Package main is the entry point for the App Suite server. It parses the
+// configuration flags, initializes the SQLite database, creates the live events'
+// hub, and starts the HTTP server, which serves the API and the SPA embedded in
+// the binary (internal/web).
 package main
 
 import (
@@ -86,7 +86,7 @@ func run() error {
 	// background loops - stops on either. Created before the database opens so a
 	// signal that lands mid-migration stops the migration between statements rather
 	// than killing the process outright. Until stopSignals runs at exit, a second
-	// signal is swallowed rather than killing the graceful shutdown part-way, as before.
+	// signal is swallowed rather than killing the graceful shutdown part-way.
 	sigCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopSignals()
 	ctx, cancel := context.WithCancel(sigCtx)
@@ -123,7 +123,7 @@ func run() error {
 	srv := server.New(ctx, db, hub, *dataDir, allowedOrigins)
 	srv.SetSite(site)
 	srv.SetTurnstile(tsSecret, tsSiteKey)
-	srv.SetLogFile(*logFile) // GET /api/logs tails this file
+	srv.SetLogFile(*logFile) // GET /api/v1/logs tails this file
 
 	// Outbound-Discord safety valves. A development server is normally pointed at a
 	// COPY OF THE LIVE DATABASE, whose announcement types, book clubs, affiliates and
@@ -211,8 +211,8 @@ func run() error {
 	}()
 
 	// Non-nil only when the server itself failed. A signal-driven stop is a clean
-	// exit; a bind failure is not, and reporting both as success is what let a
-	// backend that could never start sit there looking healthy.
+	// exit; a bind failure is not, and must not report success for a backend that
+	// never started.
 	var fatal error
 	select {
 	case <-ctx.Done():
@@ -253,11 +253,10 @@ func run() error {
 		slog.Warn("tea-room lock scheduler did not stop within the shutdown deadline")
 	}
 
-	// End every event stream first: an open stream is a request the HTTP server's
-	// shutdown would otherwise wait on until its deadline.
+	// End every event stream before shutting the HTTP server down: an open stream is
+	// a request its shutdown would otherwise wait on until its deadline.
 	hub.Close()
 
-	// Then shut down the HTTP server.
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
 		slog.Error("HTTP server shutdown error", "error", err)
 	}

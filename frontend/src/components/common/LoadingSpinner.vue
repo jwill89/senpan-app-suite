@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * Small reusable loading spinner. Styled entirely with theme tokens (see the
- * `.spinner` rules in app.css) so custom themes restyle it automatically.
+ * `.spinner` rules in components.css) so custom themes restyle it automatically.
  *
  *   <LoadingSpinner />                      inline spinner
  *   <LoadingSpinner label="Loading..." />     spinner + muted label

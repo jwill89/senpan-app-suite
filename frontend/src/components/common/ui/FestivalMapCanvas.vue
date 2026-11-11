@@ -94,21 +94,19 @@ const dragging = ref(false)
  * is a fixed shape but the canvas takes its height from the plan image, so the two
  * only match when the image happens to share that aspect.
  *
- * Assuming they matched is what broke this view. Pan was clamped against the
- * VIEWPORT, so at zoom 1 the allowed range was zero in both axes - a taller plan
- * was cut off at the bottom with no way to drag to it - and "Fit" reset to that
- * same cropped view because a floor of 1 made zooming out to the whole plan
- * impossible.
+ * Assuming they matched would clamp pan against the VIEWPORT: at zoom 1 the allowed
+ * range would be zero in both axes, so a taller plan is cut off at the bottom with
+ * no way to drag to it, and "Fit" would reset to that same cropped view because a
+ * floor of 1 makes zooming out to the whole plan impossible.
  */
 const canvasSize = ref({ width: 0, height: 0 })
 
 /**
  * The plan image's own aspect (width / height), once it has loaded. 0 until then.
  *
- * The viewport used to be a fixed 16/10 whatever the plan was, so anything taller
- * had to be zoomed out to fit and sat letterboxed between empty margins - readable
- * only by zooming back in. Taking the shape from the image means the plan fills the
- * frame it is given, at the size it was drawn.
+ * The viewport takes its shape from the image rather than a fixed 16/10, so the plan
+ * fills the frame it is given, at the size it was drawn, instead of sitting
+ * letterboxed between empty margins.
  */
 const imageAspect = ref(0)
 
@@ -248,13 +246,13 @@ async function onImageLoad(e: Event): Promise<void> {
  * so before that it is still the stylesheet's fallback, and a fit measured against
  * the fallback is a fit against a box the plan is not the shape of. It comes out at
  * exactly fallbackAspect / planAspect - for a 3:2 plan in a 16:10 frame, 0.9375 -
- * so the map opened a few percent small, inset inside its own frame, and pressing
- * "Fit" was the only thing that put it right.
+ * so the map would open a few percent small, inset inside its own frame, until
+ * "Fit" was pressed.
  *
- * The measurement it used to be spent on is real and arrives first whenever the
- * image is already in the browser's cache: the canvas has its full size at mount,
- * before the load event that tells the frame what shape to be. That is the ordinary
- * case for a second visit, which is why this looked intermittent.
+ * That early measurement is real and arrives first whenever the image is already
+ * in the browser's cache: the canvas has its full size at mount, before the load
+ * event that tells the frame what shape to be. That is the ordinary case for a
+ * second visit.
  *
  * A map with no image at all has nothing to wait for - its empty state carries its
  * own shape - so it fits immediately.
@@ -399,28 +397,23 @@ const isDimmed = (id: number): boolean => props.dimmedIds?.has(id) ?? false
 const isRally = (id: number): boolean => props.rallyIds?.has(id) ?? false
 
 /**
- * Whether to corner-badge a pitch as part of the open stamp rally, judged over the
- * occupants on the browsed day rather than all of them - a pitch shows the badge
- * for whoever is actually standing there.
- *
- * A BADGE, not the stamp's own artwork. A rally stamp is often a picture of food,
- * and printed on the stall it read as a menu: a visitor took it for what the stall
- * serves rather than for something to collect. The artwork still belongs to the
- * stamp, so it stays where it is being described - in the panel a tapped stall
- * opens - and the plan carries one consistent mark instead.
- *
- * Keyed on inStampRally rather than on having artwork, so a stall whose stamp
- * image has not been uploaded yet is still marked as part of the rally.
- */
-/**
  * Day-dependent derivation for every pitch, computed ONCE per (stalls, day) rather
- * than per render.
+ * than per render: who is drawn there, whether it is corner-badged as part of the
+ * open stamp rally, and whether the visitor holds its stamps.
  *
- * These two answers used to be derived inside the template - stampArt up to twice
- * per stall and onSelectedDay once per occupant - so every pointermove during a pan
- * or pinch re-walked and re-filtered every pitch's occupant list, on a map that is
- * being dragged at frame rate. A computed keyed on the props they actually depend
- * on collapses that to one pass whenever the day or the map really changes.
+ * Deriving these in the template would re-walk and re-filter every pitch's
+ * occupant list on every pointermove during a pan or pinch, on a map that is being
+ * dragged at frame rate. A computed keyed on the props they actually depend on
+ * collapses that to one pass whenever the day or the map really changes.
+ *
+ * The rally badge is judged over the occupants on the browsed day rather than all
+ * of them - a pitch shows it for whoever is actually standing there. It is a
+ * BADGE, not the stamp's own artwork: a rally stamp is often a picture of food, and
+ * printed on the stall it reads as a menu, so a visitor takes it for what the stall
+ * serves rather than for something to collect. The artwork stays in the panel a
+ * tapped stall opens. It is keyed on inStampRally rather than on having artwork, so
+ * a stall whose stamp image has not been uploaded yet is still marked as part of
+ * the rally.
  */
 const perStall = computed(() => {
   const byStall = new Map<
@@ -452,10 +445,10 @@ const perStall = computed(() => {
 /**
  * Who to DRAW in a pitch: only those standing there on the day being browsed.
  *
- * Under a day filter the others used to be drawn faded, which meant a pitch that
- * changes hands still showed two names when only one of them was there - the
- * visitor reads the pitch, not the opacity. A pitch shows its combined form only
- * when two tenants really are there on the same day.
+ * The others are left out rather than drawn faded: a pitch that changes hands
+ * would still show two names when only one of them is there - the visitor reads
+ * the pitch, not the opacity. A pitch shows its combined form only when two
+ * tenants really are there on the same day.
  */
 function drawnOccupants(stall: PublicFestivalStall): PublicStallOccupant[] {
   return perStall.value.get(stall)?.list ?? stall.occupants
@@ -531,11 +524,11 @@ defineExpose({ zoomBy, reset, zoom })
               :key="occupant.id"
               class="map-stall-occupant"
             >
-              <!-- Labelled by AFFILIATE, always: that is who a visitor is looking
-                   for, and a stall title is optional so labelling by it left
+              <!-- Labeled by AFFILIATE, always: that is who a visitor is looking
+                   for, and a stall title is optional so labeling by it would leave
                    untitled pitches blank. A title's trailing "(Day 1)" - which is
-                   how admins have always written it - drops to its own line
-                   underneath rather than disappearing. -->
+                   how admins write it - drops to its own line underneath rather
+                   than disappearing. -->
               <span>{{ occupantMapLabel(occupant) }}</span>
               <!-- Only for an occupant who is NOT there every day: naming a day on
                    one present throughout reads as "gone tomorrow". Judged against
@@ -549,9 +542,8 @@ defineExpose({ zoomBy, reset, zoom })
               </span>
               <!-- The type is its OWN line, not an alternative to the day note: a
                    pitch has a type whether or not its title carries a day, and
-                   pairing them as if/else silently dropped it from every titled
-                   pitch. Lighter than the name above it, so the two read in
-                   order. -->
+                   pairing them as if/else would drop it from every titled pitch.
+                   Lighter than the name above it, so the two read in order. -->
               <span
                 v-if="stallCaption(occupant)"
                 class="map-stall-caption map-stall-caption--type"

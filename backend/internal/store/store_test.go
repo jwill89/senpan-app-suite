@@ -329,8 +329,6 @@ func TestSettingsGetSet(t *testing.T) {
 	}
 }
 
-// -- Style operations ----------------------------------------------------------
-
 // -- Winners log operations --------------------------------------------------
 
 // addWinners writes entries to the winners log, as a game's end does.
@@ -433,8 +431,8 @@ func TestFrequentWinners(t *testing.T) {
 }
 
 // TestOpenNoMigrateLeavesTheSchemaAlone pins the read-only opener. themetool is
-// routinely pointed at a copy of production, and its dump/check commands used the
-// migrating opener - so merely INSPECTING a file irreversibly upgraded its schema.
+// routinely pointed at a copy of production, and a migrating opener would
+// irreversibly upgrade that copy's schema just by INSPECTING it.
 func TestOpenNoMigrateLeavesTheSchemaAlone(t *testing.T) {
 	path := storetest.Path(t)
 

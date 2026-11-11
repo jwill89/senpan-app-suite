@@ -2,7 +2,7 @@
  * Book club store: admin management of reading lists and their items for the
  * book clubs (Yaoi, Yuri, ...). Covers list CRUD, item CRUD (manual or pulled
  * from AniList), cover-image upload, the club's Discord webhook, and publishing a
- * list to Discord. Mirrors the structure of the raffles store.
+ * list to Discord.
  *
  * One store serves every club: the active club (set via `openClub` when a club
  * tab is entered) drives which club's lists are loaded/created and the

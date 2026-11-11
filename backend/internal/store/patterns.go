@@ -7,7 +7,7 @@ import (
 )
 
 // The patterns' API (internal/api, patterns.go) and the game (internal/game) read
-// and write them through sqlc; what is left here is the tests' way of making one.
+// and write them through sqlc; this file holds only the tests' way of making one.
 
 // SavePattern inserts a new pattern last in its category and returns its ID. A
 // categoryID of 0 or less is the seeded first category (1). For tests that need a

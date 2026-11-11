@@ -1,6 +1,6 @@
 import shared, { vueConventions, tsStylistic } from '@jwill89/lint-web'
 
-// The shared front-end rules (shared-tooling's lint/web): Vue's recommended rules,
+// The shared front-end rules (`@jwill89/lint-web`): Vue's recommended rules,
 // typescript-eslint's strict and stylistic type-aware rules, accessibility in the
 // templates, the Vue conventions every front end holds, and Prettier's conflict
 // list. Below them, what only this app needs. A rule is turned off here with its

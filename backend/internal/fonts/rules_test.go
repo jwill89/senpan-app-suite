@@ -65,7 +65,7 @@ func TestServedVariant(t *testing.T) {
 	if label != "OTF" || tok != FileToken(testSecret, "F.otf", bucket) {
 		t.Errorf("explicit OTF = %q %q", label, tok)
 	}
-	// A saved choice that no longer exists falls back to automatic.
+	// A saved choice with no matching file falls back to automatic.
 	if _, label = ServedVariant(testSecret, both, Meta{Serve: "EOT"}, false, bucket); label != "TTF" {
 		t.Errorf("stale choice served %q; want the automatic TTF", label)
 	}

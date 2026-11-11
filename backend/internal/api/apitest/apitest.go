@@ -34,8 +34,8 @@ const eventStream = "text/event-stream"
 
 // Transport wraps next (nil for the default) so that every 2xx answer from an
 // operation under api.Prefix is checked against the document; a mismatch fails t.
-// A path the document doesn't have is left alone: it is a route not yet on huma. An
-// event stream's body is checked as the test reads it, since it doesn't end.
+// A path that is not an operation of the document is left alone. An event stream's
+// body is checked as the test reads it, since it doesn't end.
 func Transport(t testing.TB, next http.RoundTripper) http.RoundTripper {
 	if next == nil {
 		next = http.DefaultTransport

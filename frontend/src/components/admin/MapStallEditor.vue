@@ -36,10 +36,9 @@ const canvasRef = useTemplateRef<HTMLElement>('canvasRef')
 const store = useFestivalMapsStore()
 
 /**
- * What a pitch is labelled with here: its AFFILIATE, the same as the public map.
- * Labelling by title showed "Untitled stall" on every pitch whose title was left
- * blank - which is most of them, since a title is optional and the map never uses
- * one - naming a pitch after the fact that it has no name.
+ * What a pitch is labeled with here: its AFFILIATE, the same as the public map.
+ * A title would read "Untitled stall" on most pitches, since a title is optional
+ * and the map never uses one.
  *
  * The form holds an affiliate ID rather than a name, so it is resolved against the
  * same list the affiliate picker offers. No match (or none chosen) is the venue's
@@ -68,8 +67,7 @@ function beginDrag(mode: DragMode, stall: FestivalStallForm, e: PointerEvent): v
  * Keyboard equivalent of grabbing a pitch. Dragging is inherently pointer-only, but
  * SELECTING one must not be: once selected, the form's numeric position, size and
  * rotation fields edit the same values a drag would, so a keyboard user can place a
- * stall precisely. Without this the whole editor was unreachable without a mouse -
- * the pitches were bare divs carrying only @pointerdown.
+ * stall precisely. Without it the whole editor would be unreachable without a mouse.
  */
 function selectStall(stall: FestivalStallForm): void {
   emit('select', stall._uid ?? 0)

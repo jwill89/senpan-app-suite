@@ -93,8 +93,8 @@ const (
 	// is ended, and resumes from its last event id when its client reopens it.
 	queueSize = 64
 	// DefaultHeartbeat is how often a stream sends its ping: inside Cloudflare's
-	// 100-second and Apache's 120-second idle timeouts, so neither closes a quiet
-	// stream, and often enough for a client to notice one that died silently.
+	// 100-second idle timeout and Apache's hour-long proxy timeout, so neither closes
+	// a quiet stream, and often enough for a client to notice one that died silently.
 	DefaultHeartbeat = 25 * time.Second
 )
 

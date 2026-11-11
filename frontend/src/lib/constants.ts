@@ -1,6 +1,5 @@
 /**
- * Shared constants and small pure helpers mirrored from the original app.js.
- * Keeping these identical preserves the exact look and behavior.
+ * Shared constants and small pure helpers.
  */
 import type { SettingsInput } from '@/api/client'
 
@@ -10,7 +9,7 @@ export interface StampShape {
   name: string
 }
 
-/** Stamp shapes - identical set/order to the original app. */
+/** Stamp shapes. */
 export const STAMP_SHAPES: StampShape[] = [
   { id: 'blank', emoji: '', name: 'Blank' },
   { id: 'heart', emoji: '♥️', name: 'Heart' },
@@ -27,7 +26,7 @@ export interface StampColor {
   value: string
 }
 
-/** Stamp colors - identical set/order to the original app. */
+/** Stamp colors. */
 export const STAMP_COLORS: StampColor[] = [
   { id: 'pink', name: 'Pink', value: 'rgba(229,49,112,.55)' },
   { id: 'red', name: 'Red', value: 'rgba(255,0,0,.55)' },
@@ -41,13 +40,13 @@ export const STAMP_COLORS: StampColor[] = [
 /**
  * Most entries one person may hold in a raffle, and so the longest custom-cost
  * ladder (whose length IS the allowance). Mirrors the backend's
- * `maxRaffleEntries` - the server rejects anything past it.
+ * `raffles.MaxEntries` - the server rejects anything past it.
  */
 export const RAFFLE_MAX_ENTRIES = 100
 
 /**
  * Shortest accepted "have I already entered?" search, in CODE POINTS. Mirrors the
- * backend's `raffleLookupMinQuery`: entrants are looking for a name they know, so
+ * backend's `lookupMinQuery`: entrants are looking for a name they know, so
  * anything shorter is a request for the entrant list rather than a search.
  */
 export const RAFFLE_LOOKUP_MIN_QUERY = 2
@@ -308,7 +307,7 @@ export const FF14_WORLD_NAMES: string[] = FF14_WORLDS.flatMap((dc) => dc.worlds)
  * Registry of book clubs shown under the admin "Book Clubs" section. Add an
  * entry to introduce a new club; its sidebar button, route, settings webhook
  * field, and tab all wire up automatically from this list (mirror the backend
- * `bookClubs` registry in bookclubs.go - keep `slug`/`commentsLabel` in sync).
+ * `bookclubs.Clubs` registry - keep `slug`/`commentsLabel` in sync).
  *
  *   - `commentsLabel`: label for the per-item curator comments field (e.g.
  *     "Yao's Comments" vs "Drani's Comments"); also used in the Discord embed.
@@ -360,7 +359,7 @@ export const ADMIN_PERMISSIONS: AdminPermission[] = [
   { key: 'festival-garapon', label: 'Garapon', section: 'Festival' },
   { key: 'festival-stamp-rally', label: 'Stamp Rally', section: 'Festival' },
   { key: 'festival-ema', label: 'Ema Plaques', section: 'Festival' },
-  // Raffles moved under Festival; the permission/route id stays `teahouse-raffles`.
+  // Raffles sit under Festival; the permission/route id is `teahouse-raffles`.
   { key: 'teahouse-raffles', label: 'Raffles', section: 'Festival' },
   { key: 'atelier-fonts', label: 'Font Upload', section: 'Atelier Yao' },
   { key: 'atelier-carrd', label: 'Carrd Upload', section: 'Atelier Yao' },

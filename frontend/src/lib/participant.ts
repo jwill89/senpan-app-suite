@@ -18,7 +18,7 @@ const SEPARATOR = ' @ '
 /**
  * Renders a name and world the single way every system displays them:
  * "Firstname Lastname @ World". A blank world yields just the name, so a record
- * predating the world picker reads as what it is rather than trailing a separator.
+ * with no world reads as what it is rather than trailing a separator.
  */
 export function participantLabel(name: string, world = ''): string {
   const trimmedName = name.trim()
@@ -28,7 +28,7 @@ export function participantLabel(name: string, world = ''): string {
 
 /**
  * participantLabel's inverse, for a string that arrives already joined - a record
- * this browser saved before worlds had their own field, or a name someone pasted.
+ * this browser saved with the world inside the name, or a name someone pasted.
  *
  * Splits on the LAST separator, since a world never contains one. With no
  * separator the whole string is the name and the world is empty: the caller is told

@@ -59,13 +59,11 @@ type Server struct {
 	// stamps normally never touches it; a script guessing short human-typed
 	// passwords ("alpha", "bravo") runs out quickly.
 	stampGuessLimiter *rateLimiter
-	// Garapon draws. Every other public mutating path has a limiter and this one
-	// had none, even though it is the only IRREVERSIBLE public action in the app:
-	// a draw is recorded against the player's allowance and cannot be undone. The
-	// token is the capability, so anyone who obtains one - and a stamp-card link
-	// doubles as one - could spend a whole allowance in a single burst. Counted on
-	// every draw, not just failures: a legitimate player has a handful of draws
-	// total, so the ceiling is only reachable by a script.
+	// Garapon draws. The only IRREVERSIBLE public action in the app: a draw is
+	// recorded against the player's allowance and cannot be undone. The token is the
+	// capability, so anyone who obtains one could spend a whole allowance in a single
+	// burst. Counted on every draw, not just failures: a legitimate player has a
+	// handful of draws total, so the ceiling is only reachable by a script.
 	garaponDrawLimiter *rateLimiter
 	// Public passkey-login BEGIN. Separate from limiter on purpose: every begin
 	// stores a WebAuthn challenge in the session store, so it needs a budget of its
@@ -90,7 +88,7 @@ type Server struct {
 	turnstileSecret  string
 	turnstileSiteKey string
 	// logFile is the path to the rotating JSON log file the admin log viewer
-	// (GET /api/logs) tails. Empty disables the viewer. Injected via SetLogFile.
+	// (GET /api/v1/logs) tails. Empty disables the viewer. Injected via SetLogFile.
 	logFile string
 	// images, carrd and fonts are the uploads under dataDir, plugin the plugin
 	// repository and sounds the game's sound effects beside them. The operations in
@@ -142,7 +140,7 @@ func (s *Server) SetWebhookPolicy(override string, dryRun bool) {
 	s.discord.DryRun = dryRun
 }
 
-// SetLogFile tells the admin log viewer (GET /api/logs) which rotating JSON log
+// SetLogFile tells the admin log viewer (GET /api/v1/logs) which rotating JSON log
 // file to tail. Empty leaves the viewer with nothing to read. Injected from main
 // so it matches the -log-file the process actually writes to.
 func (s *Server) SetLogFile(path string) {
@@ -215,8 +213,8 @@ func New(ctx context.Context, st *store.Store, hub *live.Hub, dataDir string, al
 		emaLimiter:          newRateLimiter(10, 10*time.Minute),
 	}
 
-	// The operations already on huma (internal/api), on the same mux: they share its
-	// session, CSRF and access-log layers with the routes still registered by hand.
+	// The operations (internal/api) are mounted on the mux, which sits behind the
+	// session, CSRF and access-log layers.
 	api.New(s.mux, api.Deps{
 		Store:             st,
 		Discord:           s.discord,
@@ -249,17 +247,17 @@ func New(ctx context.Context, st *store.Store, hub *live.Hub, dataDir string, al
 	})
 	// Everything outside /api/: GET /healthz and the SPA (site.go).
 	s.siteRoutes()
-	// Upgrade the image-category manifest to the current schema (folds the
-	// formerly hardcoded permanent categories into the manifest; runs once).
+	// Bring the image-category manifest to its current version, adding the default
+	// categories an older one lacks (a current one is left alone).
 	s.images.MigrateManifest()
-	// One-time, idempotent migration of legacy announcement images into the new
-	// announcements_main category dir (safe to run on every startup).
+	// Copy the files of the images/announcements folder into the announcements_main
+	// category (idempotent; safe on every startup).
 	s.images.MigrateAnnouncementImages()
 	// Seed the built-in flourish SVGs into the Flourishes image category so they
 	// are pickable in the theme flourish selectors (idempotent).
 	s.images.SeedFlourishes()
-	// Upgrade pre-group font metadata (file-keyed entries, the old global
-	// origin allowlist), then reconcile every font's WOFF2 conversion -
+	// Move font metadata keyed by file name onto its font and give each font its own
+	// origin allowlist, then reconcile every font's WOFF2 conversion -
 	// backfilling missing ones and sweeping stale copies. Both idempotent;
 	// conversion failures log and fall back to serving an uploaded format.
 	s.fonts.MigrateMeta(ctx)
@@ -313,10 +311,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// CORS: only echo the Origin (and allow credentials) for explicitly
 	// allow-listed cross-origin sites. The SPA and API are same-origin in both
 	// prod (one server behind the proxy) and dev (Vite proxies /api), so the
-	// allowlist is normally empty and these headers are simply not sent - the browser doesn't consult
-	// CORS for same-origin requests. This replaces a previous "reflect ANY Origin
-	// with credentials" policy, under which any website could make credentialed
-	// cross-origin requests to the API.
+	// allowlist is normally empty and these headers are simply not sent - the
+	// browser doesn't consult CORS for same-origin requests. Reflecting ANY Origin
+	// with credentials would let any website make credentialed cross-origin
+	// requests to the API.
 	if origin := r.Header.Get("Origin"); origin != "" && s.allowedOrigins[origin] {
 		w.Header().Set("Access-Control-Allow-Origin", origin)
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
@@ -414,8 +412,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	ip := logClientIP(r)
 	// Redact capability-token path segments so bearer tokens (garapon/stamp-card
-	// draw links, font-kit tokens) never land in the rotating log, the /api/logs
-	// viewer, or the admin WS tail.
+	// draw links, font-kit tokens) never land in the rotating log, the /api/v1/logs
+	// viewer, or the admins' live log tail.
 	path := redactSensitivePath(r.URL.Path)
 	// actor names who made the request: a logged-in account (session or plugin
 	// PAT), a Cloudflare-verified bot, or anonymous. `auth` is always present so
@@ -440,8 +438,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	slog.Log(r.Context(), level, "http request", attrs...)
 	// When DEBUG is on (live-toggleable), emit a richer companion line for every
 	// request. Guarded so the header lookups are skipped entirely at INFO+. Query,
-	// path, and Referer are all scrubbed of capability tokens (tokens can ride the
-	// query as the PAT fallback, and the Referer when navigating from a token page).
+	// path, and Referer are all scrubbed of capability tokens (a Referer carries one
+	// when a browser navigates away from a token page).
 	if slog.Default().Enabled(r.Context(), slog.LevelDebug) {
 		dattrs := []slog.Attr{
 			slog.String("method", r.Method),
@@ -518,8 +516,8 @@ func errorLevel(err error) slog.Level {
 // -- Auth helpers ------------------------------------------------------------
 
 // sessionUserID returns the logged-in user's id from the session, or 0 if none.
-// The id is stored as int64 (see handleAuthAction), so it is read back via a
-// type assertion rather than scs's GetInt (which only matches plain int).
+// The id is stored as int64 (auth.SignIn), so it is read back via a type
+// assertion rather than scs's GetInt (which only matches plain int).
 func (s *Server) sessionUserID(r *http.Request) int64 {
 	if id, ok := s.sessions.Get(r.Context(), auth.SessionUserID).(int64); ok {
 		return id
@@ -528,9 +526,9 @@ func (s *Server) sessionUserID(r *http.Request) int64 {
 }
 
 // sessionUserEpoch returns the password epoch the cookie session was minted with
-// (0 when absent - e.g. a session predating this feature, which matches the
-// default password_epoch of an unchanged account). Compared against the user's
-// current PasswordEpoch to invalidate sessions after a password change/reset.
+// (0 when absent, which matches the default password_epoch of an unchanged
+// account). Compared against the user's current PasswordEpoch to invalidate
+// sessions after a password change/reset.
 func (s *Server) sessionUserEpoch(r *http.Request) int64 {
 	if e, ok := s.sessions.Get(r.Context(), auth.SessionEpoch).(int64); ok {
 		return e
@@ -653,7 +651,7 @@ func (s *Server) loadCurrentUser(r *http.Request) *model.User {
 		return nil
 	}
 	// Reject a session minted before the account's last password change/reset
-	// (its stored epoch no longer matches), so a password change logs out every
+	// (its stored epoch doesn't match), so a password change logs out every
 	// other session. The current session is kept valid by signing it in again under
 	// the new epoch (the change-password operation, auth.SignIn).
 	if s.sessionUserEpoch(r) != u.PasswordEpoch {

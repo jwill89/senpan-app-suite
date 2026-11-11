@@ -169,7 +169,7 @@ func TestSettingsAndIntegrationsAccess(t *testing.T) {
 }
 
 // An admin can clear a secret on purpose, and the book clubs' webhooks are not among
-// the integrations any more.
+// the integrations.
 func TestIntegrationsSave(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
@@ -235,7 +235,7 @@ func TestStylesLifecycle(t *testing.T) {
 		t.Errorf("the active theme: %v", active)
 	}
 
-	// It is no longer public, so players can't pick it.
+	// It was saved as not public, so players can't pick it.
 	var public map[string]any
 	decodeInto(t, env.get(t, "/api/v1/styles/public"), http.StatusOK, &public)
 	if len(public["styles"].([]any)) != 0 {

@@ -461,7 +461,7 @@ function cancel(): void {
                 @change="setAffiliate(occupant, ($event.target as HTMLSelectElement).value)"
               >
                 <!-- No "the venue" default: the venue is an affiliate in its own
-                     right now, with its own logo and links, so hard-coding it here
+                     right, with its own logo and links, so hard-coding it here
                      would offer a second, lesser version of a real record. -->
                 <option value="" disabled>Select an affiliate...</option>
                 <option v-for="a in store.affiliates" :key="a.id" :value="a.id">

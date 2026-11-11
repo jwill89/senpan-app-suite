@@ -73,10 +73,10 @@ func TestAnnouncementSkip_SetsACount(t *testing.T) {
 	}
 }
 
-// TestAnnouncementSkip_SurvivesAnEdit is the regression for the bug this replaced:
-// saving ANY edit used to clear a pending skip, because the write path reset the
-// flag and the update statement wrote it. The skip belongs to the schedule cursor,
-// not the form, so an edit must leave it alone.
+// TestAnnouncementSkip_SurvivesAnEdit holds that saving ANY edit leaves a pending
+// skip alone: were the update statement to write the flag from the form, an
+// unrelated edit would clear it. The skip belongs to the schedule cursor, not the
+// form.
 func TestAnnouncementSkip_SurvivesAnEdit(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)

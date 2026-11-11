@@ -73,7 +73,7 @@ function onDirChange(e: Event): void {
 
 // -- Uploading ---------------------------------------------------------------
 // Only `system-images` holders may upload; every other editor sees the picker
-// exactly as before (the backend enforces the same permission on the endpoint).
+// without the Upload button (the backend enforces the same permission on the endpoint).
 const canUpload = computed(() => auth.hasPermission('system-images'))
 
 const fileInput = useTemplateRef<HTMLInputElement>('fileInput')

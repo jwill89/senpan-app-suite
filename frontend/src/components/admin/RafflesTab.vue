@@ -1,7 +1,6 @@
 <script setup lang="ts">
 /**
- * Admin Raffles manager - one tab (under Senpan Tea House) unifying the former
- * New / Open / Closed raffle tabs into the standard manager model:
+ * Admin Raffles manager - one tab in the standard manager model:
  *
  *   - list: "Current Raffles" (every non-closed raffle) as image cards with a
  *     corner status icon (a calendar-clock when it opens later, a red
@@ -14,7 +13,7 @@
  *     view. Opened with a Back sub-header.
  *   - form: the create/edit/copy form (RaffleFormTab), also a Back sub-page.
  *
- * All state + actions come from the raffles store (unchanged besides copyRaffleForm).
+ * All state + actions come from the raffles store.
  */
 import { computed, ref } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
@@ -76,7 +75,7 @@ const entryColumns = computed<DataColumn[]>(() => {
     { key: 'numEntries', label: 'Entries', align: 'center' },
   ]
   // A details-only (or free) raffle collects nothing, so the money column would
-  // only ever read 0. The paid column stays: the draw still runs off it.
+  // only ever read 0. The paid column stays in every mode: a paying raffle draws on settled tickets.
   if (charges.value) {
     cols.push({ key: 'cost', label: 'Cost', align: 'center' })
   }

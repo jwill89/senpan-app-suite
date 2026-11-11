@@ -39,8 +39,8 @@ function section(wrapper: VueWrapper, label: string) {
     .find((s) => s.find('.admin-nav-header').text().includes(label))!
 }
 
-/** Whether a section is expanded - its header carries the `open` class, which is
- * the exact expression (`openSection === <section>`) that also drives the items'
+/** Whether a section is expanded - its header carries the `is-open` class, which is
+ * the exact expression (`isOpen(<section>)`) that also drives the items'
  * `v-show`, so it is the source of truth for accordion state. */
 function isExpanded(wrapper: VueWrapper, label: string): boolean {
   return section(wrapper, label).find('.admin-nav-header').classes().includes('is-open')
@@ -72,7 +72,7 @@ describe('AdminSidebar', () => {
     expect(isExpanded(wrapper, 'System')).toBe(false)
     expect(section(wrapper, 'System').find('.admin-nav-items').isVisible()).toBe(false)
     // The Festival section carries Festival Map + Garapon + Stamp Rally + Ema Plaques
-    // (which holds the artist's requests too) + Raffles (Raffles moved here from Tea House).
+    // (which holds the artist's requests too) + Raffles.
     const festivalText = section(wrapper, 'Festival')
       .findAll('.admin-nav-items button')
       .map((b) => b.text())
@@ -101,7 +101,7 @@ describe('AdminSidebar', () => {
     await clickHeader(wrapper, 'System')
 
     // Independent accordion: System expands while the already-open Bingo stays
-    // open, and no navigation happened - headers are pure toggles now.
+    // open, and no navigation happened - headers are pure toggles.
     expect(isExpanded(wrapper, 'System')).toBe(true)
     expect(isExpanded(wrapper, 'Bingo')).toBe(true)
     expect(push).not.toHaveBeenCalled()

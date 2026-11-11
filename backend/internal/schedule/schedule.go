@@ -165,7 +165,7 @@ func NthWeekday(year int, month time.Month, wd time.Weekday, n, h, m int, loc *t
 // Advance is the cursor after the occurrence at due has fired: the next occurrence
 // of r and whether the schedule stays live. A recurring rule rolls on to the first
 // occurrence strictly in the future, anchored on the later of now and due: from
-// the old cursor alone, a post overdue by more than a period (the server was down
+// the cursor alone, a post overdue by more than a period (the server was down
 // across a slot) would land on another past slot, stay due, and fire again every
 // tick. Missed occurrences are skipped, not replayed. A once-only or unscheduled
 // rule has no further occurrence, so it ends.

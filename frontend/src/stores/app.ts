@@ -1,8 +1,5 @@
 /**
  * App store: global app settings, Google Fonts list, and active theme CSS.
- *
- * Mirrors the original app.js settings logic (loadSettings/saveSettings,
- * loadGoogleFontsList, _applyHeaderFont, _loadActiveCSS/_applyCustomCSS).
  */
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
@@ -26,7 +23,7 @@ export const useAppStore = defineStore('app', () => {
    */
   const integrations = ref<Integrations>({ googleFontsApiKey: '' })
   const googleFontsList = ref<string[]>([])
-  /** Fonts uploaded via System -> Font Upload (name + serving token). */
+  /** Fonts uploaded via Atelier -> Font Upload (name + serving token). */
   const uploadedFonts = ref<UploadedFont[]>([])
   let googleFontsCacheKey = ''
   /** True while settings are being saved (drives the Save button). */
@@ -200,8 +197,8 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
-  /** Resolves and applies the saved theme preference. A specific theme that is no
-   *  longer Public silently reverts to Default. */
+  /** Resolves and applies the saved theme preference. A specific theme that has
+   *  stopped being Public silently reverts to Default. */
   async function applyThemePreference(): Promise<void> {
     const pref = themePreference.value
     if (pref && pref !== 'default') {

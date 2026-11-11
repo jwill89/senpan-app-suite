@@ -4,9 +4,8 @@
  * (with or without an unlock time), posting a room to Discord, and the single
  * shared Discord webhook the posts go to.
  *
- * A cousin of the affiliates store (a flat single-table entity with an image
- * picked from the shared library) crossed with the announcements store (a
- * drag-orderable list plus per-row action flags + a webhook).
+ * A flat single-table entity with an image picked from the shared library, a
+ * drag-orderable list, per-row action flags and a webhook.
  */
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
@@ -239,7 +238,7 @@ export const useTeaRoomsStore = defineStore('teaRooms', () => {
   /**
    * Lock a room. `untilLocal` is a datetime-local value (local wall clock) for a
    * lock that lifts by itself, or '' for one that stands until someone unlocks
-   * the room - the way every lock behaved before expiries existed.
+   * the room.
    *
    * A time already gone is refused here rather than sent: the server would take
    * it, expire the lock on its next sweep and alert the staff about a room that

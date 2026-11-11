@@ -2,8 +2,7 @@
 /**
  * A round colored chip standing in for a Garapon prize ball - the single source
  * of truth for that swatch, shared by the admin manager and the public player
- * view (it previously lived as near-identical scoped CSS in both, at clashing
- * sizes). The `color` is any CSS color; `size` picks one of three fixed footprints.
+ * view. The `color` is any CSS color; `size` picks one of three fixed footprints.
  */
 withDefaults(defineProps<{ color: string; size?: 'sm' | 'md' | 'lg' }>(), { size: 'md' })
 </script>

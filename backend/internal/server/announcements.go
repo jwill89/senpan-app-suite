@@ -200,7 +200,7 @@ func advanceRow(ctx context.Context, q *db.Queries, a *db.Announcement, next str
 // few times before giving up.
 //
 // The write applies only while the row still holds the cursor read before posting.
-// One that no longer matches means an admin edited the schedule during the post:
+// One that doesn't match means an admin edited the schedule during the post:
 // their cursor stands, and this reports false and no error, because retrying would
 // only overwrite the edit again. The message is already on Discord either way.
 func (s *Server) markPostedWithRetry(ctx context.Context, q *db.Queries, a *db.Announcement, next string, live bool) (bool, error) {

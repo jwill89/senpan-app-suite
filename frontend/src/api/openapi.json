@@ -764,7 +764,7 @@
         "additionalProperties": false,
         "properties": {
           "version": {
-            "description": "The app's semantic version: one version for the SPA and the API since 4.0.0.",
+            "description": "The app's semantic version: one version for the SPA and the API.",
             "examples": ["5.0.0"],
             "type": "string"
           }
@@ -888,7 +888,7 @@
             "type": "array"
           },
           "createdAt": {
-            "description": "When it was made, RFC 3339 in UTC; null for a card made before this was recorded.",
+            "description": "When it was made, RFC 3339 in UTC; null when no time was recorded for it.",
             "type": ["string", "null"]
           },
           "customStatus": {
@@ -1115,7 +1115,7 @@
         "additionalProperties": false,
         "properties": {
           "createdAt": {
-            "description": "When it was made, RFC 3339 in UTC; null for a card made before this was recorded.",
+            "description": "When it was made, RFC 3339 in UTC; null when no time was recorded for it.",
             "type": ["string", "null"]
           },
           "customStatus": {
@@ -3324,7 +3324,7 @@
             "type": "integer"
           },
           "patternIds": {
-            "description": "The win patterns to play for: at least one. Those deleted since are left out, and a start none of whose patterns exists any more is refused (422).",
+            "description": "The win patterns to play for: at least one. Those deleted since are left out, and a start none of whose patterns exists is refused (422).",
             "items": {
               "format": "int64",
               "type": "integer"
@@ -3850,7 +3850,7 @@
         "additionalProperties": false,
         "properties": {
           "gameId": {
-            "description": "The game whose prompt this answers (the prompt's gameId). An answer for a game no longer running, or a second answer, is refused (409).",
+            "description": "The game whose prompt this answers (the prompt's gameId). An answer for a game that isn't running, or a second answer, is refused (409).",
             "format": "int64",
             "type": "integer"
           },
@@ -4572,7 +4572,7 @@
         "additionalProperties": false,
         "properties": {
           "categoryId": {
-            "description": "The category they are in from now on: a pattern from another one moves into it.",
+            "description": "The category they end up in: a pattern from another one moves into it.",
             "format": "int64",
             "minimum": 1,
             "type": "integer"
@@ -6032,7 +6032,7 @@
             "type": "string"
           },
           "festivalMapId": {
-            "description": "The festival to file it under; null or left out for none. One that no longer exists is refused.",
+            "description": "The festival to file it under; null or left out for none. One that doesn't exist is refused.",
             "format": "int64",
             "minimum": 1,
             "type": ["integer", "null"]
@@ -7025,7 +7025,7 @@
             "type": "integer"
           },
           "completionMode": {
-            "description": "all: a card is complete when every stamp is collected or can't be any more. counts: when it holds requiredFood food stamps and requiredGame game stamps.",
+            "description": "all: a card is complete when every stamp is collected or can never be collected. counts: when it holds requiredFood food stamps and requiredGame game stamps.",
             "enum": ["all", "counts"],
             "type": "string"
           },
@@ -7261,7 +7261,7 @@
             "type": "string"
           },
           "prizes": {
-            "description": "The rally's whole set of prizes, replacing the old. An empty list clears them.",
+            "description": "The rally's whole set of prizes; those it had are replaced. An empty list clears them.",
             "items": {
               "$ref": "#/components/schemas/StampRallyPrizeInput"
             },
@@ -8232,7 +8232,7 @@
             "type": "string"
           },
           "token": {
-            "description": "The token its file is served under (GET /api/fonts/pub/f/{token}); it rotates, so a page uses the one it was given.",
+            "description": "The token its file is served under (GET /api/v1/fonts/pub/f/{token}); it rotates, so a page uses the one it was given.",
             "type": "string"
           }
         },
@@ -10813,11 +10813,11 @@
             }
           },
           {
-            "description": "The id of the last event this board got, sent when it reopens the stream: the events since it come first. One the server no longer keeps is answered with resync.",
+            "description": "The id of the last event this board got, sent when it reopens the stream: the events since it come first. One the server doesn't keep is answered with resync.",
             "in": "header",
             "name": "Last-Event-ID",
             "schema": {
-              "description": "The id of the last event this board got, sent when it reopens the stream: the events since it come first. One the server no longer keeps is answered with resync.",
+              "description": "The id of the last event this board got, sent when it reopens the stream: the events since it come first. One the server doesn't keep is answered with resync.",
               "type": "string"
             }
           }
@@ -15690,11 +15690,11 @@
         "operationId": "stream-staff-events",
         "parameters": [
           {
-            "description": "The id of the last event this client got, sent when it reopens the stream: the events since it that the account may hear come first. One the server no longer keeps is answered with resync.",
+            "description": "The id of the last event this client got, sent when it reopens the stream: the events since it that the account may hear come first. One the server doesn't keep is answered with resync.",
             "in": "header",
             "name": "Last-Event-ID",
             "schema": {
-              "description": "The id of the last event this client got, sent when it reopens the stream: the events since it that the account may hear come first. One the server no longer keeps is answered with resync.",
+              "description": "The id of the last event this client got, sent when it reopens the stream: the events since it that the account may hear come first. One the server doesn't keep is answered with resync.",
               "type": "string"
             }
           }
@@ -16524,7 +16524,7 @@
     },
     "/festival-maps/public/{idOrSlug}": {
       "get": {
-        "description": "Found by its shortcode, else its numeric id, so a link posted before a shortcode existed keeps working. Each pitch is resolved for a visitor: the affiliate's card, whether it is open now, its stamp-rally badge and a raffle running there. A map that isn't published is not found.",
+        "description": "Found by its shortcode, else its numeric id, so a link by id keeps working after the map is given a shortcode. Each pitch is resolved for a visitor: the affiliate's card, whether it is open now, its stamp-rally badge and a raffle running there. A map that isn't published is not found.",
         "operationId": "get-public-festival-map",
         "parameters": [
           {
@@ -18349,7 +18349,7 @@
     },
     "/game/halftime": {
       "post": {
-        "description": "Once per game: every console hears it was answered, and by whom (halftime_resolved), and closes its prompt. A mini-game reaches the boards once the number that reached half-time has (minigame). An answer for a game no longer running, a second answer, or one before half-time is refused (409). Answers the game.",
+        "description": "Once per game: every console hears it was answered, and by whom (halftime_resolved), and closes its prompt. A mini-game reaches the boards once the number that reached half-time has (minigame). An answer for a game that isn't running, a second answer, or one before half-time is refused (409). Answers the game.",
         "operationId": "answer-halftime",
         "requestBody": {
           "content": {

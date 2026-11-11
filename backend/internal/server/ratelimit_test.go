@@ -8,7 +8,7 @@ import (
 )
 
 func TestClientIP(t *testing.T) {
-	// clientIP now delegates to logClientIP: proxy-supplied headers are trusted
+	// clientIP delegates to logClientIP: proxy-supplied headers are trusted
 	// ONLY when the immediate peer (RemoteAddr) is the loopback reverse proxy, and
 	// the true origin is the leftmost XFF / CF-Connecting-IP - not the rightmost
 	// (Cloudflare edge) entry. An off-loopback peer falls back to RemoteAddr host.

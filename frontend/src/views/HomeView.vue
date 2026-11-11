@@ -100,8 +100,8 @@ onMounted(() => {
   void festivalMaps.loadPublicMaps()
 })
 
-// The logo (and the other brand images) are served at runtime from the web
-// root's persistent `images/` folder - see vite.config.ts - not bundled. Bind
+// The logo (and the other brand images) are served at runtime from the data
+// folder's persistent `images/` folder - see vite.config.ts - not bundled. Bind
 // the URL as a runtime string so the build never tries to resolve it as a
 // module (a static `src="/images/logo.png"` makes Vite import it, which fails a
 // clean build where public/images/ - gitignored - isn't present).

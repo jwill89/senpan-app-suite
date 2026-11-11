@@ -133,9 +133,9 @@ describe('festival map widget: embedded links', () => {
 })
 
 /**
- * The hint covers the whole plan, so unlike the corner note it replaced it CANNOT
- * be left up: it would be dimming the map a visitor is trying to read. Both ways
- * out of it are asserted here.
+ * The hint covers the whole plan, so unlike a corner note it CANNOT be left up: it
+ * would be dimming the map a visitor is trying to read. Both ways out of it are
+ * asserted here.
  */
 describe('festival map widget: the usage hint', () => {
   it('clears itself after seven seconds when nobody touches the map', async () => {
@@ -191,10 +191,9 @@ describe('festival map widget: the usage hint', () => {
 })
 
 /**
- * The other half of moving the rally mark off the plan: the artwork has to land
- * somewhere, and the panel is where it is actually explained - beside the rally's
- * name, under a line saying what it is for. On the stall it was a picture of food
- * with nothing to say it was a stamp.
+ * The rally's artwork is explained in the stall panel, not on the plan: beside the
+ * rally's name, under a line saying what it is for. On the stall itself it would be
+ * a picture of food with nothing to say it was a stamp.
  */
 describe('festival map widget: the stamp artwork', () => {
   it('shows the stamp artwork in the panel, where it is explained', async () => {

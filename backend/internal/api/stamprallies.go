@@ -55,7 +55,7 @@ type StampRally struct {
 	RedeemInstructions string            `json:"redeemInstructions" doc:"How to redeem a finished card (Markdown), shown once it is complete."`
 	Status             string            `json:"status" enum:"open,closed" doc:"A closed rally takes no more stamps and no sign-ups."`
 	PublicSignup       bool              `json:"publicSignup" doc:"Whether anyone may sign up for a card; off, only staff issue cards."`
-	CompletionMode     string            `json:"completionMode" enum:"all,counts" doc:"all: a card is complete when every stamp is collected or can't be any more. counts: when it holds requiredFood food stamps and requiredGame game stamps."`
+	CompletionMode     string            `json:"completionMode" enum:"all,counts" doc:"all: a card is complete when every stamp is collected or can never be collected. counts: when it holds requiredFood food stamps and requiredGame game stamps."`
 	RequiredFood       int64             `json:"requiredFood" doc:"The food stamps a card needs in counts mode."`
 	RequiredGame       int64             `json:"requiredGame" doc:"The game stamps a card needs in counts mode."`
 	FestivalMapID      *int64            `json:"festivalMapId" nullable:"true" doc:"The festival it is filed under; null for none."`
@@ -112,7 +112,7 @@ type StampRallyInput struct {
 	RequiredGame       int64                  `json:"requiredGame" minimum:"0" doc:"The game stamps a card needs in counts mode, kept to the number of game stamps."`
 	FestivalMapID      *int64                 `json:"festivalMapId,omitempty" nullable:"true" minimum:"1" doc:"The festival to file it under; null or left out for none. One that doesn't exist is refused."`
 	Stamps             []StampRallyStampInput `json:"stamps" maxItems:"200" nullable:"false" doc:"The rally's whole set of stamps: a stamp with an id keeps that stamp and what was collected on it, id 0 adds one, and one left out is deleted. An empty list clears them."`
-	Prizes             []StampRallyPrizeInput `json:"prizes" maxItems:"100" nullable:"false" doc:"The rally's whole set of prizes, replacing the old. An empty list clears them."`
+	Prizes             []StampRallyPrizeInput `json:"prizes" maxItems:"100" nullable:"false" doc:"The rally's whole set of prizes; those it had are replaced. An empty list clears them."`
 }
 
 // StampRallyStampInput is a stamp as a save sends it.
@@ -762,7 +762,7 @@ func (h handlers) settleStalls(ctx context.Context, festivalID *int64, stamps []
 	return nil
 }
 
-// replaceRallyPrizes writes a rally's prizes in the order sent, replacing the old.
+// replaceRallyPrizes writes a rally's prizes in the order sent, in place of those it had.
 func replaceRallyPrizes(ctx context.Context, q *db.Queries, rallyID int64, prizes []db.InsertStampRallyPrizeParams) error {
 	if err := q.DeleteStampRallyPrizes(ctx, rallyID); err != nil {
 		return err

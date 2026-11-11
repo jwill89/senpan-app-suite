@@ -10,9 +10,9 @@
  * question.
  *
  * `allowUnknown` keeps an existing value that is not on the list selectable rather
- * than silently blanking it - a record written before the picker existed, or one a
- * staff member typed by hand, has to survive being edited on a form that would not
- * offer that value today.
+ * than silently blanking it - a record whose world a staff member typed by hand, or
+ * that has left the list, has to survive being edited on a form that would not
+ * offer that value.
  */
 import { computed, useId } from 'vue'
 import { FF14_WORLDS } from '@/lib/constants'
@@ -43,9 +43,9 @@ const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 const selectId = useId()
 
 /**
- * A stored world the list no longer offers (a retired world, a hand-typed one, or
- * anything predating the picker). Surfaced as its own option so opening the form
- * does not quietly discard it.
+ * A stored world the list does not offer (a hand-typed one, or one that has left
+ * the list). Surfaced as its own option so opening the form does not quietly
+ * discard it.
  */
 const unknownValue = computed(() => {
   const current = props.modelValue.trim()

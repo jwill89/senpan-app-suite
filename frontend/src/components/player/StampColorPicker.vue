@@ -90,7 +90,7 @@ function onColorChange(c: { rgba: string }): void {
 }
 
 /* The Chrome picker skin lives globally on the shared `.color-picker` object
-   (app.css) so it's identical here and in the Themes tool. */
+   (admin.css) so it's identical here and in the Themes tool. */
 
 /* Quick-pick presets row: label above a centered row of swatches. */
 .color-picker-presets {

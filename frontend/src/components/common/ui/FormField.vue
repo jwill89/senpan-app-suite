@@ -3,7 +3,7 @@
  * One labelled form control. Wraps the control (default slot) with a label and
  * optional help text, giving every admin form the same field rhythm. Controls
  * placed in the default slot stretch full-width automatically (see the `.field`
- * rule in app.css), replacing the old per-input `.field-input-full` class.
+ * rule in utilities.css).
  *
  * The label can be passed as the `label` prop or, when it needs markup, via the
  * `#label` slot. Help text likewise supports a `help` prop (plain string) or a

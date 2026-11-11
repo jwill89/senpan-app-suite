@@ -11,17 +11,17 @@ import { changelogPlugin } from './config/changelog-plugin.ts'
 import { vitestDefaults } from '../shared/test/web/vitest.js'
 
 // The build goes where the Go server embeds it (backend/internal/web, embed.FS):
-// Go embeds only files inside its own module, and since 4.0.0 the binary serves the
-// SPA. So the front end builds before any Go build, test or lint.
+// Go embeds only files inside its own module, and the binary serves the SPA. So the
+// front end builds before any Go build, test or lint.
 const outDir = '../backend/internal/web/dist'
 
 // Static images (logo/favicon/share_banner) live in `public/images/`, and the game's
 // sound effects in `public/sounds/` (git-ignored), so they are available during
 // `vite dev`. In production, the server serves both from the PERSISTENT `images/` and
-// `sounds/` folders in its data folder (see deploy/README.md), so the copies Vite
-// would otherwise bake into the build are redundant, and the sounds must never ship
-// in the binary. This plugin removes them after the build so the binary embeds only
-// the SPA shell + hashed `assets/`.
+// `sounds/` folders in its data folder, so the copies Vite would otherwise bake into
+// the build are redundant, and the sounds must never ship in the binary. This plugin
+// removes them after the build so the binary embeds only the SPA shell + hashed
+// `assets/`.
 function stripDistImages(): Plugin {
   return {
     name: 'strip-dist-images',
@@ -66,10 +66,10 @@ function ogImageCacheBust(): Plugin {
 
 // Heavy, rarely-changing vendor libs each get their own chunk so they cache
 // independently of app code (FontAwesome is only needed in the admin views;
-// Milkdown + the emoji picker are lazy-loaded). Vite 8 / Rolldown dropped the
-// object form of `manualChunks`, so the same grouping is expressed as a function
-// that maps a module's node_modules package to its chunk. Purely a
-// caching/loading win - no behavioural change.
+// Milkdown + the emoji picker are lazy-loaded). Vite 8 / Rolldown takes no object
+// form of `manualChunks`, so the grouping is a function that maps a module's
+// node_modules package to its chunk. Purely a caching/loading win - no behavioral
+// change.
 const vendorChunkGroups: readonly (readonly [string, readonly string[]])[] = [
   ['vue', ['vue', '@vue', 'pinia', 'vue-router']],
   ['fontawesome', ['@fortawesome']],
@@ -99,12 +99,11 @@ function manualChunks(id: string): string | undefined {
 // Output files a public visitor can never reach. Filled during the build and read
 // by the service worker's `manifestTransforms` below.
 //
-// Precaching is a SEPARATE question from code-splitting, and the two disagreed.
-// The admin bundles are lazy-loaded, so they never touch a player's initial page
-// load - but `globPatterns` swept every emitted file into the precache, so the
-// service worker downloaded them anyway on first visit: ~1.2 MB of admin-only
-// JavaScript plus the KaTeX web faces, for visitors who cannot open the admin at
-// all.
+// Precaching is a SEPARATE question from code-splitting. The admin bundles are
+// lazy-loaded, so they never touch a player's initial page load - but `globPatterns`
+// sweeps every emitted file into the precache, so without this exclusion the service
+// worker would download them on first visit: ~1.2 MB of admin-only JavaScript plus
+// the KaTeX web faces, for visitors who cannot open the admin at all.
 //
 // This is computed from the real module graph rather than from file-name
 // patterns, because the names do not carry the answer: `DataTable` is admin-only
@@ -204,9 +203,9 @@ function verifyAdminNotPrecached(): Plugin {
         source = readFileSync(sw, 'utf-8')
       } catch {
         // Not "no PWA in this build" - this plugin is ordered after the one that
-        // writes sw.js, so by here it must exist. Reading a stale copy from an
-        // earlier build is exactly how this check silently passed while the
-        // exclusion was broken, so a missing file is a failure, not a skip.
+        // writes sw.js, so by here it must exist. A stale copy left by an earlier
+        // build would let this check pass while the exclusion was broken, so a
+        // missing file is a failure, not a skip.
         this.error(`expected a generated service worker at ${sw}, found none`)
         return
       }
@@ -229,10 +228,9 @@ function verifyAdminNotPrecached(): Plugin {
   }
 }
 
-// The frontend's semantic version, read from package.json and baked into the
-// bundle as the global `__APP_VERSION__` (see env.d.ts). The admin dashboard
-// shows it next to the backend version for a compatibility check; bump
-// package.json's "version" in the same change as a matching CHANGELOG.md entry.
+// The app's semantic version, read from package.json and baked into the bundle as
+// the global `__APP_VERSION__` (see env.d.ts). The admin footer compares it with the
+// version the server reports, so an open tab can tell it is behind a deploy.
 const frontendVersion = JSON.parse(
   readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf-8'),
 ).version as string
@@ -259,11 +257,11 @@ export default defineConfig({
     markAdminOnlyOutput(),
     // Installable PWA + offline app-shell. The service worker auto-updates on
     // each deploy (new precache manifest). The API (its event streams included) and
-    // the persistent root images/ are explicitly excluded from the SPA navigation fallback so
+    // the persistent /images/ are explicitly excluded from the SPA navigation fallback so
     // they always hit the network (and the server's own handling of them).
     VitePWA({
       registerType: 'autoUpdate',
-      // Static images live in the persistent root images/ folder (stripped from
+      // Static images live in the server's persistent images/ folder (stripped from
       // dist), so they are not bundled/precached - referenced by absolute URL.
       includeAssets: [],
       manifest: {
@@ -317,7 +315,7 @@ export default defineConfig({
             },
           },
         ],
-        // SPA deep-link fallback, but never intercept the API or root images.
+        // SPA deep-link fallback, but never intercept the API or /images/.
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//, /^\/images\//],
         cleanupOutdatedCaches: true,
@@ -369,7 +367,7 @@ export default defineConfig({
     clearMocks: true,
   },
   // Absolute base: required for Vue Router history mode so deep-link refreshes
-  // (e.g. /admin/cards) resolve hashed assets from the document root /assets/
+  // (e.g. /admin/bingo/cards) resolve hashed assets from the document root /assets/
   // rather than relative to the current path. The server serves the SPA at the
   // site's root and falls back to index.html for unknown paths (internal/web).
   base: '/',

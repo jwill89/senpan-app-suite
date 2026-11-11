@@ -1,2 +1,2 @@
-# Keeps the raffle uploads directory present in the build output so the Go
-# server's upload path ({webroot}/images/raffles) always exists.
+# Keeps this folder in git. It mirrors the data folder's Raffle image category
+# (images/raffles) for the dev server.

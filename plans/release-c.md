@@ -1,7 +1,7 @@
 # Plan: release C, the API on huma (5.0.0)
 
 Written 2026-11-09 against app 4.1.0 / plugin 3.9.1.0 / schema v73. Release C of the
-overhaul in shared-tooling's `PLAN.md` (step 7): the backend moves to huma and the shape
+overhaul in `plans/shared-tooling-rollout.md` (step 7): the backend moves to huma and the shape
 the standards give an API (`shared/standards/api-and-realtime.md`), and the SPA and the
 plugin move with it, all released together as 5.0.0.
 
@@ -20,7 +20,7 @@ Dalamud is back up.
 | SQL | sqlc, domain by domain as each moves (decided with release B). |
 | Missing times | `null` in the API (the database has held NULL since 4.1.0). |
 | Base path | `/api/v1`, as Kindred Nights and Home Library have it (decided 2026-11-09, over the standard's `/api`). The font host's vhost (`fonts.senpan.cafe` -> `/api/fonts/pub/`) moves to `/api/v1/fonts/pub/` on deploy day; the kit.css address Carrd pages embed stays. `/healthz` stays where it is; `/api/ws` goes (the live feed below). The API contract's own version is the document's `info.version`, starting at 5.0.0. |
-| Sign-in | Inside huma, under `/api/v1/auth/*` (the owner, 2026-11-09): the standard's one action-shaped exception, in the document and the typed client. Kindred Nights and Home Library sign in through plain handlers under `/auth/*`, which came from Kindred's Discord redirects rather than from huma; they move the same way (shared-tooling's `plans/sign-in-on-huma.md`). |
+| Sign-in | Inside huma, under `/api/v1/auth/*` (the owner, 2026-11-09): the standard's one action-shaped exception, in the document and the typed client. Kindred Nights and Home Library sign in through plain handlers under `/auth/*`, which came from Kindred's Discord redirects rather than from huma; they move the same way (each repo's own `plans/sign-in-on-huma.md`). |
 | Live feed | Server-sent events, replacing the WebSocket (the owner, 2026-11-09). The traffic is one-way: the server discards what a client sends (the SPA sends only a keepalive), and calls, claims and every other write go over REST, so the standard's channel rule (api-and-realtime.md) picks SSE. As Kindred Nights does it: huma's `sse` package, so the events are typed in the document and reach TypeScript through openapi-typescript; sign-in through the API's own layers (a cookie, or the plugin's Bearer header, so no token in a URL); the browser's `EventSource` reconnecting and resuming by `Last-Event-ID`. The draw delay players see is kept. Events name what changed and the client re-reads it over REST, as the standard has it, except a draw, which carries the called number (the owner, 2026-11-09): it goes to every player's phone at once on every call, so re-reading would set off a request from each at the same instant; the number is tiny, the server already decides when each audience gets it, and a reconnect still re-reads. Events with nothing to re-read carry what they report: a log line, a yoever reaction, who answered half-time. Shared-tooling's real-time table had Senpan on WebSockets for "calls and claims", but claims go over REST. |
 | Matching the siblings | Where Kindred Nights and Home Library agree, Senpan does the same, with no exception of its own (the owner, 2026-11-09): huma's config as Home Library sets it, the document committed as `frontend/src/api/openapi.json` by `go run . openapi`, openapi-typescript into `schema.d.ts`, and an openapi-fetch `client.ts`. |
 

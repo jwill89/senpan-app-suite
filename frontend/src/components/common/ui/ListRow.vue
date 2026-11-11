@@ -4,8 +4,7 @@
  * the left (cover image, color swatch, icon), the item body in the default slot,
  * and actions pinned to the **far right** via the `#actions` slot.
  *
- * Stack rows inside a `.list-rows` container (flex column with gaps). Replaces
- * the per-page bespoke row chrome (`.ann-card`, `.bc-item-card`, ...).
+ * Stack rows inside a `.list-rows` container (flex column with gaps).
  */
 </script>
 

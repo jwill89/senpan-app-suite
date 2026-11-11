@@ -1,15 +1,14 @@
 <script setup lang="ts">
 /**
- * Admin Settings tab - app title, default draw delay, frequent-winner
- * thresholds, Google Fonts API key, and the header/board font (with live
- * preview). Mirrors the original `adminTab==='system-settings'` block.
+ * Admin Settings tab - the app's general, gameplay, fonts and branding, and
+ * book-club settings, including the header/board font (with live preview).
  *
  * The header/board font is chosen from a single combo box grouped into two
  * <optgroup>s: fonts uploaded via System -> Font Upload (listed first) and
  * Google Fonts (the live API list when an API key is set, else the shared
  * FALLBACK_GOOGLE_FONTS list). Uploaded fonts' @font-face rules are registered
- * (applyUploadedFonts) so they preview live and can be selected. A previously
- * saved value that is in neither group is preserved as a "(custom)" option so
+ * (applyUploadedFonts) so they preview live and can be selected. A saved
+ * value that is in neither group is preserved as a "(custom)" option so
  * editing settings never silently drops it.
  */
 import { computed, onMounted, watch } from 'vue'
@@ -58,11 +57,10 @@ const fontOptions = computed(() =>
 )
 
 /**
- * The currently-saved header font when it appears in neither group (e.g. a font
- * typed in an earlier version, or a Google font not in the fallback list with
- * no API key configured). Surfaced as a "(custom)" option so the combo box
- * never blanks out / silently drops the saved value. Empty string when the
- * value is already covered by a group.
+ * The currently-saved header font when it appears in neither group (e.g. a Google
+ * font not in the fallback list with no API key configured). Surfaced as a
+ * "(custom)" option so the combo box never blanks out / silently drops the saved
+ * value. Empty string when the value is already covered by a group.
  */
 const customHeaderFont = computed(() => {
   const f = app.settings.headerFont.trim()
@@ -174,8 +172,7 @@ watch(
         <section class="settings-section">
           <h4 class="section-heading"><font-awesome-icon :icon="['fad', 'dice']" /> Gameplay</h4>
           <!-- The draw delay is set live on the Game page (in-game "Draw Delay"
-               selector), which persists + broadcasts it, so it isn't configured
-               here anymore. -->
+               selector), which persists + broadcasts it, so it isn't set here. -->
           <FormField
             label="Frequent Winner Threshold"
             help="How many wins before a player is flagged as a frequent winner."
@@ -232,7 +229,7 @@ watch(
             <font-awesome-icon :icon="['fad', 'font']" /> Fonts &amp; Branding
           </h4>
           <!-- The key is one of the integrations, which only an admin reads or
-               saves (GET/PUT /settings/integrations). -->
+               saves (GET/PUT /api/v1/settings/integrations). -->
           <FormField v-if="auth.isAdmin" label="Google Fonts API Key">
             <input
               v-model="app.integrations.googleFontsApiKey"

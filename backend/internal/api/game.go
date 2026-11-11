@@ -23,7 +23,7 @@ var gameTags = []string{"Game"}
 
 // GameStartInput is a game to start.
 type GameStartInput struct {
-	PatternIDs   []int64 `json:"patternIds" minItems:"1" maxItems:"1000" nullable:"false" doc:"The win patterns to play for: at least one. Those deleted since are left out, and a start none of whose patterns exists any more is refused (422)."`
+	PatternIDs   []int64 `json:"patternIds" minItems:"1" maxItems:"1000" nullable:"false" doc:"The win patterns to play for: at least one. Those deleted since are left out, and a start none of whose patterns exists is refused (422)."`
 	Auto         bool    `json:"auto,omitempty" doc:"Whether numbers are drawn on their own, the first at once. Left out, they aren't."`
 	AutoInterval int     `json:"autoInterval,omitempty" doc:"Seconds between automatic draws, held between 5 and 600; 0 or left out for the default, 30."`
 	Replace      bool    `json:"replace,omitempty" doc:"End the game running, if one is, and start this one in its place. That game's winners are not logged, since nobody confirmed them (end-game does). Left out, a start while a game is running is refused (409)."`
@@ -42,7 +42,7 @@ type GameEndInput struct {
 
 // HalftimeAnswer is staff's answer to a game's half-time prompt.
 type HalftimeAnswer struct {
-	GameID   int64 `json:"gameId" doc:"The game whose prompt this answers (the prompt's gameId). An answer for a game no longer running, or a second answer, is refused (409)."`
+	GameID   int64 `json:"gameId" doc:"The game whose prompt this answers (the prompt's gameId). An answer for a game that isn't running, or a second answer, is refused (409)."`
 	Minigame bool  `json:"minigame" doc:"True to run a mini-game: players are told once the number that reached half-time has got to them, and the automatic draws stay paused. False for none: they start again if the prompt paused them."`
 }
 
@@ -124,7 +124,7 @@ func (h handlers) registerGame(api huma.API) {
 		Summary: "Answer the half-time prompt",
 		Description: "Once per game: every console hears it was answered, and by whom (halftime_resolved), and " +
 			"closes its prompt. A mini-game reaches the boards once the number that reached half-time has " +
-			"(minigame). An answer for a game no longer running, a second answer, or one before " +
+			"(minigame). An answer for a game that isn't running, a second answer, or one before " +
 			"half-time is refused (409). Answers the game.",
 		Tags: gameTags, Security: secured, Middlewares: page,
 		Errors: append(guarded, http.StatusConflict, http.StatusUnprocessableEntity),

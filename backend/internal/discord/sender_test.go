@@ -65,9 +65,9 @@ func TestPostDiscordWebhookComponentsFlag(t *testing.T) {
 }
 
 // TestPostDiscordWebhookLogsSuccess covers the "did that post actually go out?"
-// gap: a delivered post used to log nothing at all, so the only Discord posts
-// visible in the log were the ones that failed. Every feature posts through this
-// funnel, so this one line is what makes all of them auditable.
+// question: without a line for a delivered post, the only Discord posts in the log
+// would be the ones that failed. Every feature posts through this funnel, so this
+// one line is what makes all of them auditable.
 func TestPostDiscordWebhookLogsSuccess(t *testing.T) {
 	logged := captureLogs(t)
 
@@ -92,7 +92,7 @@ func TestPostDiscordWebhookLogsSuccess(t *testing.T) {
 	}
 
 	// A rejected post must NOT log here. The caller decides whether that is a retry
-	// (the scheduler) or a 502 (an admin's manual send) and logs it with that
+	// (the scheduler) or an error answer (an admin's manual send) and logs it with that
 	// context, so reporting it here too would double every failure in the log.
 	before := len(logged())
 	bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -210,10 +210,10 @@ func TestWithComponentsParam(t *testing.T) {
 	}
 }
 
-// TestPostDiscordWebhookSurfacesDiscordReason is the regression for the opaque-502
-// bug: when Discord rejects a post (e.g. a deleted webhook -> 404 "Unknown
-// Webhook"), the returned error must carry Discord's own reason and status, not a
-// bare status code - that reason is what the send handlers now log.
+// TestPostDiscordWebhookSurfacesDiscordReason checks that when Discord rejects a
+// post (e.g. a deleted webhook -> 404 "Unknown Webhook"), the returned error carries
+// Discord's own reason and status, not a bare status code - that reason is what the
+// send handlers log.
 func TestPostDiscordWebhookSurfacesDiscordReason(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.Copy(io.Discard, r.Body)
@@ -288,8 +288,8 @@ type timeoutError struct{}
 func (timeoutError) Error() string { return "i/o timeout" }
 func (timeoutError) Timeout() bool { return true }
 
-// TestNormalizeEmbedURL covers the fix for the Discord 400 "embeds invalid" bug:
-// an image URL whose filename has a space (or non-ASCII) must be percent-encoded
+// TestNormalizeEmbedURL covers Discord's 400 "embeds invalid" on a malformed image
+// URL: an image URL whose filename has a space (or non-ASCII) must be percent-encoded
 // so Discord accepts the embed, encoding must be idempotent, and a non-http value
 // must be rejected so the caller omits the field.
 func TestNormalizeEmbedURL(t *testing.T) {

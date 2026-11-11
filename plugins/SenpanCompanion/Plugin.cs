@@ -61,9 +61,9 @@ public sealed class Plugin : IDalamudPlugin
             this.config.Save();
         }
 
-        // HappyEyeballs improves IPv6/dual-stack connect behavior (Dalamud guidance). The
-        // timeout covers a call until its answer's headers arrive, so the live stream
-        // stays open past it.
+        // HappyEyeballs tries the IPv6 and IPv4 addresses in turn, so a dual-stack host with
+        // one dead path still connects. The timeout covers a call until its answer's
+        // headers arrive, so the live stream stays open past it.
         this.http = new HttpClient(new SocketsHttpHandler { ConnectCallback = this.happyEyeballs.ConnectCallback })
         {
             Timeout = TimeSpan.FromSeconds(15),
@@ -124,7 +124,7 @@ public sealed class Plugin : IDalamudPlugin
 
     private void OnCommand(string command, string args)
     {
-        // Both open the main window; settings are a tab inside it now.
+        // Both open the main window; settings are a tab inside it.
         if (args.Trim().Equals("config", StringComparison.OrdinalIgnoreCase))
             this.mainWindow.IsOpen = true;
         else

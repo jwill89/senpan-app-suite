@@ -21,7 +21,7 @@ $DeployServiceName = "<systemd-service-name>"          # e.g. myapp
 $DeployRemoteOptDir = "<dir-holding-the-app-binary>"   # e.g. /opt/myapp (its data folder is <this>/data)
 $DeployCertName = "<certificate-name>"                 # the vhost's certificate: its folder under /etc/letsencrypt/live, e.g. example.com
 # Optional: the site's public address, fetched after every deploy (the smoke check):
-# the page, /healthz, /api/version and the plugin index, as visitors reach them through
+# the page, /healthz, /api/v1/version and the plugin index, as visitors reach them through
 # Cloudflare. Unset, it is https://apps.senpan.cafe; set it only to check another.
 # $DeploySiteUrl = "<https-address-of-the-site>"       # e.g. https://example.com
 # Optional: the live SQLite database on the host. Leave it unset: the deploy reads it

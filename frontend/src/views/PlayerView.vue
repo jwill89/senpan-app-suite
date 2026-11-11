@@ -132,7 +132,7 @@ const calledActiveColumns = computed(() =>
 )
 
 /**
- * Leave the board and return home (App.vue disconnects the WS on the route
+ * Leave the board and return home (App.vue closes the live stream on the route
  * change). We navigate *first* and only clear the player's card/stamps once
  * we've actually left - so a navigation that can't complete (e.g. fetching the
  * lazily-loaded Home chunk fails on a direct link, or its hash is stale after a

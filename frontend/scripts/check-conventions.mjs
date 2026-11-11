@@ -2,12 +2,10 @@
 /**
  * CSS convention + token-drift gate.
  *
- * ESLint does not lint CSS and Prettier only formats it, so nothing enforced the
- * naming rules or kept the FIVE copies of the theme-token list in agreement. This
- * script does both. Run via `npm run lint:conventions`; wired into
- * scripts/check.ps1 and .github/workflows/ci.yml alongside lint/format.
- *
- * The rules it enforces are documented in AGENTS.md -> "CSS conventions".
+ * ESLint does not lint CSS and Prettier only formats it, so this script checks the
+ * naming rules, keeps the three copies of the theme-token list in agreement and holds
+ * the scoped-CSS ratchet. Run via `npm run lint:conventions`; scripts/check.ps1 and
+ * the CI workflow run it alongside lint/format.
  */
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -52,17 +50,17 @@ function declaredClasses(css) {
 const THIRD_PARTY = /^(vc-|milkdown|crepe|ProseMirror|v3-|cm-|fa-|svg-inline)/
 
 // ---------------------------------------------------------------- rule 1
-// Class names must describe a role, never an appearance. This is the rule the
-// retired `--gold` token broke: `.text-gold` named the colour, so renaming the
-// token to `--highlight` left the class lying about itself.
+// Class names must describe a role, never an appearance. A class named for a color
+// goes stale when the token behind it changes: `.text-gold` over `--highlight` would
+// lie about itself.
 const APPEARANCE =
   /(^|-)(gold|silver|bronze|red|green|blue|yellow|amber|orange|purple|pink|grey|gray|white|black|dim|bright)(-|$)/
 
 // ---------------------------------------------------------------- rule 2
 // One separator style. `-` joins a name to its part, `--` marks a modifier, and
-// `is-` marks state. BEM's `__` is not used: over half the CSS lives in Vue
+// `is-` marks state. BEM's `__` is not used: much of the CSS lives in Vue
 // `<style scoped>` blocks, where the compiler already guarantees uniqueness, so
-// `__` bought ceremony and no isolation.
+// `__` would add ceremony and no isolation.
 const BEM_ELEMENT = /__/
 
 // ---------------------------------------------------------------- rule 3
@@ -109,8 +107,8 @@ for (const f of srcFiles) {
 }
 
 // ---------------------------------------------------------------- rule 4
-// Every var(--x) must resolve. A typo'd or retired token silently falls back to
-// `inherit`, which is invisible until someone notices the wrong colour.
+// Every var(--x) must resolve. A typo'd or removed token silently falls back to
+// `inherit`, which is invisible until someone notices the wrong color.
 const rootTokens = new Set(
   (
     readFileSync(join(SRC, 'assets/styles/tokens.css'), 'utf8').match(/^\s+--[a-z0-9-]+(?=:)/gm) ||
@@ -134,8 +132,9 @@ for (const f of srcFiles) {
 }
 
 // ---------------------------------------------------------------- rule 5
-// The themeable token list is duplicated in five places. They must agree, or the
-// theme editor, the seeder and the contrast auditor disagree about what a theme is.
+// The themeable token list is duplicated in three places (tokens.css, the editor's
+// list, the backend's allowlist). They must agree, or the theme editor and the server
+// disagree about what a theme is.
 //
 // tokens.css also holds tokens that are deliberately NOT themeable; they are listed
 // here and must be absent from the themeable copies.
@@ -193,11 +192,10 @@ for (const [label, [path, extract]] of Object.entries(sources)) {
 // STATE or PART of `.x`; if no rule defines `.x` itself, the object has no box and
 // the states modify nothing.
 //
-// This exists because a bulk rule-dropper that matched only simple selectors
-// (`^\.name {`) was pointed at all of src/ and stripped the base rules out of
-// utilities.css while leaving their `:hover`/`.is-*` compounds behind. The file
-// still looked populated and every test passed - the objects just silently
-// rendered unstyled.
+// A bulk rule-dropper that matches only simple selectors (`^\.name {`) strips the
+// base rules out of a file while leaving their `:hover`/`.is-*` compounds behind.
+// The file still looks populated and every test passes - the objects just silently
+// render unstyled.
 //
 // "Defined" means a rule whose LAST compound is exactly `.x`, so a contextual base
 // (`.admin-login .box {}`) counts. Skipped: `is-*` (state never has a base) and
@@ -272,10 +270,9 @@ for (const [cls, files] of objectOf) {
 // No dead classes in markup. A class hard-coded in a static class="..." must be
 // styled by something, or the markup is describing an intent nothing delivers.
 //
-// This found 20: four spacing utilities that were never defined (`mt-4`, `mt-10`
-// on elements that then got no margin at all), `btn-secondary` on three Server
-// Logs buttons that consequently rendered with no fill, and fourteen inert
-// wrapper classes.
+// Typical finds: a spacing utility that is never defined (`mt-4`, `mt-10`: the
+// element gets no margin at all), a `btn-secondary` that renders with no fill, and
+// inert wrapper classes.
 //
 // Exempt: a class referenced from a .ts file is a deliberate test or JS hook
 // (ChangelogModal.spec.ts queries `.changelog-entry`), not dead markup. Only
@@ -293,16 +290,15 @@ for (const [cls, files] of staticAttr) {
 
 // ---------------------------------------------------------------- rule 8
 // Scoped CSS may only shrink. Shared styles are the default and a <style scoped>
-// block is the exception (AGENTS.md -> "The two tiers"), but nothing measured that,
-// so scoped CSS grew to near parity with the global stylesheets before anyone
-// noticed - the extraction that followed took days. A ratchet makes the next
+// block is the exception, but left unmeasured, scoped CSS grows toward parity with
+// the global stylesheets and extracting it later takes days. A ratchet makes a
 // regression cost one line of review instead.
 //
 // Two guards, because they fail differently:
 //   - GRANDFATHERED: a file already in the baseline may not exceed its recorded
-//     count. Legacy size is tolerated; growth is not.
-//   - CAPPED: a file NOT in the baseline is new work, and new work has no legacy
-//     to plead. It may not exceed NEW_FILE_CAP without an explicit re-baseline.
+//     count. Its recorded size is tolerated; growth is not.
+//   - CAPPED: a file NOT in the baseline is new work with no recorded size to plead.
+//     It may not exceed NEW_FILE_CAP without an explicit re-baseline.
 // The total is also pinned, so churn cannot move lines between files for free.
 //
 // Run `node scripts/check-conventions.mjs --update-baseline` after a reduction to
@@ -371,9 +367,8 @@ if (baseline) {
 // ---------------------------------------------------------------- rule 9
 // A themeable token must be consumed by something OTHER than the theme editor.
 // The editor renders every token by definition, so it cannot vouch for one: a
-// token only it references is a knob in the UI that changes nothing in the app.
-// `--accent-hover` and `--accent-2-hover` went the other way - dropped from the
-// stylesheets while still offered in the editor - and stayed broken for weeks.
+// token only it references is a knob in the UI that changes nothing in the app,
+// such as one dropped from the stylesheets while still offered in the editor.
 const EDITOR_OWNED = /(ThemeTokenEditor|theme-tokens|assets\/styles\/tokens\.css)/
 const consumerBlob = srcFiles
   .filter((f) => !EDITOR_OWNED.test(rel(f)))
@@ -390,9 +385,9 @@ for (const t of themeableCss) {
 // ---------------------------------------------------------------- rule 10
 // A festival-map pitch label is sized ONCE for the whole plan, and a pitch may
 // only trim that size - never derive its own. Sizing straight off the pitch's box
-// (`clamp(0.34rem, 26cqh, 0.85rem)`) made every pitch compute a different number
-// from its own height: a tall pitch and a short one on one plan drew their names
-// at 13.6px and 5.5px, and dragging a resize handle rescaled the text the whole
+// (`clamp(0.34rem, 26cqh, 0.85rem)`) makes every pitch compute a different number
+// from its own height: a tall pitch and a short one on one plan draw their names
+// at 13.6px and 5.5px, and dragging a resize handle rescales the text the whole
 // way. The three declarations below are what keep it uniform, and they only work
 // together, so they are checked as a set. It lives here rather than in a vitest
 // file because container-query units need real layout - jsdom resolves neither

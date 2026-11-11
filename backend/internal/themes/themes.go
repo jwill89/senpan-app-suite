@@ -14,9 +14,9 @@ import (
 )
 
 // TokenOrder is the canonical list of theme-overridable design tokens, in the
-// order they appear in :root (frontend app.css), without their leading "--". It is
-// the one allowlist: only these names are stored or emitted, and CSS is generated
-// in this order. --radius and --header-font are left out (the radius is a
+// order they appear in :root (frontend styles/tokens.css), without their leading
+// "--". It is the one allowlist: only these names are stored or emitted, and CSS is
+// generated in this order. --radius and --header-font are left out (the radius is a
 // structural default; the header font is an app setting).
 var TokenOrder = []string{
 	// Backgrounds

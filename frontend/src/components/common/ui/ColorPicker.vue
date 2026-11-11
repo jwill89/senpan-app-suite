@@ -2,7 +2,7 @@
 /**
  * Thin wrapper around the `@ckpack/vue-color` Chrome picker: lazy-loads it (so
  * its weight only lands when a picker actually opens), applies the shared
- * `.color-picker` theme skin (app.css), and normalizes the change payload to a
+ * `.color-picker` theme skin (admin.css), and normalizes the change payload to a
  * CSS `rgba()` string plus a `#rrggbb(aa)` hex. Used by the stamp-colour modal
  * (StampColorPicker).
  */

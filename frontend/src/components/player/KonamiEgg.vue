@@ -19,7 +19,7 @@
  * and on live with no deploy step.
  *
  * It is also warmed on mount at low priority rather than fetched when the egg
- * fires. Loading it lazily meant the first reveal of a session raced its own
+ * fires. Loading it lazily would make the first reveal of a session race its own
  * download - and the reveal unmounts at REVEAL_MS, which cancels an unfinished
  * request, so a slow fetch could never complete across repeated triggers.
  */

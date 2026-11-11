@@ -9,8 +9,8 @@ import (
 	"app-suite/internal/permissions"
 )
 
-// Each resource is heard by the pages that show it; the accounts and the
-// integrations by the admins alone; a book club's by that club.
+// TestResourceAudience checks that each resource is heard by the pages that show it;
+// the accounts and the integrations by the admins alone; a book club's by that club.
 func TestResourceAudience(t *testing.T) {
 	for resource, want := range map[string]live.Audience{
 		"raffles":       {Staff: true, Perms: []string{permissions.TeahouseRaffles}},
@@ -38,8 +38,9 @@ func TestResourceAudience(t *testing.T) {
 	}
 }
 
-// Each stream's events have names of their own, and the document says each event's
-// type is its name alone, so a generated client tells them apart.
+// TestEventsAreTypedInTheDocument checks that each stream's events have names of
+// their own, and that the document says each event's type is its name alone, so a
+// generated client tells them apart.
 func TestEventsAreTypedInTheDocument(t *testing.T) {
 	doc := Document()
 	for path, events := range map[string][]live.Message{"/events": staffEvents(), "/board/{id}/events": boardEvents()} {
@@ -70,8 +71,8 @@ func TestEventsAreTypedInTheDocument(t *testing.T) {
 	}
 }
 
-// Only the staff hear the cards, patterns, resources, tea rooms and the log; a board
-// hears its card deleted.
+// TestStreamsCarryTheirOwnEvents checks that only the staff hear the cards, patterns,
+// resources, tea rooms and the log, and that a board hears its card deleted.
 func TestStreamsCarryTheirOwnEvents(t *testing.T) {
 	staff, board := eventMap(staffEvents()), eventMap(boardEvents())
 	for _, name := range []string{"cards_changed", "patterns_changed", "resource_changed", "tea_room_unlocked", "log",

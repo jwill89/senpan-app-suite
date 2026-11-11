@@ -1,9 +1,7 @@
 /**
  * Vue Router configuration.
  *
- * Replaces the previous store-driven view switching (`ui.view` + `admin.adminTab`)
- * with real, linkable URLs and HTML5 history mode. The route map mirrors the old
- * view/tab surface exactly:
+ * Real, linkable URLs in HTML5 history mode. The main routes:
  *
  *   /                         -> Home
  *   /play/:cardId             -> Player board (loads the board by id)
@@ -103,7 +101,7 @@ const adminChildren: RouteRecordRaw[] = [
     meta: { tab: 'teahouse-tea-rooms' },
   },
   // Senpan Tea House -> Raffles. One manager (current cards + closed table) with
-  // detail/form Back sub-pages, replacing the former New/Open/Closed raffle tabs.
+  // detail/form Back sub-pages.
   {
     path: 'teahouse/raffles',
     name: 'admin-teahouse-raffles',
@@ -409,8 +407,8 @@ router.beforeEach(async (to) => {
   }
 
   if (to.meta.requiresAdmin) {
-    // The admin area now admits any logged-in (active) account; individual pages
-    // are gated per permission below.
+    // The admin area admits any logged-in (active) account; individual pages are
+    // gated per permission below.
     if (!auth.user) {
       return { name: 'admin-login', query: { redirect: to.fullPath } }
     }

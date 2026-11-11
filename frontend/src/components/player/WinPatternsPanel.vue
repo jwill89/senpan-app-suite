@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * Win patterns panel (player view) - shows the active win patterns for the
- * current game. Mirrors the original `.patterns-panel` block on the player view.
+ * current game.
  */
 import PatternMini from '@/components/common/PatternMini.vue'
 import type { GamePattern } from '@/api/client'

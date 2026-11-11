@@ -132,7 +132,7 @@ function hoursFor(occupant: PublicStallOccupant): EventTime[] {
  * The stylesheet needs it to size the WIDGET, not just the plan. The frame is
  * capped in height so a tall plan cannot push the page down, and it keeps the
  * plan's shape as it shrinks - but the toolbar above it and the stage around it
- * did not, so a square or portrait plan opened off to one side of a bar far wider
+ * do not, so a square or portrait plan would sit off to one side of a bar far wider
  * than itself, with dead page beside it. Handing the shape up lets the widget take
  * the same width, which is what makes a fitted map open with nothing around it.
  */
@@ -153,7 +153,7 @@ const modalPos = ref<{ x: number; y: number } | null>(null)
 /**
  * The STAGE, not the whole widget: the panel is positioned inside the stage, so a
  * drag measured against the widget would be offset by the toolbar sitting above it
- * - which showed up as the panel jumping down the moment it was grabbed.
+ * - the panel would jump down the moment it was grabbed.
  */
 const stageRef = useTemplateRef<HTMLElement>('stageRef')
 const modalRef = useTemplateRef<HTMLElement>('modalRef')
@@ -406,8 +406,8 @@ const linkTarget = computed(() => (props.embedded ? '_blank' : undefined))
                 </h3>
                 <!-- On its own row rather than trailing the name: whether the
                      stall is open right now is the first thing a visitor wants,
-                     and inline it was easy to miss at the end of a long name that
-                     had already wrapped. -->
+                     and inline it is easy to miss at the end of a long name that
+                     has already wrapped. -->
                 <p class="map-stall-status">
                   <span
                     class="status-badge"
@@ -416,8 +416,7 @@ const linkTarget = computed(() => (props.embedded ? '_blank' : undefined))
                     {{ occupant.isOpen ? 'open now' : 'closed' }}
                   </span>
                 </p>
-                <!-- The type alone. The affiliate used to be repeated here, one
-                     line under the name it now heads. -->
+                <!-- The type alone: the affiliate already heads the name above. -->
                 <p v-if="stallCaption(occupant)" class="map-stall-type">
                   <font-awesome-icon :icon="['fad', 'store']" />
                   <span>{{ stallCaption(occupant) }}</span>
@@ -504,7 +503,7 @@ const linkTarget = computed(() => (props.embedded ? '_blank' : undefined))
                   <!-- A RouterLink rather than a button, so it carries a real href:
                        embedded, `target` makes it open outside the frame, and
                        vue-router leaves a _blank link to the browser. On our own
-                       page it navigates in place as before. -->
+                       page it navigates in place. -->
                   <RouterLink
                     v-if="!$slots['raffle-action']"
                     class="link-btn"

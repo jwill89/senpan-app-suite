@@ -385,7 +385,7 @@ func TestAccount_ChangePassword(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	// Old password no longer works; new one does (fresh client).
+	// The old password is refused; the new one signs in (fresh client).
 	c := newClient(t, env)
 	resp = postAs(t, c, env, "/api/v1/auth/login", map[string]string{"username": seedAdminUser, "password": seedAdminPass})
 	if resp.StatusCode != http.StatusUnauthorized {
@@ -426,8 +426,8 @@ func TestAccount_ChangePasswordEndsOtherSessions(t *testing.T) {
 // as well as its id; one minted without the epoch reads back as epoch 0, which the
 // server refuses for any account whose password has ever changed. The failure is
 // nasty because the sign-in itself looks fine - it answers 200 with the account -
-// and only the NEXT request finds nobody. That is what a passkey sign-in once did
-// for every account past epoch 0, because it stamped the id and not the epoch.
+// and only the NEXT request finds nobody. A sign-in that stamped the id and not the
+// epoch would fail this way for every account past epoch 0.
 func TestLoginAfterPasswordChangeStampsEpoch(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
@@ -449,15 +449,14 @@ func TestLoginAfterPasswordChangeStampsEpoch(t *testing.T) {
 	}
 }
 
-// TestPermission_EveryPageGuardsAReadRoute is the coverage the suite was missing.
-// Only a handful of the grantable permission keys had ANY negative test, so a guard
-// silently dropped or loosened on the other features would have gone unnoticed -
-// and the whole point of per-page permissions is that a grantee of one page cannot
-// reach another.
+// TestPermission_EveryPageGuardsAReadRoute gives every grantable permission key a
+// negative test: without one, a guard silently dropped or loosened on a feature
+// would go unnoticed - and the whole point of per-page permissions is that a
+// grantee of one page cannot reach another.
 //
 // One representative READ route per page: a GET is enough to prove the guard is
 // wired, needs no fixture, and leaves nothing behind if the guard is broken. Every
-// route listed here was confirmed against its handler to be permission-gated;
+// route listed here is permission-gated in its handler;
 // deliberately public reads are NOT listed, since asserting 403 on them would be
 // asserting the wrong thing: GET /api/v1/game is public and varies what it shows by
 // role (staff with the Game page see numbers inside the draw delay), and GET

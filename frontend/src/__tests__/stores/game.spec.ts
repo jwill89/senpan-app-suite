@@ -67,8 +67,8 @@ describe('loadWinnersLog', () => {
   /**
    * Every winners-log DELETE echoes back on the live stream as a resource_changed
    * and admin.ts calls loadWinnersLog on each one - so clearing a handful of
-   * entries started that many full re-pages of an unbounded log at once, all
-   * racing to write the same ref. Overlapping calls now share one walk.
+   * entries would start that many full re-pages of an unbounded log at once, all
+   * racing to write the same ref. Overlapping calls share one walk.
    */
   it('coalesces overlapping loads into a single pass', async () => {
     const game = useGameStore()
@@ -80,8 +80,8 @@ describe('loadWinnersLog', () => {
   })
 
   it('fetches page 1 first, then every remaining page at once', async () => {
-    // 3 pages of 200. Walking them serially made a venue with a couple of years of
-    // history wait on that many round trips IN SEQUENCE before a row painted, so
+    // 3 pages of 200. Walking them serially would make a venue with a couple of years
+    // of history wait on that many round trips IN SEQUENCE before a row painted, so
     // the assertion has to be about ORDERING, not just the call count - a serial
     // loop issues exactly the same three requests.
     const order: string[] = []

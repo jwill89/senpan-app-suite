@@ -3,8 +3,7 @@
  * Centered placeholder for empty lists and tables. The message comes from the
  * `text` prop or the default slot; an optional `icon` renders a large muted
  * glyph above it, `hint` (prop or `#hint` slot) adds a secondary line, and the
- * `#action` slot holds an optional call-to-action button. Replaces the ad-hoc
- * `.msg-block` placeholders.
+ * `#action` slot holds an optional call-to-action button.
  */
 import type { IconPrefix } from '@fortawesome/fontawesome-svg-core'
 

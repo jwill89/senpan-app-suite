@@ -25,8 +25,9 @@ type CollectStampParams struct {
 	StampType       string
 }
 
-// Keeps the participant's, the stall's and the stamp's type as they are now. A card
-// holds a stamp once: the unique pair makes a second collect insert nothing.
+// Records the participant's name, the stall's name and the stamp's type as they are
+// when the stamp is collected. A card holds a stamp once: the unique pair makes a
+// second collect insert nothing.
 func (q *Queries) CollectStamp(ctx context.Context, arg CollectStampParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, collectStamp,
 		arg.RallyID,

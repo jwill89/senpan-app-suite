@@ -12,8 +12,8 @@ func TestParticipantLabel(t *testing.T) {
 	}{
 		{"Aria Ashwood", "Gilgamesh", "Aria Ashwood @ Gilgamesh"},
 		{"  Aria Ashwood  ", "  Gilgamesh  ", "Aria Ashwood @ Gilgamesh"},
-		// A record written before worlds had their own column, or one staff typed
-		// by hand, must not render a dangling separator.
+		// A record with no world, such as one staff typed by hand, must not render a
+		// dangling separator.
 		{"Aria Ashwood", "", "Aria Ashwood"},
 		{"Aria Ashwood", "   ", "Aria Ashwood"},
 	} {

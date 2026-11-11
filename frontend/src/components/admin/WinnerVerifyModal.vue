@@ -1,8 +1,7 @@
 <script setup lang="ts">
 /**
  * Winner verification modal (admin) - shows a winning card's board with the
- * cells that complete the win pattern highlighted. Mirrors the original
- * "Winner verification modal" block. Driven by game.winnerPreview.
+ * cells that complete the win pattern highlighted. Driven by game.winnerPreview.
  */
 import ModalOverlay from '@/components/common/ModalOverlay.vue'
 import BingoBoard from '@/components/common/BingoBoard.vue'

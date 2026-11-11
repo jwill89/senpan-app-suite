@@ -400,11 +400,11 @@ export const usePatternsStore = defineStore('patterns', () => {
   /**
    * Keep the drag view in step with server state. `editableGroups` holds shallow
    * COPIES so vue-draggable-plus can reorder them freely, which means it silently
-   * goes stale the moment `patterns` changes underneath it - and it used to be
-   * rebuilt in only two places, so deleting a pattern, renaming one, or reading the
-   * list again after a live change all left the admin looking at a list that no longer
-   * matched what would be saved. Watching the source instead of remembering to call
-   * rebuild at each write site also covers whatever write path gets added next.
+   * goes stale the moment `patterns` changes underneath it: deleting a pattern,
+   * renaming one, or reading the list again after a live change would leave the
+   * admin looking at a list that no longer matches what would be saved. Watching
+   * the source instead of remembering to call rebuild at each write site also
+   * covers whatever write path gets added next.
    *
    * Deep, because a rename mutates a pattern object in place rather than replacing
    * the array. The list is a few dozen rows, so the traversal is not a concern.

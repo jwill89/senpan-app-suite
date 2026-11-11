@@ -55,7 +55,7 @@ describe('auditTheme', () => {
 
   it('covers the B-I-N-G-O header letters and the button hover states', () => {
     const ids = auditTheme(defaultTokens()).results.map((r) => r.id)
-    // Pairings that earlier sweeps missed - guard against regressions.
+    // Pairings that are easy to miss - guard against regressions.
     expect(ids).toContain('bingo-top')
     expect(ids).toContain('bingo-bottom')
     expect(ids).toContain('primary-btn-hover')
@@ -63,7 +63,7 @@ describe('auditTheme', () => {
   })
 
   it('flags the BINGO header when --highlight matches a dark board gradient', () => {
-    // The Summer-style bug: a dark highlight on a dark board frame.
+    // A Summer-style theme: a dark highlight on a dark board frame.
     const report = auditTheme({
       ...defaultTokens(),
       highlight: '#063644',

@@ -9,17 +9,16 @@ import "strings"
 // two separate fields. This file is where those two become one string and back, so
 // a person written by one system is recognisable to the others.
 //
-// The separator is " @ ", the format FFXIV players already use and the one the
-// sign-up forms have always suggested. A world never contains it, which is what
-// makes the split unambiguous.
+// The separator is " @ ", the format FFXIV players use and the sign-up forms
+// suggest. A world never contains it, which is what makes the split unambiguous.
 
 // participantSep separates a character name from its home world.
 const participantSep = " @ "
 
 // ParticipantLabel renders a name and world the single way every system displays
 // them: "Firstname Lastname @ World". A blank world yields just the name, so a
-// pre-picker record (or one staff entered by hand) reads as what it is rather than
-// trailing an empty separator.
+// record with no world (one staff entered by hand, say) reads as what it is rather
+// than trailing an empty separator.
 func ParticipantLabel(name, world string) string {
 	name, world = strings.TrimSpace(name), strings.TrimSpace(world)
 	if world == "" {
@@ -29,8 +28,7 @@ func ParticipantLabel(name, world string) string {
 }
 
 // SplitParticipantLabel is ParticipantLabel's inverse, for input that arrives as
-// one string - a lookup box, or a record written before the world had its own
-// column.
+// one string - a lookup box, or a record that kept the label whole.
 //
 // It splits on the LAST separator: a world never contains one, so anything earlier
 // belongs to the name. With no separator the whole string is the name and the world

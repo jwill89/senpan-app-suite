@@ -1,1 +1,1 @@
-# Keep the raffle uploads directory in git so it exists at the document root.
+# Keeps the raffle uploads directory in git so it exists in the images/ tree copied to a new host.

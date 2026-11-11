@@ -34,7 +34,7 @@ import { useUiStore } from './ui'
 // Safe cell readers for winner verification. The winner's board/pattern grids come
 // from the server; a malformed (non-5x5) grid would otherwise throw on a missing
 // row. Typed `unknown` on purpose so the shape checks are genuine (not flagged as
-// unnecessary under the project's strict-but-not-noUncheckedIndexedAccess types).
+// unnecessary by the type checker).
 function patternCell(grid: unknown, r: number, c: number): boolean {
   if (!Array.isArray(grid)) {
     return false
@@ -630,17 +630,9 @@ export const useGameStore = defineStore('game', () => {
   // -- Winners log ------------------------------------------------------------
 
   /**
-   * Loads the whole winners log so the table can sort and paginate it client-side
-   * like every other admin table.
-   *
-   * The API caps `perPage` at 200 (backend/internal/api/winners.go), so this
-   * pages through until it has `total` rows rather than requesting one huge page
-   * - asking for more than the cap is refused (422).
-   */
-  /**
    * Coalesces overlapping loads. Every winners-log DELETE echoes back on the live
    * stream as a resource_changed, and admin.ts calls this on each one - so
-   * clearing a handful of entries used to start that many full re-pages at once,
+   * clearing a handful of entries would start that many full re-pages at once,
    * all racing to write the same ref. Callers still get a promise that resolves
    * when the data is there; they just share one walk of the log.
    */
@@ -687,6 +679,14 @@ export const useGameStore = defineStore('game', () => {
     }, 250)
   }
 
+  /**
+   * Loads the whole winners log so the table can sort and paginate it client-side
+   * like every other admin table.
+   *
+   * The API caps `perPage` at 200 (backend/internal/api/winners.go), so this
+   * pages through until it has `total` rows rather than requesting one huge page
+   * - asking for more than the cap is refused (422).
+   */
   async function loadWinnersLogOnce(): Promise<void> {
     winnersLogLoading.value = true
     try {
@@ -699,9 +699,9 @@ export const useGameStore = defineStore('game', () => {
         )
 
       // Page 1 first, because only it can tell us how many there are - then the
-      // rest AT ONCE. Walking them serially meant a venue with a couple of years
-      // of history waited on fifteen round trips in sequence before a single row
-      // painted; this is two round trips regardless of size.
+      // rest AT ONCE. Walking them serially would make a venue with a couple of years
+      // of history wait on fifteen round trips in sequence before a single row
+      // paints; this is two round trips regardless of size.
       const first = await pageAt(1)
       const total = first.total || first.entries.length
       const pages = Math.ceil(total / PER_PAGE)
@@ -765,7 +765,7 @@ export const useGameStore = defineStore('game', () => {
     ) {
       return 0
     }
-    // Concurrently, not one after another: deleting forty selected rows used to be
+    // Concurrently, not one after another: deleting forty selected rows would be
     // forty sequential round trips before the single reload at the end. allSettled
     // so one failure doesn't abandon the rest, and the errors are reported once
     // rather than as a stack of toasts.

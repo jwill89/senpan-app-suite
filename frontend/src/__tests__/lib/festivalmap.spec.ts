@@ -218,15 +218,15 @@ describe('formatEventTime', () => {
   })
 
   it('drops the prefix entirely when unlabeled, rather than leaving a stray dash', () => {
-    // Checked on an OPEN-ENDED range: a range with an end now legitimately
-    // contains " - " between its two times, so that is no longer the tell.
+    // Checked on an OPEN-ENDED range: a range with an end legitimately contains
+    // " - " between its two times, so that would be no tell.
     const line = formatEventTime(time({ start: '2026-08-01T18:00:00Z' }))
     expect(line.startsWith('-')).toBe(false)
     expect(line).not.toContain(' - ')
   })
 
   it('reads as a start time alone when there is no end', () => {
-    // The two ends are joined by a dash now, not the word "to" - see
+    // The two ends are joined by a dash, not the word "to" - see
     // formatEventRange. An open-ended range still shows one moment.
     const withEnd = formatEventTime(
       time({ start: '2026-08-01T18:00:00Z', end: '2026-08-01T22:00:00Z' }),
@@ -267,11 +267,12 @@ describe('isWithin / isWithinAny', () => {
 })
 
 /**
- * The public map opened cropped, could not be dragged, and "Fit" only restored the
- * same crop. All three came from one assumption: that the canvas exactly fills the
- * viewport. It does not - the viewport is a fixed shape while the canvas takes its
- * height from the plan image - so a plan taller than that shape overflowed with a
- * pan range of zero and a zoom floor of 1 that could not reach it.
+ * The canvas does not exactly fill the viewport: the viewport is a fixed shape while
+ * the canvas takes its height from the plan image. A plan taller than that shape
+ * overflows, so the pan range and the zoom floor come from the real overflow;
+ * assuming an exact fill gives a pan range of zero and a zoom floor of 1 that cannot
+ * reach the whole plan, and the map opens cropped, cannot be dragged, and "Fit" only
+ * restores the same crop.
  */
 describe('festival map pan and zoom', () => {
   const viewport = { width: 1152, height: 720 }
@@ -302,8 +303,8 @@ describe('festival map pan and zoom', () => {
     expect(clampPan({ x: 0, y: -99999 }, canvas, viewport, 1).y).toBeCloseTo(overflowY, 5)
     // Dragged past the top edge: the leading edge cannot come inside the viewport.
     expect(clampPan({ x: 0, y: 500 }, canvas, viewport, 1).y).toBe(0)
-    // In range: left where the visitor put it. This is the case that used to be
-    // clamped to 0, which is why dragging appeared to do nothing.
+    // In range: left where the visitor put it. Clamping it to 0 would make dragging
+    // appear to do nothing.
     expect(clampPan({ x: 0, y: -300 }, canvas, viewport, 1).y).toBe(-300)
   })
 
@@ -327,16 +328,16 @@ describe('festival map pan and zoom', () => {
 describe('map labelling', () => {
   /**
    * The map labels a pitch by its AFFILIATE. A stall title is optional, so
-   * labelling by title left untitled pitches blank - and the affiliate is who a
+   * labeling by title would leave untitled pitches blank - and the affiliate is who a
    * visitor is actually looking for.
    */
   it('labels by affiliate, falling back to the occupant own title', () => {
     expect(occupantMapLabel({ affiliate: { name: 'Flora Teahouse' } })).toBe('Flora Teahouse')
     expect(occupantMapLabel({ affiliateName: 'Lunaria' })).toBe('Lunaria')
-    // No affiliate: a record from before one was required. Naming it after the
-    // VENUE was wrong - a pitch without an affiliate is not necessarily the
-    // venue's own, and one such pitch titled "Atelier YAO" was drawn as "Senpan
-    // Tea House". Its own title is the only thing that names it.
+    // No affiliate (an occupant may have none). Naming it after the VENUE would be
+    // wrong - a pitch without an affiliate is not necessarily the venue's own, and
+    // one titled "Atelier YAO" would be drawn as "Senpan Tea House". Its own title
+    // is the only thing that names it.
     expect(occupantMapLabel({ affiliate: null, title: 'Atelier YAO' })).toBe('Atelier YAO')
     expect(occupantMapLabel({ affiliate: { name: '   ' }, title: 'Atelier YAO' })).toBe(
       'Atelier YAO',
@@ -361,9 +362,9 @@ describe('map labelling', () => {
   })
 
   /**
-   * Admins write the day into the title - the form has always suggested exactly
-   * "Flora Teahouse (Day 1)". This only moves where that parenthetical renders; it
-   * is never invented for a title that has none.
+   * Admins write the day into the title, as in "Flora Teahouse (Day 1)". This only
+   * moves where that parenthetical renders; it is never invented for a title that
+   * has none.
    */
   it('splits a trailing parenthetical off a title', () => {
     expect(splitTitleNote('Flora Teahouse (Day 1)')).toEqual({
@@ -390,9 +391,9 @@ describe('map labelling', () => {
 
 describe('map frame shape', () => {
   /**
-   * The frame used to be a fixed 16/10 whatever the plan was, so any other shape
-   * had to be zoomed out to fit and sat letterboxed between empty margins. Taking
-   * the shape from the plan means it fills the frame at the size it was drawn.
+   * The frame is not a fixed 16/10 whatever the plan is: any other shape would have
+   * to be zoomed out to fit and sit letterboxed between empty margins. Taking the
+   * shape from the plan means it fills the frame at the size it was drawn.
    */
   it('takes an ordinary plan of any shape at its own aspect', () => {
     expect(viewportAspect(1.5)).toBe(1.5) // 3:2
@@ -470,7 +471,7 @@ describe('festival datetime formatting', () => {
   })
 
   it('has no seconds and no slash-dates anywhere', () => {
-    // What toLocaleString() used to produce: "8/30/2026, 8:00:00 PM".
+    // Not what toLocaleString() produces: "8/30/2026, 8:00:00 PM".
     const line = formatEventRange('2026-08-30T20:00:00Z', '2026-08-31T01:00:00Z')
     expect(line).not.toMatch(/\d+\/\d+\/\d+/)
     expect(line).not.toMatch(/:\d{2}:\d{2}/)
@@ -507,9 +508,8 @@ describe('isDayRestricted', () => {
   })
 
   it('is false for an occupant present on every day', () => {
-    // The case that prompted this: one affiliate covering both days was still
-    // labelled "(DAY 1)" because the text came from the title rather than the
-    // schedule.
+    // Guards against one affiliate covering both days being labeled "(DAY 1)"
+    // because the text came from the title rather than the schedule.
     expect(isDayRestricted({ times: days }, days)).toBe(false)
   })
 
@@ -539,10 +539,10 @@ describe('the day named under a pitch label', () => {
   const day2 = d('Day 2', '2026-08-31T18:00:00Z', '2026-09-01T02:00:00Z')
 
   /**
-   * The reported bug: a pitch shared by two vendors, one of them there for a
-   * single day, named no day at all. Two things were in the way - the festival
-   * declared no days of its own, so nothing counted as restricted; and the note's
-   * wording came from the title, which a second vendor rarely has it typed into.
+   * A pitch shared by two vendors, one of them there for a single day, must name
+   * that day. Two things can stand in the way - a festival that declares no days of
+   * its own, so nothing counts as restricted; and note wording taken from the
+   * title, which a second vendor rarely has it typed into.
    */
   it('names the day for each vendor of a two-vendor pitch, with no festival days set', () => {
     const saturday = { title: 'Tea Bar', times: [day1] }
@@ -555,10 +555,9 @@ describe('the day named under a pitch label', () => {
   })
 
   /**
-   * The live-site case. A festival names its days ("Day 1", "Day 2") and its
-   * vendors just carry hours - so the vendor's own ranges are unlabelled, and
-   * reading the name off the vendor found nothing to say. The day a vendor
-   * OVERLAPS is what names it.
+   * A festival names its days ("Day 1", "Day 2") and its vendors just carry hours -
+   * so the vendor's own ranges are unlabeled, and reading the name off the vendor
+   * finds nothing to say. The day a vendor OVERLAPS is what names it.
    */
   it('names the day from the festival when the vendor labels no hours of its own', () => {
     const unlabelled = (start: string, end: string) => ({ label: '', start, end })
@@ -582,7 +581,7 @@ describe('the day named under a pitch label', () => {
   })
 
   it('still names nothing for a vendor there every day', () => {
-    // The case that started this: one vendor across both days, titled "(Day 1)".
+    // One vendor across both days, titled "(Day 1)".
     const allFestival = { title: 'Tea Bar (Day 1)', times: [day1, day2] }
     expect(occupantDayNote(allFestival, [day1, day2])).toBe('')
     // ...and one keeping no hours of its own follows the festival, so likewise.
@@ -601,15 +600,14 @@ describe('the day named under a pitch label', () => {
 })
 
 /**
- * The exact values from the production festival, which is what finally explained
- * this. Each "day" is entered as a broad ~24h span, so consecutive days RUN INTO
- * one another: Day 1 ends 2026-09-01T19:35 while Day 2 has already begun at
- * 19:39... and Lunaria, booked for Day 1, ends at 19:48 - nine minutes inside Day
- * 2's window.
+ * The exact values from a production festival. Each "day" is entered as a broad
+ * ~24h span, so consecutive days RUN INTO one another: Day 1 ends 2026-09-01T19:35
+ * while Day 2 has already begun at 19:39... and Lunaria, booked for Day 1, ends at
+ * 19:48 - nine minutes inside Day 2's window.
  *
- * Matching on any overlap at all therefore put Lunaria on both days: it appeared
- * under the Day 2 filter, and named no day at all, because it looked like it was
- * there throughout. Each range now belongs to the ONE day it overlaps most.
+ * Matching on any overlap at all would put Lunaria on both days: it would appear
+ * under the Day 2 filter, and name no day at all, because it would look like it was
+ * there throughout. Each range belongs to the ONE day it overlaps most.
  */
 describe('production festival day assignment', () => {
   const day1 = {
@@ -639,13 +637,13 @@ describe('production festival day assignment', () => {
   })
 
   it('names the day under each vendor', () => {
-    // The reported symptom: Lunaria showed no "(Day 1)".
+    // Lunaria carries its "(Day 1)".
     expect(occupantDayNote(lunaria, days)).toBe('Day 1')
     expect(occupantDayNote(moonlight, days)).toBe('Day 2')
   })
 
   it('shows each vendor only under its own day filter', () => {
-    // The other symptom: Lunaria appeared as if open on both days.
+    // Lunaria must not appear as if open on both days.
     const both = [lunaria, moonlight]
     expect(occupantsOnDayFn(both, day1, days).map((o) => o.title)).toEqual(['Lunaria'])
     expect(occupantsOnDayFn(both, day2, days).map((o) => o.title)).toEqual(['Moonlight Tides'])

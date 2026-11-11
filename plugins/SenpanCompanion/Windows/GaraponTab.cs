@@ -19,7 +19,7 @@ namespace SenpanCompanion.Windows;
 /// <list type="bullet">
 /// <item><see cref="DrawManage"/> - issue a per-player drawing link (nearby-player
 /// quick-fill, optional /tell, copy link + the paired stamp-card link). Deliberately
-/// create-only: no edit/delete, mirroring "limited to creating new entries".</item>
+/// create-only: links are never edited or deleted from in-game.</item>
 /// <item><see cref="DrawLog"/> - the read-only draw log for the picked garapon.</item>
 /// </list>
 /// When the garapon is linked to an open Stamp Rally, the server auto-issues the

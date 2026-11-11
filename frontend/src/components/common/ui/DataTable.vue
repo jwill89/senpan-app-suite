@@ -46,9 +46,9 @@ export interface DataTableView {
  * pipeline cannot be split between the table and its parent.
  *
  * The pipeline is TanStack Table, which is headless: it supplies the row model
- * only. Every element below is still our own markup with our own classes, and
+ * only. Every element below is our own markup with our own classes, and
  * nothing here is styled by a library - the theme tokens and the WCAG audit see
- * this table exactly as before.
+ * this table's own markup.
  *
  * Core usage: `columns` + `rows`, plus any of
  *  - `filter` / `filter-fn` - search text and how a row matches it (default:
@@ -134,7 +134,7 @@ const emit = defineEmits<{ 'update:view': [view: DataTableView] }>()
 
 // v9 composes the engine from explicit features instead of bundling everything:
 // each capability is opted into here, and a row model must come AFTER the feature
-// it depends on. The core row model is implicit now, so it has no entry. This is
+// it depends on. The core row model is implicit, so it has no entry. This is
 // the whole engine this table uses - filtering (global + per-column facets),
 // sorting, paging, and interactive column resizing (which needs BOTH the sizing
 // and resizing features).
@@ -190,8 +190,7 @@ function asText(v: unknown): string {
 /**
  * Locale- and numeric-aware compare on the raw cell value, which orders text,
  * numbers and this app's fixed-format timestamps correctly. Kept explicit rather
- * than using a built-in so sorting behaves identically to the hand-written
- * comparators this replaced.
+ * than using a built-in so every table sorts the same way.
  */
 function compareCells(a: unknown, b: unknown): number {
   return asText(a).localeCompare(asText(b), undefined, { numeric: true })
@@ -234,7 +233,7 @@ const tableColumns = computed<ColumnDef<typeof features, T>[]>(() =>
     size: col.width ? Number.parseInt(col.width, 10) || 150 : 150,
     // A first click is always ascending. TanStack otherwise flips numeric columns
     // to descending-first, which would silently reverse the meaning of a click on
-    // half the admin tables relative to how they behaved before.
+    // half the admin tables.
     sortDescFirst: false,
     sortFn: (rowA, rowB, id) => compareCells(rowA.getValue(id), rowB.getValue(id)),
     filterFn: (row, id, value: string) => asText(row.getValue(id)) === value,
@@ -322,8 +321,6 @@ const facets = computed<Record<string, DataFacet[]>>(() => {
   return out
 })
 
-// Any change that can shrink the result set returns to page 1; a page left past
-// the end (e.g. after filtering) clamps back into range.
 // Anything that changes which rows land on a page sends you back to page 1:
 // a filter, a facet, or a new page size. (Sorting does the same, below.)
 watch(
@@ -334,6 +331,7 @@ watch(
   { deep: true },
 )
 watch(sorting, () => (page.value = 1))
+// A page left past the end (e.g. after filtering) clamps back into range.
 watch(
   totalPages,
   (n) => {

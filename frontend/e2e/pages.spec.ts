@@ -5,8 +5,8 @@ import { PLAYER, expect, test, title } from './fixtures.ts'
 /**
  * The public pages, each opened by its own address: it shows its heading and what the
  * server sent for it, then passes axe at WCAG 2.2 AA with its best practices. Everything
- * is found by role and name, never by a class, so the suite still holds when a shared
- * component kit replaces the hand-written components.
+ * is found by role and name, never by a class, so the suite holds whatever the markup
+ * is built from.
  */
 const pages: { path: string; heading: string; shows: (page: Page) => Promise<void> }[] = [
   {

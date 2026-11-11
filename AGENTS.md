@@ -100,7 +100,8 @@ immediately**. See **Authentication & authorization** below.
 +-- shared/                           <- the shared-tooling submodule (lint configs, the CI workflows' scripts, SharedDeploy, repo files) - see **Shared tooling**
 +-- Taskfile.yml                      <- day-to-day commands (`task` lists them); includes shared/repo/Taskfile.yml as shared:*
 +-- scripts/                          <- check.ps1 (everything CI runs, on demand) + deploy.ps1 (on SharedDeploy; settings in the untracked deploy.config.ps1)
-+-- deploy/                           <- host artifacts: apache-vhost.conf (the three names' VirtualHosts, installed by the deploy), senpan.service (the unit's template), persistent images/ + README
++-- deploy/                           <- host artifacts: apache-vhost.conf (the three names' VirtualHosts, installed by the deploy), senpan.service (the unit's template), persistent images/
++-- docs/ops.md                       <- the deploy and host guide: the data folder, the vhost, one-time server setup, each deploy, backups, and the steps a release needs beyond the deploy (Upgrading to x.y.z)
 +-- backend/                          <- Go backend
 |   +-- main.go                       <- Entry point: flags, DB init, the embedded SPA, server start
 |   +-- sqlc.yaml                     <- sqlc 1.31.1: internal/db/queries/*.sql against schema.sql -> internal/db (`task gen`)
@@ -188,12 +189,9 @@ immediately**. See **Authentication & authorization** below.
 
 Each place below is code that still does what the shared rules now rule out, checked against the code on 2026-11-07. The rest of this file describes the code as it is today. When a follow-up lands, its line here goes, and the lines that describe the old way change with it.
 
-Decided, and staying:
-
-- **The vhost ships with the deploy.** Every app deploy installs `deploy/apache-vhost.conf` as `/etc/apache2/sites-available/<service>.conf` where it differs (`Install-ServiceBinary -Vhost`), checked with `apachectl configtest`, so the droplet runs what the repository says (shared-tooling `PLAN.md`, release E, as Home Library does). The standards keep the vhost on the host, changed there by hand, with a template in the repo (`deploy-and-ops.md`). The unit is still not shipped; 5.2.0's move edited its `-webroot` and `ReadWritePaths` lines once, and the template follows.
-
 Found in the docs and checked against the code, with no follow-up planned yet. The owner decides whether each moves or stays; one that stays gets its reason here:
 
+- **The unit is not shipped.** Every app deploy installs the vhost from `deploy/apache-vhost.conf` where it differs (`Install-ServiceBinary -Vhost`), checked with `apachectl configtest`, but the systemd unit is changed on the host by hand: `deploy/senpan.service` is a template, and the deploy only reads the running unit. The guide ships the units from repo templates too, with the host values filled from the deploy config.
 - **Client address.** `logClientIP` (`server/ratelimit.go`) trusts `CF-Connecting-IP`, then the leftmost `X-Forwarded-For`, from a loopback peer. The guide has Apache restore the address with `mod_remoteip` and the app read the last `X-Forwarded-For` entry, never `CF-Connecting-IP`; the droplet's `mod_remoteip` change comes first.
 - **Bootstrap admin.** Migration v22 seeds `admin`/`admin`, protected by its name. The guide makes the first admin with a command run on the host, and protects the owner accounts named in config. It stays (decided 2026-11-07): the seeded password is changed as soon as an install creates it, and otherwise the account serves only development.
 - **Content-Security-Policy.** The app sets the policy on the SPA (`internal/web`), the one Apache set before 4.0.0, with `style-src 'unsafe-inline'` and `https:` sources. The guide sets it in the app with a per-response nonce, never `'unsafe-inline'`, naming only the hosts the app uses.
@@ -237,7 +235,7 @@ All dependencies are wired in `main.go` and passed via structs (no globals, no s
 
 **Background scheduler**: `main.go` launches `RunAnnouncementScheduler` (`server/announcements.go`, on sqlc, posting through the `discord.Sender`) in a goroutine tied to a shutdown-cancelled context. It uses the ticker/sweep loop in `scheduler.go` (`runScheduler`): ticks every 30s (and sweeps once on startup to catch up after downtime), posts due announcements to their type's webhook, and is resilient - an announcement whose webhook is unset is left pending, a failed post is retried next tick, and `skip_count`/recurrence advance the cursor without losing the schedule. `skip_count` is how many upcoming occurrences to pass over (each skipped one decrements it), so a Friday+Saturday announcement can sit out a whole weekend in one go; it is schedule-cursor state, written ONLY by the skip operation and the scheduler - saving an announcement deliberately leaves it alone, since writing it from the form is what used to clear a pending skip whenever an admin saved an unrelated edit. After a sweep that wrote anything (posted, consumed a skip, gave up) it sends `resource_changed` `announcements` once, so open Announcements pages read the list again. Wall-clock times are resolved against each announcement's IANA timezone (DST-safe, in `internal/schedule`) and stored as UTC; `tzdata.go` embeds the zone database so this works on Windows hosts too.
 
-**Logging & observability**: the app logs **structured JSON** via `slog` (set up in the `logging` package). Output goes to **stdout** (captured by journald) and, when `-log-file` is set (default `/var/log/senpan/senpan.log`), to a **rotating file** (timberjack: daily-midnight rotation, zstd backups, bounded retention) - the file sink degrades gracefully to stdout-only if it can't be created (e.g. a read-only `/var/log` under `ProtectSystem=strict`; the systemd unit needs `LogsDirectory=senpan` - see `deploy/README.md`). The request-logging middleware records `method`/`path`/`status`/`duration`/`ip` per request, using the **real client IP** (`CF-Connecting-IP` behind Cloudflare, not the proxy's `[::1]`). Admins view logs **without SSH**: `GET /api/v1/logs` tails the file (level/text/limit filters), and every line is also pushed to the admins' event streams as a `log` event so **System -> Logs** live-tails them (see the tab in the frontend section). The minimum level is a `slog.LevelVar` flipped at runtime by `PUT /api/v1/logs/level` - turn **DEBUG** on to capture a richer `request detail` line per request plus DEBUG logs across the services, then back off, with no restart. The same NDJSON parse (`model.ParseLogEntry`) backs both the REST tail and the live feed.
+**Logging & observability**: the app logs **structured JSON** via `slog` (set up in the `logging` package). Output goes to **stdout** (captured by journald) and, when `-log-file` is set (default `/var/log/senpan/senpan.log`), to a **rotating file** (timberjack: daily-midnight rotation, zstd backups, bounded retention) - the file sink degrades gracefully to stdout-only if it can't be created (e.g. a read-only `/var/log` under `ProtectSystem=strict`; the systemd unit needs `LogsDirectory=senpan` - see `docs/ops.md`). The request-logging middleware records `method`/`path`/`status`/`duration`/`ip` per request, using the **real client IP** (`CF-Connecting-IP` behind Cloudflare, not the proxy's `[::1]`). Admins view logs **without SSH**: `GET /api/v1/logs` tails the file (level/text/limit filters), and every line is also pushed to the admins' event streams as a `log` event so **System -> Logs** live-tails them (see the tab in the frontend section). The minimum level is a `slog.LevelVar` flipped at runtime by `PUT /api/v1/logs/level` - turn **DEBUG** on to capture a richer `request detail` line per request plus DEBUG logs across the services, then back off, with no restart. The same NDJSON parse (`model.ParseLogEntry`) backs both the REST tail and the live feed.
 
 **What gets an Info line.** Beyond per-request logging: every **delivered** Discord post (`discord post sent`, emitted once in the `discord.Sender` with a `webhookTarget` label - kind + record name - so a new posting feature is covered without adding a line); **scheduler** start/stop for both background loops; the **bingo game** lifecycle (`bingo game started` / `bingo game ended` / `bingo halftime decision`, with the acting admin via `Server.actorName`); a consumed **skip** on an announcement (with the count remaining); and manual announcement sends + reading-list publishes with their `by` attribute. Two things are deliberately quieter: a **failed** post is logged by the caller that knows whether it retries or answers the failure (never in the Sender too), and high-frequency events stay at **Debug** or are dropped entirely - individual scheduler sweeps (2,880/day at a 30s tick) and individual bingo draws (~75/game) would bury everything else.
 
@@ -702,7 +700,7 @@ talks peer-to-peer.
 The lint configs, the CI workflows, the deploy module and the repo files are
 **shared-tooling**'s (`https://github.com/jwill89/shared-tooling`), held as a git
 submodule at `shared/` and pinned to one release. `shared/README.md` says what each
-folder holds; `shared/PLAN.md` says why. What Senpan takes from it:
+folder holds. What Senpan takes from it:
 
 - **Frontend:** `@jwill89/lint-web` (ESLint, Prettier, Stylelint, the tsconfigs) from
   `shared/lint/web`, and `vitestDefaults` from `shared/test/web/vitest.js`.
@@ -892,11 +890,11 @@ A check only Senpan runs goes into both `scripts/check.ps1` and its job in `.git
 
 ### Versions and releases
 
-Since 4.0.0 the app has one version, for the SPA and the API together, since one binary ships both: `frontend/package.json` `"version"`, which `backend/internal/version/version.go` `Version` must equal (`TestVersionIsTheApps` checks; served at `GET /api/version` and `GET /healthz`). The plugin keeps its own, as Dalamud needs: `SenpanCompanion.csproj` `<Version>`, with `AssemblyVersion` in `plugins/pluginmaster.json`. A change that ships adds its entry under Unreleased in `CHANGELOG.md` (`### App` or `### Plugin`); raising a version moves those entries into a `### [version] - date` heading under the App or Plugin section, newest first, in the same commit. The Frontend and Backend sections are the history from before 4.0.0 and take no new entries. The admin sidebar footer shows the app's version and the plugin's, and flags an open tab whose server now runs a different version. The release job above tags each new version and publishes its CHANGELOG entry; nothing is tagged by hand.
+Since 4.0.0 the app has one version, for the SPA and the API together, since one binary ships both: `frontend/package.json` `"version"`, which `backend/internal/version/version.go` `Version` must equal (`TestVersionIsTheApps` checks; served at `GET /api/version` and `GET /healthz`). The plugin keeps its own, as Dalamud needs: `SenpanCompanion.csproj` `<Version>`, with `AssemblyVersion` in `plugins/pluginmaster.json`. A change that ships adds its entry under Unreleased in `CHANGELOG.md` (`### App` or `### Plugin`); raising a version moves those entries into a `### [version] - date` heading under the App or Plugin section, newest first, in the same commit. Never put an Unreleased heading inside the App or Plugin section: the release job and the admin dashboard's changelog take the first `### [...]` there as the latest version. The Frontend and Backend sections are the history from before 4.0.0 and take no new entries. An entry is a short list of what a user could notice, held to the shared changelog rules: a release that needs a step at deploy says so in one line and points to `docs/ops.md`, under `Upgrading to x.y.z`, where the steps are. The admin sidebar footer shows the app's version and the plugin's, and flags an open tab whose server now runs a different version. The release job above tags each new version and publishes its CHANGELOG entry; nothing is tagged by hand.
 
 ## Deployment (Apache)
 
-Only the maintainer deploys, from the owner's PC, through `scripts/deploy.ps1` on SharedDeploy, and only releases ship: the newest `v<version>` CI tagged on main for the app, the newest `Plugin-v<version>` for the plugin, each built in a checkout of its own (shared-tooling's newest-release deploy). `task deploy` deploys the app, then the plugin when its version is new (`-IfNewer`); an app release the host already runs is skipped (`-Force` deploys it again). `task deploy:backend` and `task deploy:plugin` deploy one each, with flags after `--`. The settings live in the untracked `scripts/deploy.config.ps1`; `deploy/README.md` has the whole run.
+Only the maintainer deploys, from the owner's PC, through `scripts/deploy.ps1` on SharedDeploy, and only releases ship: the newest `v<version>` CI tagged on main for the app, the newest `Plugin-v<version>` for the plugin, each built in a checkout of its own (shared-tooling's newest-release deploy). `task deploy` deploys the app, then the plugin when its version is new (`-IfNewer`); an app release the host already runs is skipped (`-Force` deploys it again). `task deploy:backend` and `task deploy:plugin` deploy one each, with flags after `--`. The settings live in the untracked `scripts/deploy.config.ps1`; `docs/ops.md` has the whole run.
 
 The Go binary serves everything: the API, its event streams, the SPA it embeds and the
 public files of its data folder. Apache serves nothing from a document root: the vhost
@@ -905,7 +903,7 @@ every path of `apps.senpan.cafe` to the app with `timeout=3600` for the streams 
 `mod_deflate` kept off `text/event-stream`), `fonts.senpan.cafe` to `/api/v1/fonts/pub/`
 and `carrd.senpan.cafe` to `/carrd/`. The data folder holds the uploads and the plugin
 repository, beside the database, so redeploys never touch them (full guide in
-`deploy/README.md`):
+`docs/ops.md`):
 
 ```text
 /opt/senpan/data/    <- -data on the unit's ExecStart (the deploy reads it)
@@ -918,8 +916,8 @@ repository, beside the database, so redeploys never touch them (full guide in
 ```
 
 Until 5.2.0 these folders were Apache's document root (`/var/www/apps.senpan.cafe`, passed
-as `-webroot`); 5.2.0's first deploy moved them (see **Deploy day: 5.2.0** in
-`deploy/README.md`). `-webroot` is gone: a unit still passing it fails to start.
+as `-webroot`); 5.2.0's first deploy moved them (see **Upgrading to 5.2.0** in
+`docs/ops.md`). `-webroot` is gone: a unit still passing it fails to start.
 
 - Run the Go server with `-data <folder>`; uploads are written under
   `<data>/images/<category>/`, `<data>/images/{bookclub,ema_plaques}/`,
@@ -943,7 +941,7 @@ as `-webroot`); 5.2.0's first deploy moved them (see **Deploy day: 5.2.0** in
   `this_is_bad`, each `.mp3`) are kept out of the repository: they may be the game's own
   effects. `frontend/public/sounds/` is git-ignored and holds them for `vite dev`; in
   production they are copied once, by hand, into the data folder's `sounds/`
-  (`deploy/README.md`, The data folder). A release build carries none, so a host without
+  (`docs/ops.md`, The data folder). A release build carries none, so a host without
   them answers `/sounds/*.mp3` 404 and the sounds stay silent.
 - **Which folder a new image goes in.** A consequence of that strip: `frontend/public/images/`
   is a **dev-time mirror of the server's persistent tree**, not a way to ship a file. Put an
@@ -969,12 +967,12 @@ as `-webroot`); 5.2.0's first deploy moved them (see **Deploy day: 5.2.0** in
   alone and every iPhone gets a 403 while desktop looks fine. The `fonts.senpan.cafe`
   vhost is a **reverse proxy** onto `/api/v1/fonts/pub/`; external Carrd sites embed
   `https://fonts.senpan.cafe/kit.css`. The SPA loads fonts same-origin, so it never
-  depends on any allowlist. See **Font host (protected serving)** in `deploy/README.md`.
+  depends on any allowlist. See **Font host (protected serving)** in `docs/ops.md`.
 - **Carrd host (CORS)**: Carrd projects are embedded by external Carrd sites from
   `https://carrd.senpan.cafe/<project>/...`, which the vhost proxies to the app's
   `/carrd/`; the app answers with `Access-Control-Allow-Origin: *`, never serves the
   `.carrd.json` sidecars and never lists a folder. See **Carrd image host** in
-  `deploy/README.md`.
+  `docs/ops.md`.
 - **Scheduler**: the server runs a background goroutine that posts due
   announcements to Discord webhooks - no cron needed; it
   starts with the process and stops on graceful shutdown.
@@ -983,7 +981,7 @@ as `-webroot`); 5.2.0's first deploy moved them (see **Deploy day: 5.2.0** in
   `senpan.service` unit needs `LogsDirectory=senpan` so that path is writable;
   otherwise the app degrades to stdout-only (a warning is logged). Admins view
   them at **System -> Logs** (live tail + `GET /api/v1/logs`) or on-box via `jlv`.
-  See **Server logs** in `deploy/README.md`.
+  See **Server logs** in `docs/ops.md`.
   - **Request line** carries `method`/`path`/`status`/`duration`/`ip` plus an
     **actor**: `auth` (`session`|`token`|`bot`|`anon`), and `user`/`bot` when they
     apply. Admins resolve via the cookie session, the plugin via its PAT (both

@@ -5,7 +5,7 @@
  * text, links, headings, board numbers, every button intent, ...) against the
  * WCAG 2.1 contrast minimums and returns a report the theme editor surfaces via
  * the "Check WCAG compliance" button. Mirrors the Go checker in
- * `src/cmd/themetool` - keep the pair list in sync.
+ * `backend/cmd/themetool` - keep the pair list in sync.
  *
  * Thresholds: normal text AA 4.5:1 / AAA 7:1; large text AA 3:1 / AAA 4.5:1.
  */

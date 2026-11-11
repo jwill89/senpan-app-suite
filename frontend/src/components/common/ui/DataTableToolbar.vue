@@ -1,12 +1,8 @@
 <script setup lang="ts">
 /**
- * The toolbar above a {@link DataTable}. One layout for every table, because
- * seven tables had each grown their own: the row count sat left of the actions
- * on one screen and right of them on the next, the same button read "CSV" here
- * and "Export CSV" there, the counts said "6/6 cards", "40 total entries",
- * "10 stamps" and "3 draws", and Manage Cards split its controls over two rows
- * while the rest used one. Composing the pieces by hand is what let that happen,
- * so the order is fixed here rather than left to each caller:
+ * The toolbar above a {@link DataTable}. One layout for every table, so the
+ * order, the count wording and the button labels can't drift from one screen to
+ * the next; the order is fixed here rather than left to each caller:
  *
  *   [ search  filters ] ................... [ per-page  count  actions ]
  *

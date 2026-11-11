@@ -6,13 +6,13 @@
     Deploy the Senpan App Suite's newest release to the host: the app (one binary, the SPA inside it), or the Dalamud plugin.
 
 .DESCRIPTION
-    Built on shared-tooling's SharedDeploy module (shared/deploy/pwsh), the shape every
-    deploy follows: one archive, one held SSH connection, one remote run.
+    Built on the SharedDeploy module (shared/deploy/pwsh): one archive, one held SSH
+    connection, one remote run.
 
     What ships is the newest release CI tagged on main (the tags are fetched first): the
     app's newest v<version>, or the plugin's newest Plugin-v<version>, checked out into a
     folder of its own and built there, with npm ci from its lockfile. Commits after it, a
-    shared-tooling update or work not yet released, are not part of it, and neither is
+    submodule update or work not yet released, are not part of it, and neither is
     anything uncommitted. The SPA and the API are one app: one version, one binary, which
     embeds the SPA's build and serves the data folder's public files.
 
@@ -32,7 +32,7 @@
          checked and compressed, newest three kept), install the binary, owned by the
          account the unit runs as, start it, and wait for /healthz to answer on the host; if
          it does not, the previous binary and vhost go back with the snapshot, since the new
-         binary may have migrated a schema the old one refuses. Apache reloads once it does.
+         binary may have migrated a schema the previous one refuses. Apache reloads once it does.
       4. Fetch the site from here, through Cloudflare: /healthz and /api/v1/version naming
          this release, the page naming its entry script, that script, a picture and the
          plugin index. If any fails, the previous binary, vhost and snapshot go back. Once
@@ -43,8 +43,8 @@
          snapshot of the live database into devdata/database.sqlite, keeping the three
          previous local copies (skip with -NoDbPull).
 
-    The move out of the web root. A unit that still passes -webroot (the layout before the
-    app served its own files) is moved in the same run, while the service is stopped:
+    The move out of the web root. A unit that still passes -webroot (Apache serving the
+    folders from a document root) is moved in the same run, while the service is stopped:
       - Before anything stops: the folders to move are there and the data folder
         (<RemoteOptDir>/data) holds none of them; the sites now serving the vhost's names
         are found from apachectl -S and serve no other name; Apache takes the new vhost in
@@ -76,11 +76,11 @@
     scripts/deploy.config.ps1 (copy scripts/deploy.config.example.ps1). Nothing about the
     host is in this file.
 
-    Needs PuTTY's plink 0.85 or later (pscp is no longer used), with a key that has a
-    passphrase loaded into Pageant first: pageant.exe "<KeyPath>". The host needs sqlite3
-    and curl, and Apache with mod_proxy_http, mod_headers and mod_rewrite. The whole run is
-    one SSH connection (plus one only if it drops and reconnects), which stays under the
-    droplet's `ufw limit ssh`.
+    Needs PuTTY's plink 0.85 or later, with a key that has a passphrase loaded into
+    Pageant first: pageant.exe "<KeyPath>". The host needs sqlite3 and curl, and Apache
+    with mod_proxy_http, mod_headers and mod_rewrite. The whole run is one SSH connection
+    (plus one only if it drops and reconnects), which stays under the droplet's
+    `ufw limit ssh`.
 
 .PARAMETER Target
     What to deploy: app (the default: the binary, which serves the API, the SPA and the
@@ -220,7 +220,7 @@ $devDb = Join-Path $repoRoot 'devdata\database.sqlite'
 $record = 'senpan'
 # The vhost every app deploy installs, named for the service.
 $vhostPath = "/etc/apache2/sites-available/$service.conf"
-# The data folder's folders: the ones a unit still passing -webroot has moved out of it.
+# The folders the move carries from the web root into the data folder.
 $dataFolders = 'images fonts carrd plugin'
 
 # A path the remote scripts take literally: absolute, and nothing a shell or sed reads
@@ -247,7 +247,7 @@ function Assert-CommandFit {
 
 # The service as the host runs it: the unit lives only there, so it is the one place
 # that says where the live database is (-db), where the app listens (-addr), where its
-# data folder is (-data, or -webroot before the move) and whom the service runs as.
+# data folder is (-data, or -webroot on a unit not yet moved) and whom the service runs as.
 function Read-ServiceUnit {
     [CmdletBinding()]
     [OutputType([hashtable])]
@@ -257,7 +257,7 @@ function Read-ServiceUnit {
 svc='__SERVICE__'
 show() { systemctl show "$svc.service" -p "$1" --value 2>/dev/null; }
 if [ "$(show LoadState)" != loaded ]; then
-  echo "$svc.service is not installed on the host; install its unit first (deploy/README.md). Nothing was changed." >&2
+  echo "$svc.service is not installed on the host; install its unit first (docs/ops.md). Nothing was changed." >&2
   exit 3
 fi
 user=$(show User)
@@ -423,7 +423,7 @@ try {
     $dbOwner = if ($found['db_owner']) { $found['db_owner'] } else { 'not there yet' }
     Write-Ok "Live database: $db (owner $dbOwner); $service runs as $serviceOwner, listens on $addr and keeps its files in $data."
     if ($found['user'] -eq 'root' -and $found['dynamic'] -ne 'yes') {
-        Write-Warning "$service runs as root, so its backup will too. deploy/README.md (Running as a non-root user) says how to move it to its own account."
+        Write-Warning "$service runs as root, so its backup will too. docs/ops.md (Running as a non-root user) says how to move it to its own account."
     }
 
     $live = Get-DeployedRelease -Name $record
@@ -594,7 +594,7 @@ if [ -e "$data/sounds" ]; then
 elif [ -d "$web/dist/sounds" ]; then
   echo "The sounds in $web/dist/sounds move too."
 else
-  say "There is no $web/dist/sounds, so the sounds stay silent until they are copied into $data/sounds by hand (deploy/README.md)."
+  say "There is no $web/dist/sounds, so the sounds stay silent until they are copied into $data/sounds by hand (docs/ops.md)."
 fi
 echo "Backed up the web root's folders, Apache's config and the unit to $bdir."
 '@
@@ -615,7 +615,7 @@ for d in $folders; do
   fi
 done
 # The sounds, from the web root's dist/sounds, where Apache served the SPA's sounds
-# before the app embedded it, unless the data folder has its own already.
+# from, unless the data folder has its own already.
 if [ -d "$web/dist/sounds" ] && [ ! -e "$data/sounds" ]; then
   : > "$state/sounds"
   mv "$web/dist/sounds" "$data/sounds"
@@ -667,7 +667,7 @@ for p in $rw; do
 done
 if [ -z "$covered" ]; then echo "After the edit ReadWritePaths ($rw) does not cover $data." >&2; exit 1; fi
 echo "The unit runs the app with -data $data now."
-# The sites: the old ones off and the vhost on. Apache takes them once the new release answers.
+# The sites serving the vhost's names off, the vhost on. Apache takes them once the new release answers.
 for s in $sites; do a2dissite -q "$s"; done
 a2ensite -q "$site"
 if ! out=$(apache2ctl configtest 2>&1); then echo "$out" >&2; echo 'Apache refused the new vhost.' >&2; exit 5; fi
@@ -687,7 +687,7 @@ echo "Apache's sites switched to $site; it takes them once the new release answe
 if systemctl reload apache2; then echo 'Apache took the new sites.'; else echo 'apache2 did not reload; the old sites still answer.' >&2; fi
 '@
         # The smoke check's rollback (Restore-ServiceBinary's -OnRollback): the undo,
-        # then Apache back on the old sites, before the previous release starts.
+        # then Apache back on the sites the move switched, before the previous release starts.
         $undo = "$vars`n$undoFunction`ne_undo`nsystemctl reload apache2 || echo 'apache2 did not reload after the sites went back.' >&2"
         # Every name the vhost serves, asked on the host through Apache for a font file
         # as a plain file, by the paths that could reach it, redirects followed. Read only;
@@ -770,7 +770,7 @@ done
     # -- Smoke check, through Cloudflare -----------------------------------------
     # The reverse of the deploy: the previous binary and vhost with the snapshot taken just
     # before this deploy's start, since the new binary may have migrated the schema, and
-    # after a move, the web root's folders, the unit and the old sites. What was written in
+    # after a move, the web root's folders, the unit and the sites it switched. What was written in
     # the seconds the new release ran is lost with it.
     $rollback = { Invoke-RemoteStep -Script $rollbackScript -FailureMessage 'Rolling back failed on the host' }
 

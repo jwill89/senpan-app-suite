@@ -1,7 +1,6 @@
 <script setup lang="ts">
 /**
- * Admin Patterns manager - one tab (under Bingo) unifying the former Pattern
- * Categories, New Pattern, and Edit Patterns tabs into the standard manager model:
+ * Admin Patterns manager - one tab (under Bingo) in the standard manager model:
  *
  *   - list: patterns grouped by category, collapsible, drag to reorder / move
  *     between categories, with a search box + category filter. A search query
@@ -9,8 +8,7 @@
  *   - "+ New Pattern": the 5x5 grid editor on a Back sub-page.
  *   - "Manage Categories": category create / rename / delete / reorder sub-page.
  *
- * All state + actions come from the patterns store (unchanged); this only
- * restructures the three former tabs into one shell.
+ * All state + actions come from the patterns store.
  */
 import { computed, onMounted, ref } from 'vue'
 import { VueDraggable } from 'vue-draggable-plus'

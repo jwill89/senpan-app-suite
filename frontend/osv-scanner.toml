@@ -1,6 +1,6 @@
-# The advisories OSV-Scanner may pass over for this lockfile, from shared-tooling's
-# repo/osv-scanner.example.toml: each reaches only lint, test or build tooling, and no fix
-# fits its dependents' ranges (standards/packages.md). Each is looked at again by its date.
+# The advisories OSV-Scanner may pass over for this lockfile: each reaches only lint,
+# test or build tooling, and no fix fits its dependents' ranges. Each is looked at again
+# by its ignoreUntil date.
 
 # minimatch 7.0.0 to 11.0.0: denial of service from a crafted glob pattern. It comes with
 # ESLint 10, @eslint/config-array, typescript-eslint and eslint-plugin-jsx-a11y-x (lint/web),

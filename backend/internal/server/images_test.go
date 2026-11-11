@@ -486,8 +486,8 @@ func TestImages_SeedFlourishes(t *testing.T) {
 	}
 }
 
-// TestImages_Migration verifies the one-time copy of the old images/announcements
-// files into the announcements_main category on server start.
+// TestImages_Migration verifies that the files in images/announcements are copied
+// into the announcements_main category on server start.
 func TestImages_Migration(t *testing.T) {
 	dataDir := t.TempDir()
 	writeFile(t, dataDir, "images/announcements/legacy.png", realPNG(t, 2, 2))
@@ -500,8 +500,8 @@ func TestImages_Migration(t *testing.T) {
 	}
 }
 
-// TestImages_ManifestMigration verifies a manifest from before the defaults were
-// ordinary categories gets them folded in, keeping its own entries.
+// TestImages_ManifestMigration verifies a manifest that lacks the default
+// categories gets them added, keeping its own entries.
 func TestImages_ManifestMigration(t *testing.T) {
 	dataDir := t.TempDir()
 	writeFile(t, dataDir, "images/.categories.json", []byte(`{"categories":[{"name":"Event Banners","dir":"event_banners"}]}`))

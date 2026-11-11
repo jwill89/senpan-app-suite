@@ -2,8 +2,7 @@
 /**
  * Stamp shape picker - lets the player choose the stamp icon:
  *  - "None": no emoji, just the colored circle.
- *  - Any emoji: opens an emoji picker modal (replaces the old fixed emoji row,
- *    which wrapped once a custom stamp was added).
+ *  - Any emoji: opens an emoji picker modal.
  *  - A custom uploaded image.
  *
  * The emoji picker (and its CSS) is lazy-loaded so it only lands when a player

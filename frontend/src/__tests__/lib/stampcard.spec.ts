@@ -8,8 +8,8 @@ describe('stallName', () => {
    *
    * The order is the whole point. A rally linked to a festival map takes its
    * stamps from pitch OCCUPANTS and the server joins that occupant's name, so
-   * preferring the affiliate labelled a map-linked stamp by the partner behind the
-   * booth rather than the booth - and fell all the way back to "Senpan Tea House"
+   * preferring the affiliate would label a map-linked stamp by the partner behind
+   * the booth rather than the booth - and fall all the way back to "Senpan Tea House"
    * for an occupant with no affiliate at all, which is precisely the case a
    * festival map exists to describe.
    */

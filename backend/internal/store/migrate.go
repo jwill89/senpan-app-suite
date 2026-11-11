@@ -13,17 +13,15 @@ import (
 	"app-suite/internal/auth"
 )
 
-// Migrations: goose runs the numbered SQL
-// files in migrations/ at start, on the write pool, each in its own transaction
-// unless it says otherwise, and each also sets PRAGMA user_version to its own
-// number, so user_version always equals goose's version.
+// Migrations: goose runs the numbered SQL files in migrations/ at start, on the
+// write pool, each in its own transaction unless it says otherwise, and each also
+// sets PRAGMA user_version to its own number, so user_version always equals goose's
+// version.
 //
-// Version 71 is the baseline. Until 4.1.0 the schema was built by hand-written
-// migrations, guarded by user_version, that reached v71; goose took over there.
-// Migration 71 builds that schema on an empty database (baseline.sql) and seeds
-// it, and leaves a database those migrations brought to v71 as it is. A database
-// short of v71 that goose has never seen is refused: a 4.0 release brings it to
-// v71 first.
+// Version 71 is the baseline: migration 71 builds the schema (baseline.sql) on an
+// empty database and seeds it, and leaves a database already at v71 as it is. A
+// database short of v71 that goose has never seen is refused, since the migrations
+// begin after v71 and nothing here can bring it that far.
 
 //go:embed migrations/*.sql
 var migrationFiles embed.FS
@@ -31,8 +29,7 @@ var migrationFiles embed.FS
 //go:embed baseline.sql
 var baselineSQL string
 
-// baselineVersion is the schema the hand-written migrations ended at, where goose
-// took over.
+// baselineVersion is the version of baseline.sql's schema, the first one goose runs.
 const baselineVersion = 71
 
 func provider(write *sql.DB) (*goose.Provider, error) {
@@ -96,9 +93,8 @@ func migrate(ctx context.Context, write *sql.DB) error {
 	return nil
 }
 
-// baseline is migration 71: the schema the hand-written migrations built, and the
-// rows a fresh install needs. On a database those migrations already brought to
-// v71 it does nothing.
+// baseline is migration 71: the schema in baseline.sql and the rows a fresh install
+// needs. On a database already at v71 it does nothing.
 func baseline(ctx context.Context, tx *sql.Tx) error {
 	var version, tables int
 	if err := tx.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
@@ -119,7 +115,7 @@ func baseline(ctx context.Context, tx *sql.Tx) error {
 
 	// The seeds. INSERT OR IGNORE, so a run against a database that has them never
 	// overwrites one changed since. The bootstrap account's password is "admin",
-	// to be changed as soon as an install creates it (AGENTS.md).
+	// to be changed as soon as an install creates it.
 	hash, err := auth.Hash("admin")
 	if err != nil {
 		return fmt.Errorf("hash the bootstrap password: %w", err)

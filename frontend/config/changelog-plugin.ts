@@ -96,12 +96,12 @@ function parseEntries(lines: string[]): ChangelogEntry[] {
 }
 
 /**
- * Splits CHANGELOG.md into its `## App` / `## Plugin` sections and the history before
- * 4.0.0, `## Frontend` / `## Backend`, and parses each into structured version
- * entries. Only level-2 headings delimit a section (a `### [x.y.z]` version or
+ * Splits CHANGELOG.md into its `## App`, `## Plugin`, `## Frontend` and `## Backend`
+ * sections (the last two are closed histories) and parses each into structured
+ * version entries. Only level-2 headings delimit a section (a `### [x.y.z]` version or
  * `#### Added` never matches `^## `), and the preamble before the first component
- * heading is ignored. The app's entries go on into the frontend's: before 4.0.0 the
- * SPA was the side of the app its users saw, so its notes are the app's history.
+ * heading is ignored. The app's entries run on into the frontend's, whose notes are the
+ * app's earlier history, the SPA being the side of the app its users saw.
  */
 export function parseChangelog(md: string): Changelog {
   const buf: Record<keyof Changelog, string[]> = { app: [], frontend: [], backend: [], plugin: [] }

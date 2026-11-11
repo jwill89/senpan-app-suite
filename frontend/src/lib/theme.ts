@@ -1,20 +1,19 @@
 /**
  * DOM head manipulation helpers for fonts and custom themes.
  *
- * Mirrors the original app.js methods:
- *   _applyHeaderFont / _loadGoogleFont - load a Google Font and set the
- *     --header-font CSS variable used by headings and the bingo board.
- *   _applyCustomCSS - inject/update the active custom theme <style> element.
+ * `applyHeaderFont` loads a Google Font and sets the --header-font CSS variable
+ * used by headings and the bingo board; `applyCustomCSS` injects/updates the
+ * active theme's <style> element.
  *
- * Custom themes are global, class-based CSS that override the design tokens on
- * :root - so they must continue to be injected into <head> verbatim.
+ * A theme is a generated `:root{...}` block that overrides the design tokens, so
+ * it is injected into <head> verbatim.
  *
  * In addition to Google Fonts, the header/board font can be one of the fonts
- * uploaded via System -> Font Upload. `applyUploadedFonts()` registers an
+ * uploaded via Atelier -> Font Upload. `applyUploadedFonts()` registers an
  * @font-face for each uploaded font so those families are usable anywhere
  * `--header-font` is - for players too, not just the admin preview. Fonts are
  * sourced SAME-ORIGIN from `/api/v1/fonts/pub/f/<token>` (rotating opaque tokens;
- * see the backend's fontserve.go), so the app never depends on the external
+ * see internal/api/fonts.go), so the app never depends on the external
  * fonts host or its origin allowlist. `applyHeaderFont()` then skips the
  * Google Fonts request for a family it knows is an uploaded one.
  */
@@ -42,7 +41,7 @@ export function loadGoogleFont(fontFamily: string): void {
   document.head.appendChild(link)
 }
 
-// -- Uploaded fonts (System -> Font Upload) -----------------------------------
+// -- Uploaded fonts (Atelier -> Font Upload) -----------------------------------
 
 /** Maps a font file extension to its CSS @font-face format() hint. */
 const FONT_FORMAT_HINTS: Record<string, string> = {
@@ -62,7 +61,7 @@ export function fontFamilyFromFile(filename: string): string {
 }
 
 /** A font's effective CSS family: the admin-set custom name, else the default
- *  derived from the filename (mirrors the server's fontFamilyFor). */
+ *  derived from the filename (mirrors the server's `fonts.FamilyFor`). */
 export function fontFamily(font: Pick<UploadedFont, 'name' | 'family'>): string {
   return font.family || fontFamilyFromFile(font.name)
 }
@@ -70,8 +69,8 @@ export function fontFamily(font: Pick<UploadedFont, 'name' | 'family'>): string 
 /** Rejects font-family names that could break out of a single-quoted CSS string
  *  or identifier - control chars, quotes, backslash, or the structural chars
  *  { } ; < >. The server validates admin-set families and uploaded filenames too
- *  (fonts.go cssNameUnsafe); this is defense in depth so a family that predates
- *  that validation cannot inject CSS into the <style> sinks built here. */
+ *  (`fonts.NameUnsafe`); this is defense in depth so a stored family that slipped
+ *  past it cannot inject CSS into the <style> sinks built here. */
 const CSS_UNSAFE_CHARS = new Set(["'", '"', '\\', '{', '}', ';', '<', '>'])
 export function cssNameSafe(family: string): boolean {
   for (const ch of family) {
@@ -238,7 +237,7 @@ async function clampUploadedFontMetrics(fonts: UploadedFont[]): Promise<void> {
 
 /**
  * Registers @font-face rules for the given uploaded fonts (name + serving
- * token), replacing any previously-registered set. Each family is the filename
+ * token), replacing the registered set. Each family is the filename
  * without its extension; the source is the same-origin tokenized URL. Safe to
  * call repeatedly (it rewrites a single <style> element).
  *
@@ -249,7 +248,7 @@ export function applyUploadedFonts(fonts: UploadedFont[]): void {
   uploadedFamilies = new Set(fonts.map(fontFamily).filter(Boolean))
   lastFonts = fonts.slice()
 
-  // Forget cached results for families that are no longer present.
+  // Forget cached results for families that are not in the new list.
   for (const fam of [...measuredFamilies]) {
     if (!uploadedFamilies.has(fam)) {
       measuredFamilies.delete(fam)
@@ -270,7 +269,8 @@ export function applyHeaderFont(fontFamily: string | null | undefined): void {
   // Fall back to the default when the configured family carries CSS-breaking
   // characters, so a malicious headerFont can't inject CSS via the
   // --header-font variable (the server validates it too; this is defense in
-  // depth). The server rejects such values, so this only bites legacy data.
+  // depth). The server rejects such values; this guards a stored one that slipped
+  // through.
   const family = fontFamily && cssNameSafe(fontFamily) ? fontFamily : 'Arapey'
   document.documentElement.style.setProperty('--header-font', `'${family}', serif`)
   if (!isUploadedFamily(family)) {

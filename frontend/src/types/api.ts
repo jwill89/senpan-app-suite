@@ -23,7 +23,7 @@ export type DiscordTimeFormat = 't' | 'T' | 'd' | 'D' | 'f' | 'F' | 'R'
  * Selectable Discord timestamp styles (value + human label) shown in the form's
  * "Time format" picker, in a sensible reading order. The example text mirrors
  * how Discord renders each style. Keep in sync with the backend's
- * `validTimeFormats`.
+ * `validTimeFormats` (internal/discord).
  */
 export const DISCORD_TIME_FORMATS: { value: DiscordTimeFormat; label: string }[] = [
   { value: 'f', label: 'Short date & time - June 13, 2026 7:00 PM' },
@@ -39,7 +39,7 @@ export const DISCORD_TIME_FORMATS: { value: DiscordTimeFormat; label: string }[]
  * How a raffle prices entries, and whether it takes sign-ups here at all.
  * Mirrors the server's `raffles.Mode*` constants.
  *   'details' - published for reference; players sign up somewhere else.
- *   'single'  - every ticket costs `costPerEntry` (the original behavior).
+ *   'single'  - every ticket costs `costPerEntry`.
  *   'custom'  - the Nth ticket costs `tierCosts[N-1]`.
  */
 export type RaffleMode = 'details' | 'single' | 'custom'
@@ -86,7 +86,7 @@ export interface GaraponForm {
   prizes: GaraponPrizeForm[]
 }
 
-/** A stamp rally stall's kind. Everything that predates types is a food stamp. */
+/** A stamp rally stall's kind. An unset type reads as a food stamp. */
 export type StampType = 'food' | 'game'
 /** What finishing a stamp card takes - the whole card, or a count of each type. */
 export type RallyCompletionMode = 'all' | 'counts'

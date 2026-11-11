@@ -1,10 +1,9 @@
 /**
  * UI store: global toast notifications + sticky alerts + clipboard helper.
  *
- * Top-level view routing previously lived here (`view` / `setView`) but is now
- * handled by Vue Router (see `src/router`). Toasts auto-dismiss after 5.5s so
- * admins have time to read them before they fade. Alerts are the other kind: they
- * ask someone to go and do something, so they stack and stay until dismissed.
+ * Toasts auto-dismiss after 5.5s so admins have time to read them before they
+ * fade. Alerts are the other kind: they ask someone to go and do something, so
+ * they stack and stay until dismissed.
  */
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
@@ -21,7 +20,7 @@ export interface UiAlert {
   action?: { label: string; to: string }
 }
 
-/** Options for a themed confirm dialog (replaces the native window.confirm). */
+/** Options for a themed confirm dialog (used instead of the native window.confirm). */
 export interface ConfirmOptions {
   title?: string
   /** Label for the confirm button (default "Confirm"). */
@@ -74,7 +73,7 @@ export const useUiStore = defineStore('ui', () => {
 
   /**
    * Shows a themed confirmation modal and resolves to the user's choice.
-   * Drop-in async replacement for the native `window.confirm`.
+   * An async stand-in for the native `window.confirm`.
    *
    * @example if (!(await ui.confirm('Delete this?'))) return
    */

@@ -81,10 +81,10 @@ func TestRedactReferer(t *testing.T) {
 
 // TestRedactSensitivePathIsCaseInsensitive pins the deliberate case-insensitive
 // prefix match. Every other case in this file uses an all-lowercase route prefix,
-// so removing the strings.ToLower - which the function's own comment spends five
-// lines justifying - was an undetected mutation. The routes really do match any
-// casing on the server, so a token link requested as /API/Garapon/... reaches the
-// handler and must not then be written to the log verbatim.
+// so without this one, removing the strings.ToLower would go undetected. The
+// routes really do match any casing on the server, so a token link requested as
+// /API/Garapon/... reaches the handler and must not then be written to the log
+// verbatim.
 func TestRedactSensitivePathIsCaseInsensitive(t *testing.T) {
 	const token = "abcdef0123456789abcdef0123456789"
 	cases := []string{

@@ -1,5 +1,5 @@
 {
-  // The shared settings for the Node-side files (shared-tooling's lint/web), the
+  // The shared settings for the Node-side files (`@jwill89/lint-web`), the
   // end-to-end suite's included.
   "extends": "@jwill89/lint-web/tsconfig.node.json",
   "include": [

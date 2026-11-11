@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	// Bootstrap account seeded by the users migration (see store.migrateUsers).
+	// Bootstrap account seeded by the baseline migration.
 	seedAdminUser = "admin"
 	seedAdminPass = "admin"
 )

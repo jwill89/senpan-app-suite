@@ -1104,7 +1104,7 @@ export interface paths {
     }
     /**
      * One published festival map
-     * @description Found by its shortcode, else its numeric id, so a link posted before a shortcode existed keeps working. Each pitch is resolved for a visitor: the affiliate's card, whether it is open now, its stamp-rally badge and a raffle running there. A map that isn't published is not found.
+     * @description Found by its shortcode, else its numeric id, so a link by id keeps working after the map is given a shortcode. Each pitch is resolved for a visitor: the affiliate's card, whether it is open now, its stamp-rally badge and a raffle running there. A map that isn't published is not found.
      */
     get: operations['get-public-festival-map']
     put?: never
@@ -1382,7 +1382,7 @@ export interface paths {
     put?: never
     /**
      * Answer the half-time prompt
-     * @description Once per game: every console hears it was answered, and by whom (halftime_resolved), and closes its prompt. A mini-game reaches the boards once the number that reached half-time has (minigame). An answer for a game no longer running, a second answer, or one before half-time is refused (409). Answers the game.
+     * @description Once per game: every console hears it was answered, and by whom (halftime_resolved), and closes its prompt. A mini-game reaches the boards once the number that reached half-time has (minigame). An answer for a game that isn't running, a second answer, or one before half-time is refused (409). Answers the game.
      */
     post: operations['answer-halftime']
     delete?: never
@@ -3350,7 +3350,7 @@ export interface components {
     }
     AppVersion: {
       /**
-       * @description The app's semantic version: one version for the SPA and the API since 4.0.0.
+       * @description The app's semantic version: one version for the SPA and the API.
        * @example 5.0.0
        */
       version: string
@@ -3407,7 +3407,7 @@ export interface components {
     Card: {
       /** @description Its numbers, row by row from the top: column B holds 1-15, I 16-30, N 31-45, G 46-60 and O 61-75, and the centre is 0, the free space. */
       boardData: number[][]
-      /** @description When it was made, RFC 3339 in UTC; null for a card made before this was recorded. */
+      /** @description When it was made, RFC 3339 in UTC; null when no time was recorded for it. */
       createdAt: string | null
       /**
        * @description A personal card's state: pending until staff approve it (it can't be played until then), then approved; empty for a generated card.
@@ -3505,7 +3505,7 @@ export interface components {
       status: 'pending'
     }
     CardSummary: {
-      /** @description When it was made, RFC 3339 in UTC; null for a card made before this was recorded. */
+      /** @description When it was made, RFC 3339 in UTC; null when no time was recorded for it. */
       createdAt: string | null
       /**
        * @description A personal card's state: pending until staff approve it (it can't be played until then), then approved; empty for a generated card.
@@ -4558,7 +4558,7 @@ export interface components {
        * @description Seconds between automatic draws, held between 5 and 600; 0 or left out for the default, 30.
        */
       autoInterval?: number
-      /** @description The win patterns to play for: at least one. Those deleted since are left out, and a start none of whose patterns exists any more is refused (422). */
+      /** @description The win patterns to play for: at least one. Those deleted since are left out, and a start none of whose patterns exists is refused (422). */
       patternIds: number[]
       /** @description End the game running, if one is, and start this one in its place. That game's winners are not logged, since nobody confirmed them (end-game does). Left out, a start while a game is running is refused (409). */
       replace?: boolean
@@ -4833,7 +4833,7 @@ export interface components {
     HalftimeAnswer: {
       /**
        * Format: int64
-       * @description The game whose prompt this answers (the prompt's gameId). An answer for a game no longer running, or a second answer, is refused (409).
+       * @description The game whose prompt this answers (the prompt's gameId). An answer for a game that isn't running, or a second answer, is refused (409).
        */
       gameId: number
       /** @description True to run a mini-game: players are told once the number that reached half-time has got to them, and the automatic draws stay paused. False for none: they start again if the prompt paused them. */
@@ -5188,7 +5188,7 @@ export interface components {
     PatternOrder: {
       /**
        * Format: int64
-       * @description The category they are in from now on: a pattern from another one moves into it.
+       * @description The category they end up in: a pattern from another one moves into it.
        */
       categoryId: number
       /** @description The patterns' ids, in their new order. */
@@ -5944,7 +5944,7 @@ export interface components {
       entryMode: 'details' | 'single' | 'custom'
       /**
        * Format: int64
-       * @description The festival to file it under; null or left out for none. One that no longer exists is refused.
+       * @description The festival to file it under; null or left out for none. One that doesn't exist is refused.
        */
       festivalMapId?: number | null
       /**
@@ -6405,7 +6405,7 @@ export interface components {
        */
       completedCount: number
       /**
-       * @description all: a card is complete when every stamp is collected or can't be any more. counts: when it holds requiredFood food stamps and requiredGame game stamps.
+       * @description all: a card is complete when every stamp is collected or can never be collected. counts: when it holds requiredFood food stamps and requiredGame game stamps.
        * @enum {string}
        */
       completionMode: 'all' | 'counts'
@@ -6523,7 +6523,7 @@ export interface components {
       festivalMapId?: number | null
       /** @description The picture shown where a stamp isn't collected and where a prize isn't won yet. */
       notStampedImage: string
-      /** @description The rally's whole set of prizes, replacing the old. An empty list clears them. */
+      /** @description The rally's whole set of prizes; those it had are replaced. An empty list clears them. */
       prizes: components['schemas']['StampRallyPrizeInput'][]
       /** @description Whether anyone may sign up for a card. */
       publicSignup: boolean
@@ -6986,7 +6986,7 @@ export interface components {
       family: string
       /** @description The uploaded file's name. */
       name: string
-      /** @description The token its file is served under (GET /api/fonts/pub/f/{token}); it rotates, so a page uses the one it was given. */
+      /** @description The token its file is served under (GET /api/v1/fonts/pub/f/{token}); it rotates, so a page uses the one it was given. */
       token: string
     }
     User: {
@@ -8949,7 +8949,7 @@ export interface operations {
     parameters: {
       query?: never
       header?: {
-        /** @description The id of the last event this board got, sent when it reopens the stream: the events since it come first. One the server no longer keeps is answered with resync. */
+        /** @description The id of the last event this board got, sent when it reopens the stream: the events since it come first. One the server doesn't keep is answered with resync. */
         'Last-Event-ID'?: string
       }
       path: {
@@ -12447,7 +12447,7 @@ export interface operations {
     parameters: {
       query?: never
       header?: {
-        /** @description The id of the last event this client got, sent when it reopens the stream: the events since it that the account may hear come first. One the server no longer keeps is answered with resync. */
+        /** @description The id of the last event this client got, sent when it reopens the stream: the events since it that the account may hear come first. One the server doesn't keep is answered with resync. */
         'Last-Event-ID'?: string
       }
       path?: never

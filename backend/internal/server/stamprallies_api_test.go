@@ -652,7 +652,7 @@ func TestStampSignupIssuesACard(t *testing.T) {
 		t.Errorf("a drawing link for a rally with no garapon: %v", issued)
 	}
 
-	// The card reads as it always did: the label a participant holds up at a stall.
+	// The card reads as the label a participant holds up at a stall.
 	var card map[string]any
 	decodeInto(t, getAs(t, anon, env, cardPath(token, "")), http.StatusOK, &card)
 	if card["participantName"] != "Yao Ming @ Balmung" {

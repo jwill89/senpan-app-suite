@@ -1,9 +1,9 @@
 /**
  * The app's version, shown in the admin dashboard.
  *
- * Since 4.0.0 the SPA and the API are one app, built into one binary, with one
- * version: package.json's, baked into this build as `APP_VERSION`. The server reports
- * the version it runs (GET /api/version), so a tab opened before a deploy can tell it
+ * The SPA and the API are one app, built into one binary, with one version:
+ * package.json's, baked into this build as `APP_VERSION`. The server reports the
+ * version it runs (GET /api/v1/version), so a tab opened before a deploy can tell it
  * is behind the server, and the admin footer says so.
  */
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * Search box with a leading magnifying-glass icon, `v-model`'d to a string.
- * Used in manager toolbars (replaces `.ann-search`, `.font-search`, etc.).
+ * Used in manager toolbars.
  */
 withDefaults(defineProps<{ modelValue: string; placeholder?: string; ariaLabel?: string }>(), {
   placeholder: 'Search...',

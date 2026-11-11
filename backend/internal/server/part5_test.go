@@ -8,10 +8,10 @@ import (
 	"testing"
 )
 
-// TestFestivalMapPatchRejectsUnknownStatus pins the validation that replaced a
-// silent coercion. NormalizeMapStatus falls back to in_progress for anything it
-// does not recognize, which is right when reading a stored row and wrong on a
-// PATCH: a typo, or a body with no status at all, silently unpublished a live map.
+// TestFestivalMapPatchRejectsUnknownStatus pins the status validation on PATCH.
+// NormalizeMapStatus falls back to in_progress for anything it does not recognize,
+// which is right when reading a stored row and wrong on a PATCH: a typo, or a body
+// with no status at all, would silently unpublish a live map.
 func TestFestivalMapPatchRejectsUnknownStatus(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
@@ -40,8 +40,8 @@ func TestFestivalMapPatchRejectsUnknownStatus(t *testing.T) {
 // TestGameStartRejectsDeletedPatterns pins the guard against a permanently
 // unwinnable game. The handler checks the request carries pattern ids at all, but
 // the store returns only the ids that still exist - so a selection whose patterns
-// were all deleted between opening the form and pressing Start resolved to an
-// empty win set and started a game nobody could ever win, silently.
+// were all deleted between opening the form and pressing Start would resolve to an
+// empty win set and start a game nobody could ever win, silently.
 func TestGameStartRejectsDeletedPatterns(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
@@ -79,9 +79,9 @@ func TestBoardStreamRequiresARealCard(t *testing.T) {
 }
 
 // TestImagePickerReachableByMapTeaRoomAndEmaGrantees pins the permission list behind
-// the shared image picker. Both the Festival Map and Tea Room editors embed it, but
-// neither permission was listed - so a grantee of either page got a 403 from the
-// picker their own form depends on and could not finish the task the permission
+// the shared image picker. Both the Festival Map and Tea Room editors embed it, so
+// both permissions must be listed, or a grantee of either page gets a 403 from the
+// picker their own form depends on and cannot finish the task the permission
 // exists for.
 func TestImagePickerReachableByMapTeaRoomAndEmaGrantees(t *testing.T) {
 	for _, perm := range []string{"festival-map", "teahouse-tea-rooms", "festival-ema"} {
@@ -135,7 +135,7 @@ func TestAffiliateListReadableByMapGranteeWithoutWebhook(t *testing.T) {
 
 // TestPendingCardPreviewAllowedForCardsGrantee pins the review gate. Approving a
 // pending custom card IS the Manage Cards page's job, so requiring full admin to
-// preview one locked the grantee out of the task the permission was granted for.
+// preview one would lock the grantee out of the task the permission was granted for.
 // Anonymous callers must still be refused: a pending card is not yet playable.
 func TestPendingCardPreviewAllowedForCardsGrantee(t *testing.T) {
 	env := newTestEnv(t)
@@ -163,11 +163,11 @@ func TestPendingCardPreviewAllowedForCardsGrantee(t *testing.T) {
 }
 
 // TestAffiliateLinksAreNormalizedOnWrite pins the scheme hardening. carrd_link and
-// discord_link are rendered as href on the PUBLIC festival map, and nothing on the
-// write path checked their scheme - so "javascript:..." was stored verbatim and
-// reached an anonymous page, with the production CSP the only thing standing in
-// the way. normalizeExternalURL turns anything that is not already http(s) into an
-// inert "https://<typed>" link.
+// discord_link are rendered as href on the PUBLIC festival map, so without a scheme
+// check on the write path "javascript:..." would be stored verbatim and reach an
+// anonymous page, with the production CSP the only thing standing in the way.
+// normalizeExternalURL turns anything that is not already http(s) into an inert
+// "https://<typed>" link.
 func TestAffiliateLinksAreNormalizedOnWrite(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)

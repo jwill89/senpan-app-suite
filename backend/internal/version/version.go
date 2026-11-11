@@ -1,10 +1,10 @@
 // Package version exposes the app's semantic version (major.minor.patch).
 //
-// Since 4.0.0 the SPA and the API are one app, built into one binary, with one
-// version: frontend/package.json's, which CI tags as v<version> and the deploy
-// ships. Version repeats it here because the API reports it (GET /api/v1/version,
-// GET /healthz) and the committed OpenAPI document names it; a test fails if the
-// two differ, so a release changes both, with its CHANGELOG.md section.
+// The SPA and the API are one app, built into one binary, with one version:
+// frontend/package.json's, which CI tags as v<version> and the deploy ships. Version
+// repeats it here because the API reports it (GET /api/v1/version, GET /healthz) and
+// the committed OpenAPI document names it; a test fails if the two differ, so a
+// release changes both, with its CHANGELOG.md section.
 //
 // Semver intent:
 //   - MAJOR: a breaking change to the JSON API or its live events, which the plugin, a

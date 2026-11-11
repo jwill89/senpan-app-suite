@@ -130,7 +130,7 @@ type Request struct {
 	ByToken bool
 	// Account reads the signed-in account afresh, past the request's own memo: its
 	// session or token from the store, then the account behind it, nil when either
-	// is gone or the account may no longer sign in. A stream checks it while open.
+	// is gone or the account may not sign in. A stream checks it while open.
 	Account func(ctx context.Context) *model.User
 }
 
@@ -166,7 +166,7 @@ func Who(ctx context.Context) *model.User {
 	return nil
 }
 
-// Either a session cookie or a bearer token satisfies a protected operation.
+// secured says a protected operation takes either a session cookie or a bearer token.
 var secured = []map[string][]string{{"session": {}}, {"token": {}}}
 
 // New registers every operation on the mux and returns the API for its document.

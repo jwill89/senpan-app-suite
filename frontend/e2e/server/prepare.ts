@@ -37,9 +37,9 @@ for (const [name, path] of Object.entries({ ...serverFlags, SERVER })) {
 rmSync(DATA_DIR, { recursive: true, force: true })
 mkdirSync(SERVER_DATA, { recursive: true })
 
-// deploy/images, as deploy/README.md lays out the data folder; the API writes its
-// uploads and image categories beside it. The brand art there is the owner's and
-// untracked, so a CI run has the folders without it (and the pages their alt text).
+// A host's data folder starts from deploy/images; the API writes its uploads and
+// image categories beside it. The brand art there is untracked, so a CI run has the
+// folders without it (and the pages their alt text).
 cpSync(join(ROOT, 'deploy', 'images'), join(SERVER_DATA, 'images'), { recursive: true })
 
 // Built as `task build` builds it, to the run's folder, with the front end's build

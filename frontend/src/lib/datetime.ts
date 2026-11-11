@@ -13,16 +13,15 @@
  * Converts a stored UTC timestamp into the "YYYY-MM-DDTHH:mm" (LOCAL time) value
  * a datetime-local input expects. Returns '' for empty/invalid input.
  *
- * Accepts both RFC-3339 UTC strings ("...Z" / with an offset) and legacy naive
- * strings (no timezone), the latter interpreted as UTC to match how the server
- * historically compared them.
+ * Accepts both RFC-3339 strings ("...Z" / with an offset) and naive strings (no
+ * timezone), the latter interpreted as UTC to match how the server compares them.
  */
 export function utcToDatetimeLocal(value: string | null | undefined): string {
   if (!value) {
     return ''
   }
   // A trailing Z or ±HH:MM means the string already carries its zone; otherwise
-  // it's a legacy naive value we treat as UTC by appending Z.
+  // it's a naive value we treat as UTC by appending Z.
   const hasZone = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(value)
   const date = new Date(hasZone ? value : `${value}Z`)
   if (Number.isNaN(date.getTime())) {
@@ -54,10 +53,10 @@ export function datetimeLocalToUtc(value: string | null | undefined): string {
 /**
  * Parses a backend timestamp into epoch milliseconds.
  *
- * Handles SQLite's `CURRENT_TIMESTAMP` form ("YYYY-MM-DD HH:MM:SS" - UTC,
- * space-separated, no zone) as well as ISO-8601 strings. A zone-less value is
- * always treated as UTC, never local - `new Date("YYYY-MM-DD HH:MM:SS")` would
- * otherwise interpret it as local time and shift it by the viewer's offset.
+ * Handles the space-separated "YYYY-MM-DD HH:MM:SS" form (UTC, no zone) as well
+ * as ISO-8601 strings. A zone-less value is always treated as UTC, never local -
+ * `new Date("YYYY-MM-DD HH:MM:SS")` would otherwise interpret it as local time and
+ * shift it by the viewer's offset.
  * Returns NaN for empty/invalid input.
  */
 export function parseServerTimestamp(ts: string | null | undefined): number {

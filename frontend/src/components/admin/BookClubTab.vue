@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
  * Admin Book Club tab - manage reading lists and their items, then publish a
- * list to Discord. Master/detail in one tab (like the Open Raffles tab): the
- * list of reading lists, and the selected list's items + add/edit form.
+ * list to Discord. Master/detail in one tab: the list of reading lists, and the
+ * selected list's items + add/edit form.
  *
  * Generic across all book clubs: the active club (set by the router via
  * `bookclub.openClub`) supplies the club name, icon, and the curator-comments

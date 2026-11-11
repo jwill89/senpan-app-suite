@@ -3,8 +3,7 @@
  *
  * Covers Announcement Types (a named Discord webhook destination) and the
  * Announcements that post to them - CRUD, manual "send now", "skip next
- * occurrence", and a client-side search filter. Mirrors the structure of the
- * book-club store.
+ * occurrence", and a client-side search filter.
  *
  * One IANA `timezone` anchors every time on an announcement: the form holds
  * wall-clock values (start/end window, one-time post, and the recurring

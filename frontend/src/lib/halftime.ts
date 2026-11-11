@@ -4,9 +4,9 @@
  * The game only draws from the bingo columns (B-I-N-G-O) whose numbers can
  * complete one of the active win patterns, so the number of balls a game can
  * actually call is `activeColumns x 15` rather than always 75 (see the backend
- * `bingo.PatternColumns`). The half-time prompt used to fire at a hard-coded 35
- * of 75 calls; this scales that same ratio to the game's real callable pool, so a
- * three-column game (45 callable) prompts at ~21 instead of never reaching 35.
+ * `bingo.PatternColumns`). The half-time prompt is the classic 35 of 75 calls,
+ * scaled by that same ratio to the game's real callable pool, so a three-column
+ * game (45 callable) prompts at ~21 instead of never reaching 35.
  */
 import type { GamePattern } from '@/api/client'
 

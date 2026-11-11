@@ -2,11 +2,13 @@
   <!--
     Senpan Companion - a Final Fantasy XIV Dalamud plugin that acts as a second UI
     over the Senpan App Suite server (the Go backend stays the single source of
-    truth; this is just another client). See ../README.md for build/install steps.
+    truth; this is just another client).
 
     The Dalamud.NET.Sdk supplies the TargetFramework (net*-windows) and references
     the Dalamud assemblies from the local XIVLauncher install, so no Dalamud
-    package references are needed here.
+    package references are needed here. Building therefore needs the .NET 10 SDK and
+    a local XIVLauncher/Dalamud install; a Release build writes the plugin package to
+    bin/Release/SenpanCompanionAdmin/latest.zip.
   -->
   <PropertyGroup>
     <!-- Assembly name = the plugin's Dalamud InternalName (how it's identified in
@@ -25,8 +27,8 @@
          non-Windows, so it is a no-op locally: the normal Windows build and the
          `dotnet build -c Release` deploy step are unaffected. -->
     <EnableWindowsTargeting Condition="'$(OS)' != 'Windows_NT'">true</EnableWindowsTargeting>
-    <!-- The analyzers and code style come from ../Directory.Build.props
-         (shared-tooling's lint/dotnet); the plugin's exceptions are in .editorconfig. -->
+    <!-- The analyzers and code style come from ../Directory.Build.props; the
+         plugin's exceptions are in the repo-root .editorconfig. -->
   </PropertyGroup>
 
   <ItemGroup>

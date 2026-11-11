@@ -58,7 +58,7 @@ func TestAccountToken_GenerateInfoRevoke(t *testing.T) {
 
 	token := createToken(t, env.client, env)
 
-	// The summary now shows the token by its prefix - and never its secret.
+	// The summary shows the token by its prefix - and never its secret.
 	summary, _ := decodeBody(t, env.get(t, "/api/v1/me/token"))["token"].(map[string]any)
 	prefix, _ := summary["prefix"].(string)
 	if prefix == "" || !strings.HasPrefix(token, prefix) || prefix == token {

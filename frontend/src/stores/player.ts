@@ -1,7 +1,7 @@
 /**
  * Player store: joining a game, the player's board + game state, manual stamps
  * (persisted to localStorage), and stamp customization (shape/color/opacity/
- * custom image). Mirrors all player-side logic from app.js.
+ * custom image).
  */
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
@@ -22,13 +22,13 @@ import { useGameStore } from './game'
 /** Player sound preference: off, synthesized "basic" beeps, or "game" effects. */
 export type SoundMode = 'off' | 'basic' | 'game'
 
-/** Reads the persisted sound mode, migrating the legacy on/off boolean. */
+/** Reads the persisted sound mode, falling back to the on/off `bingo_sound_enabled` flag. */
 function readSoundMode(): SoundMode {
   const stored = localStorage.getItem('bingo_sound_mode')
   if (stored === 'off' || stored === 'basic' || stored === 'game') {
     return stored
   }
-  // Legacy `bingo_sound_enabled` ('1' = on) -> the basic beeps that were in place.
+  // `bingo_sound_enabled` ('1' = on) maps to the basic beeps.
   return localStorage.getItem('bingo_sound_enabled') === '1' ? 'basic' : 'off'
 }
 
@@ -48,9 +48,8 @@ const DEFAULT_STAMP_COLOR = 'rgba(229,49,112,0.55)'
 const DEFAULT_SECONDARY_STAMP_COLOR = 'rgba(56,128,255,0.55)'
 
 /**
- * Resolves the persisted stamp colour. New installs store a full CSS color
- * string; legacy installs stored a preset id (e.g. `"pink"`) - map those to the
- * matching preset value so returning players keep their chosen colour.
+ * Resolves the persisted stamp colour: a full CSS color string, or a preset id
+ * (e.g. `"pink"`) that maps to the matching preset value.
  */
 function resolveStoredColor(stored: string | null): string {
   if (!stored) {
@@ -61,10 +60,9 @@ function resolveStoredColor(stored: string | null): string {
 }
 
 /**
- * Resolves the persisted stamp shape into a { mode, emoji } pair. New installs
- * store a mode ('blank' | 'emoji' | 'custom') plus the chosen emoji character
- * separately; legacy installs stored a fixed shape id (e.g. 'heart') - map those
- * forward to the matching emoji so a returning player keeps their stamp.
+ * Resolves the persisted stamp shape into a { mode, emoji } pair. A mode
+ * ('blank' | 'emoji' | 'custom') is stored plus the chosen emoji character
+ * separately; a fixed shape id (e.g. 'heart') maps to the matching emoji.
  */
 function resolveStoredShape(): { mode: string; emoji: string } {
   const mode = localStorage.getItem('bingo_stamp_shape') || 'blank'
@@ -75,7 +73,7 @@ function resolveStoredShape(): { mode: string; emoji: string } {
   if (mode === 'blank') {
     return { mode: 'blank', emoji: '' }
   }
-  // Legacy fixed shape id (heart/star/...): map to its emoji, else fall back blank.
+  // A fixed shape id (heart/star/...) maps to its emoji, else falls back to blank.
   const legacy = STAMP_SHAPES.find((s) => s.id === mode)
   return legacy?.emoji ? { mode: 'emoji', emoji: legacy.emoji } : { mode: 'blank', emoji: '' }
 }
@@ -103,9 +101,9 @@ export const usePlayerStore = defineStore('player', () => {
   const stampEmoji = ref(resolveStoredShape().emoji)
   /**
    * The stamp tint as a full CSS color string *including its own alpha channel*
-   * (e.g. `rgba(229,49,112,0.55)`). Chosen via the color-picker modal. Legacy
-   * installs stored a preset id (e.g. `"pink"`) here - `resolveStoredColor()`
-   * maps those forward so a returning player keeps their colour. This alpha is
+   * (e.g. `rgba(229,49,112,0.55)`). Chosen via the color-picker modal. A preset id
+   * (e.g. `"pink"`) may also be stored here - `resolveStoredColor()` maps it to
+   * its value. This alpha is
    * deliberately separate from `stampOpacity` (below): the alpha tints only the
    * stamp's background fill, while opacity fades the whole mark (icon included).
    */
@@ -125,7 +123,7 @@ export const usePlayerStore = defineStore('player', () => {
    * with its own colour. When enabled, it auto-marks cells that are NOT part of
    * any active win pattern, while the primary stamp marks the pattern cells -
    * giving players an at-a-glance view of which cells matter for the win. Shares
-   * the single `stampOpacity` slider. Off by default (preserves prior behaviour).
+   * the single `stampOpacity` slider. Off by default.
    */
   const secondaryStampEnabled = ref(localStorage.getItem('bingo_secondary_stamp_enabled') === '1')
   const secondaryStampColor = ref(
@@ -354,7 +352,7 @@ export const usePlayerStore = defineStore('player', () => {
     stamps.value = {}
     frozenPatternCells.value = null // clearing the board resets the pattern split
     // If no game is running (e.g. it ended), clearing the board also drops the
-    // game details so they no longer linger in a subsequent card export.
+    // game details so they don't linger in a subsequent card export.
     if (!playerGame.value) {
       frozenGameDetails.value = ''
       game.gameDetails = ''

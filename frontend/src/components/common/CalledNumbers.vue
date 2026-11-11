@@ -2,7 +2,6 @@
 /**
  * Called numbers panel - the 5-column B-I-N-G-O number tracker shared by the
  * player and admin game views. `isCalled` decides the `called` highlight.
- * Mirrors the original `.numbers-panel` markup.
  *
  * `activeColumns` (from patternColumns) marks which columns the current game can
  * actually draw from; a column no pattern uses (so no number in it will ever be

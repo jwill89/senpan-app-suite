@@ -15,7 +15,7 @@ namespace SenpanCompanion.Services;
 /// Run state (running / next-due) is intentionally in-memory only - macros persist, but a
 /// macro always reloads stopped. <see cref="TimedTextMacro.SendsCompleted"/> is saved after
 /// every fire, so a crash mid-run leaves the remaining count correct. Logout stops every
-/// macro (you can't chat while logged out, and the spec is "won't resume until restarted").
+/// macro (you can't chat while logged out, and a macro stays stopped until started again).
 ///
 /// The Update handler, Start/Stop/Remove (called from the framework-thread Draw loop) and
 /// logout all run on the framework thread, so state is single-threaded; a lock guards it

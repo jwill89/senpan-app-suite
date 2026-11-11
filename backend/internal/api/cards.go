@@ -47,7 +47,7 @@ type CardSummary struct {
 	ID           string  `json:"id" doc:"The card's id: six letters and digits, upper-case."`
 	PlayerName   string  `json:"playerName" doc:"The player it is issued to, or the character who asked for a personal card; empty for none."`
 	Details      string  `json:"details" doc:"Staff's note on the cardholder; empty for none."`
-	CreatedAt    *string `json:"createdAt" nullable:"true" doc:"When it was made, RFC 3339 in UTC; null for a card made before this was recorded."`
+	CreatedAt    *string `json:"createdAt" nullable:"true" doc:"When it was made, RFC 3339 in UTC; null when no time was recorded for it."`
 	Protected    bool    `json:"protected" doc:"Whether Delete all spares it. Approving a personal card protects it."`
 	CustomStatus string  `json:"customStatus" enum:",pending,approved" doc:"A personal card's state: pending until staff approve it (it can't be played until then), then approved; empty for a generated card."`
 	World        string  `json:"world" doc:"The home world of the character who asked for a personal card; empty otherwise."`

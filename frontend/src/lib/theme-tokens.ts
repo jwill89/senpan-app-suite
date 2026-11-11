@@ -4,9 +4,9 @@
  * stylesheet is a generated `:root{...}` block (see tokensToCss), so themes can
  * only retint the design tokens and never carry arbitrary CSS.
  *
- * Keep this list in sync with the `:root` block in `assets/app.css` and with
- * `TokenOrder` in the Go `themes` package (the server validates against the same
- * allowlist and generates the same CSS).
+ * Keep this list in sync with the `:root` block in `assets/styles/tokens.css`
+ * and with `TokenOrder` in the Go `themes` package (the server validates against
+ * the same allowlist and generates the same CSS).
  */
 
 export interface ThemeTokenMeta {
@@ -15,9 +15,9 @@ export interface ThemeTokenMeta {
   /** Human-readable label shown in the editor. */
   label: string
   /** Where the colour is used - shown as help text under the editor row (sourced
-   *  from the app.css :root comments). */
+   *  from the tokens.css :root comments). */
   desc: string
-  /** Default value, mirroring app.css :root. */
+  /** Default value, mirroring tokens.css :root. */
   default: string
   /** True for tokens whose values use alpha (rgba) - edited as text, not a swatch. */
   alpha?: boolean
@@ -287,7 +287,7 @@ export function toRgb(c: Rgba): string {
 /**
  * Rejects a token value that could break out of its `--name:value;` declaration
  * or smuggle extra CSS into the live preview. Mirrors the server sanitizer's
- * intent (store.sanitizeTokenValue) so a hostile token can't self-inject CSS into
+ * intent (`themes.Sanitize`) so a hostile token can't self-inject CSS into
  * the editor's preview `:root{...}` block. Legitimate function values such as
  * `rgb(0 0 0 / 70%)` pass; only injection vectors are blocked.
  */

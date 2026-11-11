@@ -81,7 +81,7 @@ beforeEach(() => {
 describe('setTabFromRoute (section highlight + per-tab load)', () => {
   const cases: { tab: string; section: string }[] = [
     { tab: 'bingo-game', section: 'bingo' },
-    { tab: 'teahouse-raffles', section: 'festival' }, // raffles moved under Festival
+    { tab: 'teahouse-raffles', section: 'festival' }, // raffles sit under Festival
     { tab: 'festival-garapon', section: 'festival' },
     { tab: 'teahouse-announcements', section: 'teahouse' },
     { tab: 'bookclub-yaoi', section: 'teahouse' },
@@ -92,7 +92,7 @@ describe('setTabFromRoute (section highlight + per-tab load)', () => {
     it(`maps ${tab} -> ${section}`, () => {
       stubLoaders()
       const admin = useAdminStore()
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the table holds plain strings; the store takes the AdminTab union
       admin.setTabFromRoute(tab as any)
       expect(admin.adminTab).toBe(tab)
       expect(admin.adminSection).toBe(section)

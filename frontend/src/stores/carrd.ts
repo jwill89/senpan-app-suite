@@ -1,6 +1,6 @@
 /**
  * Carrd store: manages image-hosting "projects" (folders under <data>/carrd)
- * and the images/sub-directories within them (the System -> Carrd Upload admin
+ * and the images/sub-directories within them (the Atelier -> Carrd Upload admin
  * tab).
  *
  * A project has a human-readable title and a URL folder name. Within a project,

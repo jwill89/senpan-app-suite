@@ -4,9 +4,9 @@ import PlacementEditor, { type PlaceItem } from '@/components/admin/PlacementEdi
 
 /**
  * The placement editors (stamp rally cards and, in their twin MapStallEditor,
- * festival pitches) were pointer-only: each item was a bare <div> carrying nothing
- * but @pointerdown, with no role, no tabindex and no key handler, so the whole
- * editor was unreachable without a mouse.
+ * festival pitches) must work without a mouse: a bare <div> carrying only
+ * @pointerdown, with no role, no tabindex and no key handler, would leave the whole
+ * editor unreachable from the keyboard.
  *
  * Dragging is inherently a pointer gesture and is not what these assert. SELECTING
  * is the part that must be reachable, because once an item is selected the form's

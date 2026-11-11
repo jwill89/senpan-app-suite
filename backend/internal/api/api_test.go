@@ -47,8 +47,9 @@ func guarded(t *testing.T) humatest.TestAPI {
 	return api
 }
 
-// Each guard answers 401 when nobody is signed in, 403 when the account lacks the
-// access, and lets the rest through; an admin holds every permission.
+// TestGuards checks that each guard answers 401 when nobody is signed in, 403 when
+// the account lacks the access, and lets the rest through; an admin holds every
+// permission.
 func TestGuards(t *testing.T) {
 	member := &model.User{Username: "member", Permissions: []string{"festival-garapon"}}
 	stranger := &model.User{Username: "stranger", Permissions: []string{"bingo-cards"}}
@@ -83,7 +84,8 @@ func TestGuards(t *testing.T) {
 	}
 }
 
-// fail logs the real error and answers a 500 that names nothing of it.
+// TestFailHidesTheError checks that fail logs the real error and answers a 500 that
+// names nothing of it.
 func TestFailHidesTheError(t *testing.T) {
 	var logged bytes.Buffer
 	h := handlers{Deps{Logger: slog.New(slog.NewTextHandler(&logged, nil))}}

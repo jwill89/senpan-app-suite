@@ -7,12 +7,12 @@ import (
 	"app-suite/internal/auth"
 )
 
-// Capability tokens travel in the URL path (and, for the PAT fallback, the query
-// string): /api/v1/garapon-players/{token}, /api/v1/stamp-cards/{token}, /api/v1/fonts/pub/f/{token},
-// and the SPA referer forms /garapon/{token}, /stamp-card/{token}. Those tokens
-// are bearer credentials, so the request logger must not write them verbatim to
-// the rotating file, the /api/logs viewer, or the admins' live log events. The
-// trailing slash on each prefix keeps the admin routes (/api/v1/garapons/{id}, integer
+// Capability tokens travel in the URL path: /api/v1/garapon-players/{token},
+// /api/v1/stamp-cards/{token}, /api/v1/fonts/pub/f/{token}, and the SPA referer
+// forms /garapon/{token}, /stamp-card/{token}. Those tokens are bearer
+// credentials, so the request logger must not write them verbatim to the rotating
+// file, the /api/v1/logs viewer, or the admins' live log events. The trailing
+// slash on each prefix keeps the admin routes (/api/v1/garapons/{id}, integer
 // ids) from ever matching.
 var tokenPathPrefixes = []string{
 	"/api/v1/garapon-players/",
@@ -55,9 +55,10 @@ func redactSensitivePath(path string) string {
 	return path
 }
 
-// redactTokenQuery replaces the value of a `token` query parameter (the PAT /
-// capability-token fallback accepted on some routes) with a fixed placeholder.
-// Other parameters are left intact. Returns raw unchanged when there is no token.
+// redactTokenQuery replaces the value of a `token` query parameter with a fixed
+// placeholder. No route accepts a token in the query, but a client can still send
+// one, and it must not reach the log. Other parameters are left intact. Returns
+// raw unchanged when there is no token.
 func redactTokenQuery(raw string) string {
 	if raw == "" {
 		return ""

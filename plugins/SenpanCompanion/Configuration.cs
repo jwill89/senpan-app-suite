@@ -26,15 +26,15 @@ public class Configuration : IPluginConfiguration
     /// DPAPI-encrypted personal access token (base64), or null when none is set.
     /// Serialized to the config JSON in place of the plaintext token. Encrypted with
     /// the Windows Data Protection API (CurrentUser scope, see <see cref="TokenProtector"/>),
-    /// so a synced/backed-up or world-readable config no longer exposes a usable
+    /// so a synced/backed-up or world-readable config doesn't expose a usable
     /// token. Read/write the token through <see cref="GetToken"/> / <see cref="SetToken"/>.
     /// </summary>
     public string? TokenProtected { get; set; }
 
     /// <summary>
-    /// Legacy plaintext token from a pre-encryption config. Public only so Dalamud's
-    /// JSON loader still populates the old "Token" key; it is migrated into
-    /// <see cref="TokenProtected"/> (encrypted) on first load and then cleared, so new
+    /// A plaintext token as an older config file holds it. Public only so Dalamud's
+    /// JSON loader populates the "Token" key; it is adopted into
+    /// <see cref="TokenProtected"/> (encrypted) on first load and then cleared, so
     /// saves never persist plaintext. Do not read it - use <see cref="GetToken"/>.
     /// </summary>
     public string Token { get; set; } = string.Empty;
@@ -82,8 +82,7 @@ public class Configuration : IPluginConfiguration
 
     // Editable auto-tell message templates. Placeholders (expanded by the plugin, see
     // TellComposer): <t> = recipient name; <bingocard-link>/<garapon-link>/<stamprally-link>
-    // = the relevant link. Defaults reproduce the messages the plugin sent before the
-    // templates existed, so enabling a tell behaves the same until it's customized.
+    // = the relevant link. The defaults are the plugin's standard messages.
 
     /// <summary>Template for the bingo-card auto-tell (uses <c>&lt;bingocard-link&gt;</c>).</summary>
     public string BingoCardTellTemplate { get; set; } = "Here's your bingo card: <bingocard-link>";
@@ -116,7 +115,7 @@ public class Configuration : IPluginConfiguration
     }
 
     // Resolves the in-memory plaintext token after Dalamud deserializes the config,
-    // and migrates a pre-encryption plaintext token to encrypted storage once.
+    // and moves a plaintext token from an older config into encrypted storage once.
     private void LoadToken()
     {
         if (!string.IsNullOrEmpty(this.TokenProtected))

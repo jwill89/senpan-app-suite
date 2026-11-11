@@ -78,7 +78,7 @@ type RaffleInput struct {
 	AvailableTo        *string `json:"availableTo,omitempty" nullable:"true" format:"date-time" doc:"When it stops taking entries, RFC 3339; null or left out for no end."`
 	PrizeImage         string  `json:"prizeImage" maxLength:"500" doc:"The prize's picture: a path from the image library; empty for none."`
 	PayImage           string  `json:"payImage" maxLength:"500" doc:"A screenshot showing where to pay: a path from the image library; empty for none."`
-	FestivalMapID      *int64  `json:"festivalMapId,omitempty" nullable:"true" minimum:"1" doc:"The festival to file it under; null or left out for none. One that no longer exists is refused."`
+	FestivalMapID      *int64  `json:"festivalMapId,omitempty" nullable:"true" minimum:"1" doc:"The festival to file it under; null or left out for none. One that doesn't exist is refused."`
 	OccupantID         *int64  `json:"occupantId,omitempty" nullable:"true" minimum:"1" doc:"The stall on that festival's plan to assign it to; null or left out for none. A stall that isn't on the festival is dropped, and the festival's absence clears it."`
 }
 

@@ -9,7 +9,8 @@ import { useMarkdown, useMarkdownFlow } from '@/lib/markdown'
 //
 // `flow` switches off the single-newline-><br> behaviour (standard markdown, where
 // soft newlines are spaces) - use it for source that's soft-wrapped as prose,
-// e.g. the changelog. Default (off) preserves the game-details/raffle behaviour.
+// e.g. the changelog. Default (off) keeps each newline as a <br>, which the
+// game-details and raffle text rely on.
 const props = defineProps<{ source: string; flow?: boolean }>()
 
 const { render } = props.flow ? useMarkdownFlow() : useMarkdown()
@@ -17,8 +18,8 @@ const { render } = props.flow ? useMarkdownFlow() : useMarkdown()
 
 <template>
   <!-- `md-body` marks this as prose rather than app chrome: the global heading
-       register (base.css section 1) opts out inside it, so an admin's `## Heading`
+       register (base.css) opts out inside it, so an admin's `## Heading`
        stays readable body copy instead of picking up the uppercase display face. -->
-  <!-- eslint-disable-next-line vue/no-v-html -->
+  <!-- eslint-disable-next-line vue/no-v-html -- markdown-it runs with html: false, so raw HTML in the source is escaped -->
   <div class="md-body" v-html="render(source)"></div>
 </template>

@@ -4,17 +4,15 @@ package model
 // number of each. Stored in stamp_rally_stamps.stamp_type and snapshotted onto
 // each collected-stamp log row.
 const (
-	// StampTypeFood - a food stall's stamp. The original (and only) kind of stamp,
-	// so every stamp that predates types is one.
+	// StampTypeFood - a food stall's stamp, and what a blank or unknown type means.
 	StampTypeFood = "food"
 	// StampTypeGame - a game stall's stamp.
 	StampTypeGame = "game"
 )
 
 // NormalizeStampType maps a stored/received stamp type onto a known one, falling
-// back to StampTypeFood. Rows written before stamp types existed hold "", and API
-// clients that predate the field omit it - both mean a food stamp, which is what
-// every stamp on every past rally was.
+// back to StampTypeFood, so a row that holds "" or an API client that omits the
+// field gets a food stamp.
 func NormalizeStampType(t string) string {
 	switch t {
 	case StampTypeGame:
@@ -27,9 +25,8 @@ func NormalizeStampType(t string) string {
 // Rally completion modes - what it takes to finish a card. Stored in
 // stamp_rallies.completion_mode.
 const (
-	// RallyCompletionAll - collect every stamp on the card (any that can never be
-	// collected again no longer blocks it). The original behavior and the default
-	// for any rally created before completion modes existed.
+	// RallyCompletionAll - collect every stamp on the card (one that can never be
+	// collected again doesn't block it). The default, and what a blank mode means.
 	RallyCompletionAll = "all"
 	// RallyCompletionCounts - collect RequiredFood food stamps and RequiredGame
 	// game stamps; the rest are optional. A rally with 5 food stalls and 5 game
@@ -38,8 +35,8 @@ const (
 )
 
 // NormalizeRallyCompletion maps a stored/received completion mode onto a known
-// one, falling back to RallyCompletionAll - so a rally written before the field
-// existed (or by an older client) keeps requiring the whole card.
+// one, falling back to RallyCompletionAll - so a row that holds "" or a client that
+// omits the field requires the whole card.
 func NormalizeRallyCompletion(mode string) string {
 	switch mode {
 	case RallyCompletionCounts:

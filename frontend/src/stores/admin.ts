@@ -2,10 +2,9 @@
  * Admin navigation store: tracks the active tab + open section (for sidebar
  * highlighting) and triggers the relevant per-tab data loads.
  *
- * Navigation itself is now handled by Vue Router (`/admin/...` routes); the
- * router guard calls `setTabFromRoute()` whenever an admin child route is
- * matched, which both updates the highlight state and performs the data load
- * that the old `adminNav()` used to do as a side effect.
+ * Navigation is handled by Vue Router (`/admin/...` routes); the router guard
+ * calls `setTabFromRoute()` whenever an admin child route is matched, which both
+ * updates the highlight state and performs the tab's data load.
  */
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
@@ -62,7 +61,7 @@ export type AdminTab =
 
 // Per-dataset freshness gate so re-entering a tab doesn't re-spin and re-fetch
 // data we just loaded. Keyed by data domain (several tabs can share one key, e.g.
-// the open/closed raffle tabs, or the game/presets tabs). Mutations refresh by
+// the game and presets tabs). Mutations refresh by
 // calling the store loaders directly (bypassing this), so edits still show at
 // once; the live events have the game, cards and patterns read again as they change.
 const tabData = createFreshness(30_000)
@@ -127,13 +126,13 @@ export const useAdminStore = defineStore('admin', () => {
   /**
    * Called by the router guard when an admin child route is matched. Updates
    * the active tab + section (for sidebar highlight) and runs the per-tab data
-   * load that the old `adminNav()` performed.
+   * load.
    */
   function setTabFromRoute(tab: AdminTab): void {
     if (tab.startsWith('bingo-')) {
       adminSection.value = 'bingo'
     }
-    // Raffles moved under Festival (alongside Garapon); it keeps its
+    // Raffles sit under Festival (alongside Garapon) but keep the
     // `teahouse-raffles` id, so map it to 'festival' before the generic
     // teahouse- check below.
     else if (tab === 'teahouse-raffles' || tab.startsWith('festival-')) {

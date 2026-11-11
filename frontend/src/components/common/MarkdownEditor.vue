@@ -87,9 +87,9 @@ const emojiIcon = faceSmile?.html[0] ?? '<span>🙂</span>'
  * The insert waits for the modal to actually unmount. ModalOverlay restores focus
  * to whatever was focused when it opened - here the editor - with a raw
  * `.focus()`, and focusing a contenteditable that way collapses the caret to the
- * start of the block. Inserting first meant that restoration landed AFTER our own
- * `view.focus()` and undid it, which is why the caret kept jumping to the start of
- * the line. Going second makes the editor's selection the last word.
+ * start of the block. Inserting first would let that restoration land AFTER our own
+ * `view.focus()` and undo it, jumping the caret to the start of the line. Going
+ * second makes the editor's selection the last word.
  */
 async function onEmojiSelect(emoji: string): Promise<void> {
   emojiOpen.value = false
@@ -224,7 +224,7 @@ onMounted(async () => {
   // the transaction still lands in the right place (ProseMirror keeps its own
   // selection while blurred), but the DOM selection is stale, and a contenteditable
   // that regains focus without one drops the caret at the start of the block - so
-  // typing after picking an emoji ran on at the beginning of the line. `view.focus()`
+  // typing after picking an emoji would run on at the beginning of the line. `view.focus()`
   // writes the state's selection back to the DOM, which puts the caret after the
   // emoji that was just inserted.
   insertInline = (markdown) => {

@@ -37,10 +37,10 @@ describe('useMarkdown', () => {
     expect(render('see https://example.com now')).toContain('href="https://example.com"')
   })
 
-  // markdown-it 15 pulled in linkify-it 6, which defaults `fuzzyLink` to false -
-  // silently dropping the link on a scheme-less address an author typed. We turn it
-  // back on, so this pins the behavior rather than whatever the transitive default
-  // happens to be.
+  // linkify-it 6 (via markdown-it 15) defaults `fuzzyLink` to false, which would
+  // silently drop the link on a scheme-less address an author typed. The renderer
+  // turns it on, so this pins the behavior rather than whatever the transitive
+  // default happens to be.
   it('linkifies a scheme-less www address', async () => {
     const render = await renderer()
     expect(render('visit www.example.com today')).toContain('href="http://www.example.com"')
@@ -62,7 +62,7 @@ describe('useMarkdown', () => {
 describe('normalizeHardBreaks', () => {
   /**
    * Raw HTML is escaped (html: false), so a description holding a literal "<br />"
-   * showed those characters to the reader instead of breaking the line. Text
+   * would show those characters to the reader instead of breaking the line. Text
    * arrives that way from more than one direction - pasted from a source that
    * emitted HTML, or serialized by a WYSIWYG editor that writes hard breaks as
    * tags - so it is normalized before parsing rather than by allowing raw HTML.

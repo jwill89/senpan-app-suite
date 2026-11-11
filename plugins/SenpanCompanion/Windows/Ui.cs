@@ -11,9 +11,8 @@ namespace SenpanCompanion.Windows;
 /// Shared ImGui building blocks so every page speaks one visual language: icon +
 /// accent section headers, a three-tier button system (primary / secondary / danger),
 /// compact icon buttons for table rows, pill badges, and a rounded "card" container.
-/// Modelled on the sibling TarotGen plugin's Ui helper. Icons come from Dalamud's
-/// bundled FontAwesome font; scoped push/pop is done with <see cref="ImRaii"/> so a
-/// draw path can never leak a style onto the rest of the frame.
+/// Icons come from Dalamud's bundled FontAwesome font; scoped push/pop is done with
+/// <see cref="ImRaii"/> so a draw path can never leak a style onto the rest of the frame.
 /// </summary>
 internal static class Ui
 {
@@ -26,9 +25,8 @@ internal static class Ui
     /// separate fields everywhere - custom cards, raffle entries, stamp rally cards
     /// and garapon links - so that the same person is matchable across them; this is
     /// where the two are put back together for reading. A blank world yields just
-    /// the name (a record predating that change, or one entered without one) rather
-    /// than a dangling separator, and a blank name reads as "-" the way every other
-    /// empty cell in these tables does.
+    /// the name (a record saved without one) rather than a dangling separator, and a
+    /// blank name reads as "-" the way every other empty cell in these tables does.
     /// </remarks>
     internal static string ParticipantLabel(string name, string world)
     {

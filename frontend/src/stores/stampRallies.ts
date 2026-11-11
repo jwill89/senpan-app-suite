@@ -3,9 +3,9 @@
  * tokenized participant cards, and the event-wide collection log) plus the public
  * token-based participant view (load a card, collect stamps by password).
  *
- * Structurally a cousin of the garapons store - an event owns sub-entities and the
- * admin issues each participant a tokenized link; the difference is the visual
- * placement of stamps/prizes and the password-driven public collection flow.
+ * An event owns sub-entities and the admin issues each participant a tokenized
+ * link; stamps and prizes are placed visually on the card, and the public side
+ * collects stamps by password.
  */
 import { defineStore } from 'pinia'
 import { computed, ref, toRaw } from 'vue'

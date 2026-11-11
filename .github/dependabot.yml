@@ -1,11 +1,9 @@
-# Weekly dependency updates, in the shape every repo follows (shared-tooling's
-# repo/dependabot.example.yml): Monday, one pull request per ecosystem for minors and
+# Weekly dependency updates: Monday, one pull request per ecosystem for minors and
 # patches together, majors one by one, since they can need code changes. The shared/
-# submodule is left out: a project takes a shared-tooling release on purpose
-# (`task shared:update`).
+# submodule is left out: a release of it is taken on purpose (`task shared:update`).
 #
 # Dependabot can't read Actions secrets: the Font Awesome Pro registry needs
-# FONTAWESOME_NPM_TOKEN added again as a Dependabot secret (Settings, Secrets and
+# FONTAWESOME_NPM_TOKEN added as a Dependabot secret too (Settings, Secrets and
 # variables, Dependabot).
 version: 2
 
@@ -32,15 +30,13 @@ updates:
       - dependency-name: typescript
         update-types: ['version-update:semver-major']
       # vue-tsc 3.3.14 turns a `//` in a static attribute (placeholder="https://") into
-      # broken virtual code, which stops it checking the rest of that template
-      # (vuejs/language-tools#6322; held at 3.3.13 on 2026-11-07). Only that version:
-      # the fix comes through.
+      # broken virtual code, which stops it checking the rest of that template, so it is
+      # held at 3.3.13. Only that version is skipped, so a fix comes through.
       - dependency-name: vue-tsc
         versions: ['3.3.14']
-      # The tools shared-tooling's lint/web owns move to a new major once, in
-      # shared-tooling, with the plugins and configs that must match, and reach here with
-      # `task shared:update`; a plugin of our own for one moves with it. Minors and
-      # patches still come here.
+      # The lint tools in shared/lint/web change major version together with the plugins
+      # and configs that must match them, and arrive with `task shared:update`; a plugin
+      # of our own for one moves with it. Minors and patches still come here.
       - dependency-name: eslint
         update-types: ['version-update:semver-major']
       - dependency-name: 'eslint-*'

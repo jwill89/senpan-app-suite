@@ -394,7 +394,7 @@
   margin-bottom: 14px;
 }
 
-/* Controls stretch full-width by default, replacing the per-input
+/* Controls stretch full-width by default, so a direct child needs no
    .field-input-full class. The child combinator keeps flex-row field
    layouts (.home-card/.pattern-editor) untouched. */
 .field > input,
@@ -430,7 +430,7 @@
 }
 
 /* FormRow: side-by-side fields that wrap on narrow widths. Direct field
-   children share the width equally (replacing inline flex:1;min-width hacks). */
+   children share the width equally. */
 .form-row {
   display: flex;
   gap: 16px;
@@ -498,10 +498,10 @@
 }
 
 /* The search box is a FIXED preferred width here, not flex-grow. Left to grow,
-   it filled whatever the right-hand group didn't need - so the same control came
-   out 360px on a table with one button and 253px on one with three, which reads
-   as three different components rather than one. It still shrinks when it has
-   to, so narrow viewports are unaffected. */
+   it would fill whatever the right-hand group doesn't need, so the same control
+   would come out a different width on each table and read as a different
+   component. It still shrinks when it has to, so narrow viewports are
+   unaffected. */
 .dt-toolbar-start .search-input {
   flex: 0 1 320px;
 }
@@ -522,8 +522,8 @@
   width: 70px;
 }
 
-/* DataTable: the single admin table style (merges the former .entries-table
-   and .winners-log-table). Wrap scrolls horizontally on narrow screens. */
+/* DataTable: the single admin table style. Wrap scrolls horizontally on narrow
+   screens. */
 .data-table-wrap {
   overflow-x: auto;
 }
@@ -557,9 +557,9 @@
 }
 
 /* Banded rows. Hover deliberately differs in HUE, not lightness: the band already
-   occupies the lightness axis, so a lighter-still hover was nearly invisible on a
-   banded row and obvious on an unbanded one. A warm --accent wash plus a 2px
-   leading edge reads identically on both. The inset shadow here is a row marker,
+   occupies the lightness axis, so a lighter-still hover would be nearly invisible
+   on a banded row and obvious on an unbanded one. A warm --accent wash plus a
+   2px leading edge reads identically on both. The inset shadow here is a row marker,
    not elevation. */
 .data-table tbody tr:nth-child(even) {
   background: color-mix(in srgb, var(--panel-raised-bg) 55%, transparent);
@@ -668,7 +668,7 @@
   line-height: 1.1;
 }
 
-/* Trailing period - the display-face heading convention from senpan.cafe.
+/* Trailing period - the display-face heading convention.
    Applied to the page- and panel-level titles only; `.section-heading`
    (level 3) is a short label inside a panel, where a period reads as noise. */
 .manager-header > h3::after,
@@ -740,9 +740,8 @@
 }
 
 /* Object: sub-panel - a raised box nested INSIDE a panel, for an inline "add an
-   entry" form or a selected-item detail. Was written five times under four names
-   (`.entry-add` in three tabs, `.item-panel`, `.book-club-form`) with an identical
-   body. Distinct from `.card`, which is a bordered tile on the page surface. */
+   entry" form or a selected-item detail. Distinct from `.card`, which is a
+   bordered tile on the page surface. */
 .subpanel {
   background: var(--panel-raised-bg);
   border-radius: var(--radius);
@@ -750,8 +749,7 @@
 }
 
 /* Object: callout - a highlight-tinted notice band announcing an outcome ("you
-   won", "card complete"). Was written twice, byte-identical, as
-   `.garapon-win-banner` and `.stamp-complete-banner`. */
+   won", "card complete"). */
 .callout {
   text-align: center;
   background: color-mix(in srgb, var(--highlight) 16%, transparent);
@@ -769,8 +767,8 @@
   border-color: var(--warning);
 }
 
-/* Object: inline checkbox - a <label> wrapping a checkbox and its text. Was
-   written four times under three names. `--strong` is the settings-form variant
+/* Object: inline checkbox - a <label> wrapping a checkbox and its text.
+   `--strong` is the settings-form variant
    whose label reads as a field heading. */
 .checkbox-inline {
   display: inline-flex;
@@ -801,10 +799,9 @@
 
 /* ---------------------------------------------------------------------------
    FILE BROWSER - the upload/grid/delete UI shared by System -> Images and
-   Atelier -> Carrd Upload. Both tabs are the same media manager; every rule below
-   was byte-identical in the two components under a `carrd-` and an `image-`
-   prefix. Named `file-` rather than `media-` because `.media-card` is already the
-   raffle tile and `.media-tile` the square thumbnail inside one of these cards.
+   Atelier -> Carrd Upload. Both tabs are the same media manager. Named `file-`
+   rather than `media-` because `.media-card` is the raffle tile and
+   `.media-tile` the square thumbnail inside one of these cards.
    --------------------------------------------------------------------------- */
 .file-dropzone {
   display: flex;
@@ -1038,8 +1035,7 @@
   max-width: 100%;
 
   /* --radius-media, not --radius: chrome is square by design here, but a picture
-     takes the soft edge every other image object uses (see tokens.css). The scoped
-     rule this object replaces used the square token, which read as a hard crop. */
+     takes the soft edge every other image object uses (see tokens.css). */
   border-radius: var(--radius-media);
   border: 1px solid var(--control-border);
 }
@@ -1057,9 +1053,9 @@
 /* -- Object: toggle button -------------------------------------------------
    A segmented/selectable pill: a raised pill with a transparent border that
    lights to `--accent` on hover and fills with `--accent` / `--text-on-accent`
-   when `.active`. Shared by the announcement weekday picker and the book-club
-   view switcher; stack them in a flex container. (Distinct from `.chip`, whose
-   `.active` is a ring rather than a fill - toggles read as a chosen segment.) */
+   when `.is-active`. Shared by the announcement weekday picker and the book-club
+   view switcher; stack them in a flex container. (Distinct from `.chip`, a plain
+   clickable pill - toggles read as a chosen segment.) */
 .toggle-btn {
   background: var(--panel-raised-bg);
   color: var(--text);
@@ -1101,7 +1097,7 @@
 }
 
 /* -- Object: switch --------------------------------------------------------
-   An on/off sliding switch: a `<button>` carrying `.switch` (+ `.on` when set)
+   An on/off sliding switch: a `<button>` carrying `.switch` (+ `.is-on` when set)
    wrapping a single `<span class="switch-knob">`. Fills with `--accent` and
    slides the knob right when on; `:disabled` dims it. Used by the player's
    secondary-stamp toggle. (Distinct from
@@ -1344,10 +1340,8 @@
   align-self: flex-start;
 }
 
-/* The parts OF a manager row. Affiliates, Announcements, Book Club and Tea Rooms
-   each had their own byte-identical copy of these under a per-tab prefix
-   (`.aff-title`, `.ann-title`, `.room-title`, `.bc-item-title`, ...). One object
-   each now, so a change lands everywhere instead of in one tab.
+/* The parts OF a manager row, shared by Affiliates, Announcements, Book Club and
+   Tea Rooms, so a change lands everywhere instead of in one tab.
 
    `--inline` is for a meta line that is a wrapping row of chips/badges rather than
    a single sentence. */
@@ -1387,7 +1381,7 @@
 }
 
 /* The image fills the square without cropping - a thumbnail is a preview of the
-   whole asset, not a crop of it. Was written identically in both media managers. */
+   whole asset, not a crop of it. */
 .media-tile img {
   width: 100%;
   height: 100%;
@@ -1415,10 +1409,8 @@
   min-width: 0;
 }
 
-/* A colour field: native swatch input beside its hex read-out. Was implemented
-   three times (affiliates, announcements, tea rooms) with the copies having drifted
-   apart - one used a different monospace stack and skipped the uppercase, so the
-   same control rendered differently on one tab. */
+/* A color field: native swatch input beside its hex read-out. One object, so the
+   monospace stack and the uppercase hex are the same on every tab. */
 .color-field {
   display: flex;
   align-items: center;
@@ -1474,9 +1466,7 @@
    An inline callout inside a form: a tinted box with a leading status icon,
    carrying a validation error (`--danger`) or a caution the reader must act on
    (`--warning`). Distinct from a toast, which is transient and lives in the
-   corner - this one sits in the flow, next to what it is about, and stays.
-   Promoted out of CardRequestsView when the stamp-rally sign-up needed the same
-   thing. */
+   corner - this one sits in the flow, next to what it is about, and stays. */
 .form-alert {
   display: flex;
   align-items: flex-start;
@@ -1670,7 +1660,8 @@
    rule (the colour carries it) and the body face, because the display face is not
    readable at this size (see base.css section 1). Uppercase + letter-spacing is what
    makes a small label read AS a label, and the explicit size keeps the `h3` and `h4`
-   spellings identical - they were inheriting two different browser defaults. */
+   spellings identical, which would otherwise inherit two different browser
+   defaults. */
 .section-heading {
   color: var(--highlight);
   margin-bottom: 8px;

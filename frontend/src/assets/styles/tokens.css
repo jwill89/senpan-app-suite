@@ -1,12 +1,11 @@
 /*
  * Theme design tokens - the :root custom properties every theme overrides.
- * Split out of app.css; see app.css for the import order.
  */
 
 /* Dark theme design tokens - all colors, radii, and effect values */
 :root {
   /* -- Theme tokens ----------------------------------------------------------
-     Every colour below is a theme token: saved CSS themes override these in
+     Every colour below is a theme token: saved themes override these in
      their own :root, and the runtime theme editor + colour-picker tool target
      them by name. Names are role-descriptive (what the colour is *for*), not
      palette names.
@@ -75,7 +74,7 @@
      it. Badges and the game clock are inline children of a panel <h3>, so plain
      inheritance hands them the display face at 0.7rem, where it is unreadable.
      `font-family: inherit` cannot fix that - it inherits the heading. */
-  --radius: 0px; /* Chrome corner radius - square, matching senpan.cafe */
+  --radius: 0px; /* Chrome corner radius - square */
   --radius-media: 6px; /* Image-preview corner radius (thumbnails, covers, prize art) */
   --body-font: 'Montserrat', 'Segoe UI', system-ui, sans-serif; /* Body/UI face */
   --header-font: 'Arapey', serif; /* Header/board font (overridden dynamically via settings) */

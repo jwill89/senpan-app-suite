@@ -4,9 +4,8 @@ import type { components, paths } from './schema'
 
 // The API client for the operations on huma, typed from the generated schema (`task gen`
 // writes openapi.json and schema.d.ts beside this file; never edit either, and never
-// hand-write a type the schema has). The routes not yet on huma go through lib/api.ts
-// until their domain moves. A list in a query is sent as huma reads
-// one: comma-separated in a single parameter.
+// hand-write a type the schema has). A list in a query is sent as huma reads it:
+// comma-separated in a single parameter.
 export const api = createClient<paths>({
   baseUrl: '/api/v1',
   credentials: 'include',

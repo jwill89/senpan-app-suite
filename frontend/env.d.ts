@@ -3,7 +3,7 @@
 
 declare module '*.vue' {
   import type { DefineComponent } from 'vue'
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the shim cannot know any one component's instance type
   const component: DefineComponent<Record<string, never>, Record<string, never>, any>
   export default component
 }
@@ -34,9 +34,9 @@ declare module 'virtual:changelog' {
     entries: ChangelogEntry[]
   }
   export const changelog: {
-    /** The app's releases (4.0.0 on), then the frontend's before them. */
+    /** The app's releases, followed by the frontend's. */
     app: ChangelogSection
-    /** The frontend's and the backend's own releases, before 4.0.0. */
+    /** The `## Frontend` and `## Backend` sections, closed histories that take no new entries. */
     frontend: ChangelogSection
     backend: ChangelogSection
     plugin: ChangelogSection

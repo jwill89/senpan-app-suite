@@ -1,6 +1,7 @@
 // Package permissions names the page permissions an admin grants an account, one
 // per admin page. An admin holds every one; the Users page is admin-only and not
-// grantable. The SPA keeps the same keys (frontend/src/lib/permissions.ts).
+// grantable. The SPA keeps the same keys (frontend/src/lib/constants.ts,
+// ADMIN_PERMISSIONS).
 package permissions
 
 import "app-suite/internal/bookclubs"

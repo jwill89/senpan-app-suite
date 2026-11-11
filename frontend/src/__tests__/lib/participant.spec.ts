@@ -14,8 +14,8 @@ describe('participantLabel', () => {
   })
 
   it('omits the separator when there is no world', () => {
-    // A record written before the world picker, or one staff typed by hand, must
-    // not render a dangling " @ ".
+    // A record with no world, such as one staff typed by hand, must not render a
+    // dangling " @ ".
     expect(participantLabel('Aria Ashwood', '')).toBe('Aria Ashwood')
     expect(participantLabel('Aria Ashwood', '   ')).toBe('Aria Ashwood')
     expect(participantLabel('Aria Ashwood')).toBe('Aria Ashwood')

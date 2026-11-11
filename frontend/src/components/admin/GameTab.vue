@@ -3,7 +3,6 @@
  * Admin Game tab - "New Game" setup (pattern picker + game details) when no
  * game is active, and the live "Current Game" controls (draw, countdown, last
  * drawn, patterns, winners, frequent winners, called numbers) once started.
- * Mirrors the original `adminTab==='bingo-game'` block exactly.
  */
 import { onBeforeUnmount, onMounted, computed, ref, useId } from 'vue'
 import { useRouter } from 'vue-router'

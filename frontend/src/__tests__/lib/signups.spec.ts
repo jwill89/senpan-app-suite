@@ -76,11 +76,10 @@ describe('saved sign-ups', () => {
   })
 
   /**
-   * The upgrade path. A browser that signed up BEFORE the home world had its own
-   * field holds the whole thing in `name` and no `world` key at all. Left alone it
-   * would be a type lie - `world` typed string, undefined at runtime - and the name
-   * would no longer match what the server now stores, so the person would look like
-   * a stranger to their own records.
+   * The stored-shape upgrade path. A record that holds the whole "Name @ World" in
+   * `name` and has no `world` key at all would, left alone, be a type lie - `world`
+   * typed string, undefined at runtime - and the name would not match what the
+   * server stores, so the person would look like a stranger to their own records.
    */
   it('splits a sign-up saved before worlds had their own field', () => {
     localStorage.setItem(

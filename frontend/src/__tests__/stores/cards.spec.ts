@@ -43,9 +43,9 @@ beforeEach(() => {
 })
 
 describe('cards cardMatches', () => {
-  // The filter -> sort -> paginate pipeline itself now lives in DataTable (see
-  // DataTable.spec.ts). What remains the store's business is what "matches"
-  // means for a card, which is what these cover.
+  // The filter -> sort -> paginate pipeline itself lives in DataTable (see
+  // DataTable.spec.ts). The store's business is what "matches" means for a card,
+  // which is what these cover.
   it('matches on card id, case-insensitively', () => {
     const cards = useCardsStore()
     expect(cards.cardMatches(entry('BBB222'), 'bbb')).toBe(true)

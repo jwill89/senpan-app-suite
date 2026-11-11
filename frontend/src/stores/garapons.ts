@@ -2,9 +2,8 @@
  * Garapons store: admin management (CRUD, prizes, per-player drawing links, draw
  * log) plus the public token-based player view + authoritative draw.
  *
- * Structurally a leaner cousin of the raffles store - a garapon has no ticket
- * sign-up or cost; instead an admin issues each player a tokenized link with a
- * draw allowance, and the server picks each prize. The grand-prize image is
+ * A garapon has no ticket sign-up or cost; instead an admin issues each player a
+ * tokenized link with a draw allowance, and the server picks each prize. The grand-prize image is
  * picked from the "Garapon" image category, exactly like raffle prize images.
  */
 import { defineStore } from 'pinia'

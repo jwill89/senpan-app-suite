@@ -6,8 +6,8 @@
 -- strftime() in place of CURRENT_TIMESTAMP and datetime(), whose
 -- '2026-11-09 21:30:00' sorts wrong against it. The values convert as they copy:
 -- SQLite's space form, the browser's milliseconds (.000Z) and an offset all become
--- the one form in UTC, and the naive 2026-06-13T20:00 the raffles once stored is
--- read as UTC, as the app always read it.
+-- the one form in UTC, and the naive 2026-06-13T20:00 some raffles hold is read as
+-- UTC, as the app reads it.
 --
 -- SQLite can't add a CHECK or change a type in place, so each table is rebuilt by
 -- the procedure SQLite documents for it: foreign keys off

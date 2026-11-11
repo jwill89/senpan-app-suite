@@ -194,7 +194,7 @@ func (g *Service) Run(ctx context.Context) {
 			timer.Reset(time.Duration(bingo.ClampAutoInterval(interval)) * time.Second)
 		default:
 			// autoDrawNow is left alone: switching them off clears it (Change), and
-			// clearing it here raced a switch back on.
+			// clearing it here would race a switch back on.
 			stopTimer(timer)
 		}
 		select {

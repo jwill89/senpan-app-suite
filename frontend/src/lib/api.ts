@@ -103,7 +103,7 @@ export interface UploadOptions {
  *
  * Credentials, error extraction, and the global 401 handler match the API client's
  * (api/client.ts), so callers get the same {@link ApiError} contract.
- * @throws {ApiError} with the server's error message if the response is not OK.
+ * @throws An {@link ApiError} with the server's error message if the response is not OK.
  */
 export function apiUpload<T = unknown>(
   endpoint: string,

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * App/plugin version readout for the admin sidebar footer. The app's version is this
- * build's (baked in); the server's (GET /api/version) is fetched only to tell a tab
+ * build's (baked in); the server's (GET /api/v1/version) is fetched only to tell a tab
  * opened before a deploy that the server runs another version now, and that a reload
  * brings them back together. A failed probe is flagged too. The plugin's version is
  * fetched LIVE from the deployed Dalamud repo index (pluginmaster.json) so publishing

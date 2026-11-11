@@ -1,5 +1,5 @@
-// markdownlint for the docs (`task shared:lint:md`, and CI): the shared config from
-// shared-tooling's lint/markdown. The VS Code markdownlint extension reads this file too.
+// markdownlint for the docs (`task shared:lint:md`, and CI), on the shared config in
+// shared/lint/markdown. The VS Code markdownlint extension reads this file too.
 {
   "config": { "extends": "shared/lint/markdown/markdownlint.jsonc" },
   "globs": ["**/*.md"],

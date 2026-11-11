@@ -28,8 +28,8 @@ const (
 const MaxEntries = 100
 
 // NormalizeMode maps a stored or received mode onto a known one, falling back to
-// ModeSingle: a row written before entry modes existed holds "", and an unrecognized
-// value must never read as free or as taking no sign-ups.
+// ModeSingle: "" (no mode set) or an unrecognized value must never read as free or as
+// taking no sign-ups.
 func NormalizeMode(mode string) string {
 	switch mode {
 	case ModeDetails, ModeCustom:
@@ -149,10 +149,10 @@ func ValidWaiver(amount int64) bool { return amount >= 0 }
 // Gil is a stored amount as whole gil.
 func Gil(amount float64) int64 { return int64(math.Round(amount)) }
 
-// ParseTime reads a raffle time into a UTC instant. Times are stored as RFC 3339;
-// older ones are the naive "2006-01-02T15:04", read as UTC to agree with the SQL
-// that filters by the clock. It reports false for an empty or unreadable time, which
-// is no constraint.
+// ParseTime reads a raffle time into a UTC instant. Times are stored as RFC 3339; the
+// naive "2006-01-02T15:04" is read too, as UTC to agree with the SQL that filters by
+// the clock. It reports false for an empty or unreadable time, which is no
+// constraint.
 func ParseTime(s string) (time.Time, bool) {
 	if s == "" {
 		return time.Time{}, false

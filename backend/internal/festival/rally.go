@@ -88,7 +88,7 @@ func StampAvailable(r Rally, s Stamp, now time.Time) bool {
 }
 
 // StampExpired reports whether a stamp can never be collected again: its own window
-// ended, or the whole rally did. Such a stamp no longer blocks completion.
+// ended, or the whole rally did. Such a stamp doesn't block completion.
 func StampExpired(r Rally, s Stamp, now time.Time) bool {
 	if to, ok := raffles.ParseTime(s.ActiveTo); ok && now.After(to) {
 		return true

@@ -75,19 +75,19 @@ async function openMap() {
 
 describe('festival map canvas: the opening fit', () => {
   /**
-   * The bug this pins. The frame's shape comes from the plan, so it is the
+   * The failure this pins. The frame's shape comes from the plan, so it is the
    * fallback shape until the image has loaded - and the canvas already has its
    * full size at mount whenever the image is in the browser's cache, which is the
    * ordinary case for a second visit. Fitting against that fallback lands at
    * exactly FALLBACK_ASPECT / planAspect: a 3:2 plan opened at 0.9375, a few
    * percent small and inset inside its own frame, and only pressing "Fit" - which
-   * measures again, by then against the right frame - put it right.
+   * measures again, by then against the right frame - would put it right.
    */
   it('opens filling its frame, not at the shape the frame started as', async () => {
     const wrapper = await openMap()
     expect(wrapper.vm.zoom).toBeCloseTo(1, 3)
     // Stated the other way round, so a regression cannot pass by landing anywhere
-    // near 1: this is the exact wrong answer the ordering used to give.
+    // near 1: this is the exact wrong answer a fit against the fallback frame gives.
     expect(wrapper.vm.zoom).not.toBeCloseTo(FALLBACK_ASPECT / (PLAN_W / PLAN_H), 3)
   })
 
@@ -96,8 +96,8 @@ describe('festival map canvas: the opening fit', () => {
     const opened = wrapper.vm.zoom
     wrapper.vm.reset()
     await nextTick()
-    // Pressing Fit on a map that opened fitted must be a no-op. It was the tell:
-    // the map visibly grew, which is only possible if it had not been fitted.
+    // Pressing Fit on a map that opened fitted must be a no-op: a map that visibly
+    // grows on Fit had not been fitted.
     expect(wrapper.vm.zoom).toBeCloseTo(opened, 5)
   })
 
@@ -112,10 +112,10 @@ describe('festival map canvas: the opening fit', () => {
 /**
  * The rally mark on the plan.
  *
- * It used to be the stamp's own artwork, and a rally stamp is very often a picture
- * of food - printed on a stall it read as a menu, so a visitor took it for what the
- * stall serves rather than for something to collect. The plan now carries one
- * consistent mark and the artwork stays where it is explained, in the panel a
+ * The plan carries one consistent mark rather than the stamp's own artwork: a rally
+ * stamp is very often a picture of food, and printed on a stall it would read as a
+ * menu, so a visitor would take it for what the stall serves rather than for
+ * something to collect. The artwork stays where it is explained, in the panel a
  * tapped stall opens (asserted in FestivalMapWidget.spec.ts).
  */
 function stall(over: Partial<PublicStallOccupant> = {}, id = 1): PublicFestivalStall {
@@ -166,8 +166,8 @@ describe('festival map canvas: the stamp rally mark', () => {
 
   /**
    * The mark says "this stall is on the rally", so it follows THAT and not whether
-   * anyone has uploaded art yet - which is what it used to key on, leaving a rally
-   * stall unmarked until someone did.
+   * anyone has uploaded art yet, which would leave a rally stall unmarked until
+   * someone did.
    */
   it('marks a rally stall whose stamp has no artwork yet', () => {
     const wrapper = mount(FestivalMapCanvas, {
@@ -185,7 +185,7 @@ describe('festival map canvas: the stamp rally mark', () => {
 
   /**
    * The mark is one of the stall's own markings, so it takes the stall's label
-   * colour. The stylesheet reads it as `color: var(--stall-text)`; what is asserted
+   * color. The stylesheet reads it as `color: var(--stall-text)`; what is asserted
    * here is that the variable the badge reads carries this stall's setting.
    */
   it("carries the stall's own label colour for the mark to take", () => {

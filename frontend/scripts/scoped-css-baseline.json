@@ -1,5 +1,5 @@
 {
-  "total": 2382,
+  "total": 2380,
   "cap": 120,
   "files": {
     "frontend/src/components/admin/AffiliateFormTab.vue": 20,
@@ -11,12 +11,12 @@
     "frontend/src/components/admin/CarrdUploadTab.vue": 89,
     "frontend/src/components/admin/ChangelogModal.vue": 278,
     "frontend/src/components/admin/FontEditModal.vue": 66,
-    "frontend/src/components/admin/FontsTab.vue": 66,
+    "frontend/src/components/admin/FontsTab.vue": 65,
     "frontend/src/components/admin/GameTab.vue": 121,
     "frontend/src/components/admin/GaraponFormTab.vue": 46,
     "frontend/src/components/admin/GaraponTab.vue": 19,
     "frontend/src/components/admin/ImagesTab.vue": 50,
-    "frontend/src/components/admin/LogsTab.vue": 157,
+    "frontend/src/components/admin/LogsTab.vue": 156,
     "frontend/src/components/admin/PresetsTab.vue": 6,
     "frontend/src/components/admin/RafflesTab.vue": 18,
     "frontend/src/components/admin/SettingsTab.vue": 45,

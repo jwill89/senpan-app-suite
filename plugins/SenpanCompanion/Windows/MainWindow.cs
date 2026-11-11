@@ -18,8 +18,7 @@ namespace SenpanCompanion.Windows;
 /// plus Settings/About) whose selection drives the right-hand content pane. Sections
 /// and page links are hidden for permissions the account lacks, mirroring the web
 /// sidebar. Each page lazily loads the first time it's viewed (no manual refresh),
-/// and the Bingo pages share one live card cache. Settings live on their own page -
-/// there is no separate window.
+/// and the Bingo pages share one live card cache. Settings live on their own page.
 /// </summary>
 public sealed class MainWindow : Window, IDisposable
 {
@@ -99,8 +98,7 @@ public sealed class MainWindow : Window, IDisposable
         this.live.GameEnded += this.OnGameEnded;
         this.SizeConstraints = new WindowSizeConstraints
         {
-            // The sidebar + content split needs more horizontal room than the old
-            // tab bar did.
+            // The sidebar + content split needs more horizontal room than a tab bar would.
             MinimumSize = new Vector2(760, 460),
             MaximumSize = new Vector2(1500, 1100),
         };
@@ -189,17 +187,15 @@ public sealed class MainWindow : Window, IDisposable
             ImGui.Separator();
         }
 
-        // The old tab bar re-synced the staged settings fields whenever the Settings
-        // tab lost focus; with a sidebar there is no such event, so re-arm the prime
-        // whenever we're off the Settings page.
+        // A sidebar has no event for the Settings page losing focus, so re-arm the prime
+        // (the re-sync of the staged settings fields) whenever we're off the Settings page.
         if (this.currentPage != Page.Settings)
             this.settingsPrimed = false;
 
         // Two-pane layout: a fixed-width nav child on the left, the active page on the
         // right. Child regions (not table cells) host the pages so their full-height
-        // scrolling tables get a properly bounded region and behave exactly as they did
-        // as top-level tabs. EndChild is always called regardless of BeginChild's
-        // return (ImGui requires it). Borderless - the ImGuiChildFlags border member's
+        // scrolling tables get a properly bounded region. EndChild is always called
+        // regardless of BeginChild's return (ImGui requires it). Borderless - the ImGuiChildFlags border member's
         // name varies across ImGui versions, and the layout reads clearly without it.
         ImGui.BeginChild("##senpanNav", new Vector2(NavWidth, 0f));
         this.DrawSidebar();

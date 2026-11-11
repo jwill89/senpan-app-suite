@@ -21,9 +21,8 @@ const loading = ref(false)
 onMounted(async () => {
   // Always load, and read `homeRaffles` rather than the shared `raffles` array.
   // That array is the ADMIN list - unfiltered, including closed and out-of-window
-  // raffles - so a session where the admin surface had already populated it showed
-  // staff-only rows on this public page, and the old "only if empty" guard meant
-  // the public list was never fetched at all in that case.
+  // raffles - so reading it would show staff-only rows on this public page
+  // whenever the admin surface had already populated it.
   loading.value = true
   try {
     await raffles.loadHomeRaffles()

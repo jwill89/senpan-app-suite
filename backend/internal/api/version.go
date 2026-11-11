@@ -9,7 +9,7 @@ import (
 
 // AppVersion is the app's version as the server runs it.
 type AppVersion struct {
-	Version string `json:"version" doc:"The app's semantic version: one version for the SPA and the API since 4.0.0." example:"5.0.0"`
+	Version string `json:"version" doc:"The app's semantic version: one version for the SPA and the API." example:"5.0.0"`
 }
 
 type versionOutput struct {

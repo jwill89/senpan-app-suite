@@ -443,10 +443,10 @@ func TestFonts_DeleteRemovesEverything(t *testing.T) {
 }
 
 func TestFonts_StartupBackfillAndMetaMigration(t *testing.T) {
-	// Disk and legacy settings are seeded before the server starts: a real font, a
-	// stale conversion in the old naming, metadata keyed by file with the old
-	// "original" flag, and the old single origin list. The startup migrations must
-	// reconcile all of it.
+	// Disk and settings in the form the startup migrations upgrade are seeded before
+	// the server starts: a real font, a stale conversion under a superseded name,
+	// metadata keyed by file with an "original" flag, and one global origin list. The
+	// startup migrations must reconcile all of it.
 	dataDir := t.TempDir()
 	writeFile(t, dataDir, "fonts/Legacy.ttf", goregular.TTF)
 	writeFile(t, dataDir, "fonts/.woff2/Legacy.ttf.woff2", []byte("stale"))

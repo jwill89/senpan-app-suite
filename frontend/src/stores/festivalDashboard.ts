@@ -4,7 +4,7 @@
  * entries - with the actions on each.
  *
  * Two reads make it up. The plan is the same public map every visitor sees; what
- * depends on WHO is looking comes from POST /festivals/{idOrSlug}/dashboard, fed
+ * depends on WHO is looking comes from POST /api/v1/festivals/{idOrSlug}/dashboard, fed
  * whatever this device holds (lib/signups): the card and drawing tokens issued at
  * sign-up, and the name and world the visitor gave. The card and the drum are then
  * handed to the stamp-rally and garapon stores' public state, so the panels the

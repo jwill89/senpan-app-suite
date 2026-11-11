@@ -70,9 +70,9 @@ func newSchedulerEnv(t *testing.T, webhook string) (*Server, int64, string) {
 	return &Server{store: st, discord: &discord.Sender{}}, a.ID, startCursor
 }
 
-// TestPostDueAnnouncementsNoDoubleWhenOverdue is the regression test for the
-// reported double-posting: an overdue recurring announcement must post exactly
-// once and advance its cursor to a future slot, so a second sweep posts nothing.
+// TestPostDueAnnouncementsNoDoubleWhenOverdue holds that an overdue recurring
+// announcement posts exactly once and advances its cursor to a future slot, so a
+// second sweep posts nothing.
 func TestPostDueAnnouncementsNoDoubleWhenOverdue(t *testing.T) {
 	var hits int32
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -187,9 +187,9 @@ func TestPostDueAnnouncementsGivesUpAfterRepeatedFailures(t *testing.T) {
 
 // TestPostDueAnnouncementsRespectsAConcurrentEdit pins the snapshot guard on the
 // cursor write. The sweep reads an announcement, posts it (up to 15 seconds of
-// HTTP), and then advances the cursor from the values it read at the start - keyed
-// on id alone, so an admin edit that landed during the post was silently reverted.
-// The write now only applies while the row still holds the cursor the sweep read.
+// HTTP), and then advances the cursor from the values it read at the start. The
+// write applies only while the row still holds the cursor the sweep read; keyed on
+// id alone, an admin edit that landed during the post would be silently reverted.
 func TestPostDueAnnouncementsRespectsAConcurrentEdit(t *testing.T) {
 	var s *Server
 	var id int64

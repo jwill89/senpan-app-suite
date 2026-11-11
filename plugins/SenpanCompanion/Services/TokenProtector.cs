@@ -8,7 +8,7 @@ namespace SenpanCompanion.Services;
 /// Encrypts the personal access token at rest using the Windows Data Protection
 /// API (DPAPI, <c>CurrentUser</c> scope). The ciphertext is decryptable only by the
 /// same Windows user on the same machine, so a synced/backed-up or world-readable
-/// plugin config no longer exposes a usable token. Best-effort: if DPAPI is
+/// plugin config doesn't expose a usable token. Best-effort: if DPAPI is
 /// unavailable the methods return null and the caller keeps the token in memory
 /// for the session only. The plugin is Windows-only (FFXIV/Dalamud), so DPAPI is
 /// always the right primitive here.

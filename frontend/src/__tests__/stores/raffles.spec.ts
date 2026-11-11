@@ -392,8 +392,8 @@ describe('addRaffleEntry (admin)', () => {
 
 describe('raffle entry modes', () => {
   it('treats an unknown or missing mode as the original flat cost', () => {
-    // Raffles saved before entry modes existed carry ''. That has always meant
-    // "flat costPerEntry", so it must never read as free or as no-sign-ups.
+    // A raffle with no entry mode carries ''. That means "flat costPerEntry", so it
+    // must never read as free or as no-sign-ups.
     const legacy = { entryMode: '', costPerEntry: 500, tierCosts: [] }
     expect(raffleMode(legacy)).toBe('single')
     expect(raffleAcceptsSignups(legacy)).toBe(true)
@@ -970,7 +970,7 @@ describe('festival map linkage', () => {
 
     await raffles.setFestivalMap(9)
 
-    // The id belonged to the map that was linked before.
+    // The id belongs to the map the raffle was switched away from, so it can't stand.
     expect(raffles.raffleForm!.occupantId).toBeNull()
   })
 

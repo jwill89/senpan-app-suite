@@ -1,6 +1,6 @@
 # Deployment (Apache)
 
-This folder holds what the host runs beside the binary: the Apache vhost the deploy
+The `deploy/` folder holds what the host runs beside the binary: the Apache vhost the deploy
 installs (`apache-vhost.conf`), the systemd unit's template (`senpan.service`) and the
 persistent `images/` a new host's data folder starts from. The app is one Go binary that
 serves everything: the API, its live event streams, the SPA it embeds, and the public
@@ -305,7 +305,7 @@ Pulls) if you need it to be tamper-proof. Capability tokens in request
 paths/queries/Referer are redacted to a short correlation hash before logging, so
 draw/stamp/font links never appear verbatim in the log or the viewer.
 
-## Deploy day: 5.2.0
+## Upgrading to 5.2.0
 
 5.2.0 moves everything out of Apache's document root, and the deploy does the move itself:
 the first `task deploy` of 5.2.0 finds `-webroot` on the unit and, in the same run, moves
@@ -398,7 +398,7 @@ The checkout under `%TEMP%` is removed at the end, whether the run passed or not
 
 **The connection.** The droplet runs `ufw limit ssh`, which refuses an address after six connections in 30 s. The whole run is **one** SSH connection, held by a background `plink -share`; every command, the upload and the download ride it. If it drops, the module reconnects (one new connection) and retries the step once, resuming where it stopped; only a refused reconnect waits 35 s. Each part of the move is safe to run again.
 
-**Rolling back by hand** (on the host): the vhost with `mv -f /etc/apache2/sites-available/<service>.conf.old /etc/apache2/sites-available/<service>.conf && apachectl configtest && systemctl reload apache2`; the plugin with `mv plugin plugin.failed && mv plugin.old plugin && rm -rf plugin.failed` in the data folder; the binary with `systemctl stop <service> && install -m 755 -o <user> -g <group> app-suite.old app-suite && systemctl start <service>` in the opt dir (the unit's `User=` and `Group=`). If the previous binary refuses the database, decompress the newest snapshot over it in place, which keeps the file's owner: `systemctl stop <service> && rm -f <db>-wal <db>-shm && gunzip -c "$(ls -1t <db>.pre-*.gz | head -n 1)" > <db> && systemctl start <service>`. Going back past 5.2.0 means the move too (see [Deploy day: 5.2.0](#deploy-day-520)). A rollback by hand leaves the host's record naming the release it rolled back from, so the next deploy skips that release unless `-Force`.
+**Rolling back by hand** (on the host): the vhost with `mv -f /etc/apache2/sites-available/<service>.conf.old /etc/apache2/sites-available/<service>.conf && apachectl configtest && systemctl reload apache2`; the plugin with `mv plugin plugin.failed && mv plugin.old plugin && rm -rf plugin.failed` in the data folder; the binary with `systemctl stop <service> && install -m 755 -o <user> -g <group> app-suite.old app-suite && systemctl start <service>` in the opt dir (the unit's `User=` and `Group=`). If the previous binary refuses the database, decompress the newest snapshot over it in place, which keeps the file's owner: `systemctl stop <service> && rm -f <db>-wal <db>-shm && gunzip -c "$(ls -1t <db>.pre-*.gz | head -n 1)" > <db> && systemctl start <service>`. Going back past 5.2.0 means the move too (see [Upgrading to 5.2.0](#upgrading-to-520)). A rollback by hand leaves the host's record naming the release it rolled back from, so the next deploy skips that release unless `-Force`.
 
 **Requirements.**
 

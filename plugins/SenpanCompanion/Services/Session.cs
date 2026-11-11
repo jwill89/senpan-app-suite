@@ -88,7 +88,7 @@ public sealed class Session
             // fetch that faults BEFORE its first await - an invalid ServerUrl throws
             // synchronously - completes entirely inside this call, clears inFlight,
             // and then the assignment below would put the finished task back. That
-            // latched a completed task forever and turned every later refresh into a
+            // would latch a completed task forever and turn every later refresh into a
             // silent no-op.
             this.inFlight = task.IsCompleted ? null : task;
             return task;

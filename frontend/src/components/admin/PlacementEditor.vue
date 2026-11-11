@@ -54,7 +54,7 @@ function beginDrag(mode: DragMode, item: PlaceItem, e: PointerEvent): void {
  * Keyboard equivalent of grabbing an item. Dragging is inherently pointer-only,
  * but SELECTING is not: once selected, the form's numeric position/size/rotation
  * fields edit exactly what a drag would, so a keyboard user can place a stamp or
- * prize precisely. Without this the editor was unreachable without a mouse.
+ * prize precisely. Without it the editor would be unreachable without a mouse.
  */
 function selectItem(item: PlaceItem): void {
   emit('select', item.key)

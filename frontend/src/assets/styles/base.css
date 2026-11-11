@@ -3,7 +3,7 @@
  */
 
 /* ================================================================
-   1. RESET & BASE - Global resets, CSS custom properties, typography
+   1. RESET & BASE - Global resets, typography
    ================================================================ */
 
 /* Prevent Vue template flash before mount */
@@ -53,9 +53,9 @@ button:has(> .svg-inline--fa):not(.admin-nav-items button) > .svg-inline--fa {
 }
 
 /* Montserrat is the body face (loaded statically in index.html) - it pairs with
-   the Bulgari display face the way the Carrd at senpan.cafe does. Set from
-   --body-font so small chrome nested inside a heading can name the same face
-   instead of inheriting the display one (see tokens.css). */
+   the Bulgari display face. Set from --body-font so small chrome nested inside
+   a heading can name the same face instead of inheriting the display one (see
+   tokens.css). */
 body {
   font-family: var(--body-font);
   background: var(--page-bg);
@@ -147,7 +147,7 @@ textarea::placeholder {
    readable rather than ornamental.
 
    Weight stays 700 for both: the display face may ship a single weight, but the
-   synthesised bold is the register the app already shipped and it holds up. The
+   synthesised bold holds up. The
    separator rule under a heading is NOT set here - it belongs to the heading's
    level (utilities.css section 3 for page-level, admin.css for panel-level). */
 h1,
@@ -187,10 +187,9 @@ h1,
 
 /* -- Button system --
    ONE solid shape for every button: intent is carried by the FILL colour only,
-   never by size or border style. (The old ghost/danger outlines made bordered
-   buttons read as heavier than their solid siblings - a misleading hierarchy.)
-   Each intent sets --btn-fill + --btn-text; the shared rule applies them. Hover
-   is derived by darkening the fill via color-mix, EXCEPT where the theme owns a
+   never by size or border style (a bordered button reads as heavier than its
+   solid siblings - a misleading hierarchy). Each intent sets --btn-fill +
+   --btn-text; the shared rule applies them. Hover is derived by darkening the fill via color-mix, EXCEPT where the theme owns a
    hover colour of its own: `action` and `view` also set --btn-fill-hover from
    --accent-hover / --accent-2-hover, so a theme keeps authority over the hovered
    state. The five semantic colours + the raised surface cover all six intents.

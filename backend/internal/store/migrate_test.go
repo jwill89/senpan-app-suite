@@ -69,9 +69,9 @@ func TestFreshDatabaseMigratesToLatest(t *testing.T) {
 	}
 }
 
-// A database the hand-written migrations brought to v71 - production's - is taken
-// over as it is: the baseline doesn't run on it, so nothing it holds changes and
-// no seed comes back that was deleted, and the migrations after it run.
+// A database already at v71 - production's - is taken over as it is: the baseline
+// doesn't run on it, so nothing it holds changes and no seed comes back that was
+// deleted, and the migrations after it run.
 func TestDatabaseAtTheBaselineIsTakenOver(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "v71.db")
 	db := rawDB(t, path)
@@ -112,8 +112,8 @@ func TestDatabaseAtTheBaselineIsTakenOver(t *testing.T) {
 	}
 }
 
-// A database the hand-written migrations left short of v71 is refused, untouched:
-// goose takes over only at the baseline.
+// A database short of v71 that goose has never seen is refused, untouched: goose
+// takes over only at the baseline.
 func TestDatabaseShortOfTheBaselineIsRefused(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "v50.db")
 	db := rawDB(t, path)
@@ -156,8 +156,8 @@ func TestNewerDatabaseIsRefused(t *testing.T) {
 	}
 }
 
-// v71Database builds a database the way production's was before goose: the
-// baseline's schema at v71, then the given rows.
+// v71Database builds a database at v71 that goose has never run on: the baseline's
+// schema, then the given rows.
 func v71Database(t *testing.T, rows ...string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "v71.db")
@@ -172,7 +172,7 @@ func v71Database(t *testing.T, rows ...string) string {
 }
 
 // Migration 73 moves every timestamp to the one stored form: SQLite's space form,
-// the browser's milliseconds, an offset and the naive form older raffles stored
+// the browser's milliseconds, an offset and the naive form some raffles hold
 // (read as UTC) all convert, ” becomes NULL, and AUTOINCREMENT keeps its
 // high-water mark, so a deleted id doesn't come back.
 func TestTimestampMigrationConvertsEveryForm(t *testing.T) {
@@ -253,7 +253,7 @@ func TestTimestampMigrationRefusesAnUnreadableTime(t *testing.T) {
 	}
 }
 
-// The committed backend/schema.sql is what the migrations build now.
+// The committed backend/schema.sql is what the migrations build.
 func TestSchemaIsCurrent(t *testing.T) {
 	want, err := Schema(t.Context())
 	if err != nil {

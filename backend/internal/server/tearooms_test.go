@@ -191,7 +191,7 @@ func TestTeaRoomLockPatch(t *testing.T) {
 		t.Errorf("the toggle was not applied: %v", saved)
 	}
 
-	// Locking again with no time sets the lock afresh: it now waits for a person.
+	// Locking again with no time sets the lock afresh: it waits for a person.
 	saved = patchTeaRoom(t, env, room, map[string]any{"locked": true})
 	assertLock(t, saved, true, nil)
 	saved = patchTeaRoom(t, env, room, map[string]any{"lockedUntil": "2030-02-03T04:05:06Z"})

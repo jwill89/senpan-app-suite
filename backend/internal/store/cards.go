@@ -9,7 +9,7 @@ import (
 )
 
 // The cards' API (internal/api, cards.go) and the game (internal/game) read and write
-// them through sqlc; what is left here is the tests' way of making a card and of
+// them through sqlc; this file holds only the tests' way of making a card and of
 // checking that one exists.
 
 // SaveCard inserts a new card with the given board. For tests that need a card with

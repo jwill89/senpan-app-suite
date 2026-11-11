@@ -171,8 +171,8 @@ type Meta struct {
 	// origin is always allowed and never listed.
 	Origins []string `json:"origins,omitempty"`
 
-	// LegacyOriginal is the flag from before fonts were grouped, read only so it can be
-	// turned into Serve. It is never written.
+	// LegacyOriginal is the per-file "original" flag some stored metadata still
+	// carries, read only so it can be turned into Serve. It is never written.
 	LegacyOriginal bool `json:"original,omitempty"`
 }
 

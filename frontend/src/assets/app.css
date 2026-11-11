@@ -1,8 +1,8 @@
 /*
  * app.css - stylesheet index.
  *
- * The former monolithic stylesheet is split by domain into ./styles/*, imported
- * here in cascade order: tokens first, then base, utilities, shared components,
+ * The stylesheet is split by domain into ./styles/*, imported here in cascade
+ * order: tokens first, then base, utilities, shared components,
  * the visual map/placement editors, the player/public views, the admin views,
  * the festival pieces (after admin, whose badge margin they override), the Ema
  * designer (after festival, which hosts it), and finally the small-screen

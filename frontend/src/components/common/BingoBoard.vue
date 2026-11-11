@@ -5,8 +5,8 @@
  *  - Winner verification: static, highlights pattern-hit cells (mode="preview").
  *  - Card preview: static board (mode="preview").
  *
- * Keeps the original `.board-wrap` / `.board-header` / `.board-grid` /
- * `.board-cell` markup so all existing styles and themes apply unchanged.
+ * Renders the `.board-wrap` / `.board-header` / `.board-grid` / `.board-cell`
+ * markup that the board styles target.
  */
 import type { StyleValue } from 'vue'
 import CornerFlourish from '@/components/common/CornerFlourish.vue'

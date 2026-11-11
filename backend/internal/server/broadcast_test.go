@@ -110,7 +110,7 @@ func TestBookClubChangeTellsItsClub(t *testing.T) {
 }
 
 // Deleting a card tells its board, every time, and ends its stream: the board goes
-// home rather than holding a board for a card that no longer exists.
+// home rather than holding a board for a deleted card.
 func TestCardDeleteReachesThePlayer(t *testing.T) {
 	for i := range 12 {
 		env := newTestEnv(t)

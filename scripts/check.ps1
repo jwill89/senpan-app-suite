@@ -9,10 +9,10 @@
     Frontend (frontend/): generated code (task gen) - lint:check (ESLint + Stylelint) - format:check - lint:conventions - typecheck - test:coverage - npm audit - test:e2e
     Plugin (plugins/SenpanCompanion/): dotnet build (warnings=errors) - dotnet format - the tests (plugins/SenpanCompanion.Tests)
     Scripts and repo: PSScriptAnalyzer on every tracked script, markdownlint, the shared
-    .editorconfig/.gitattributes and the shared-tooling version (shared-tooling's own checks)
+    .editorconfig/.gitattributes and the shared/ submodule's version
 
-    The settings come from shared-tooling, the submodule at shared/ (run
-    `git submodule update --init` once after cloning).
+    The settings come from the shared/ submodule (run `git submodule update --init` once
+    after cloning).
 
     Stops at the first failing step with a clear message, so `golangci-lint`
     (which is NOT part of `go build`/`go vet`) can't be forgotten and slip
@@ -101,11 +101,11 @@ if ($run.backend -or $run.frontend) {
 if ($run.backend) {
     Push-Location "$root\backend"
     try {
-        # .golangci.yml is written from shared-tooling's template (Senpan's own rules are in
+        # .golangci.yml is written from the shared template (Senpan's own rules are in
         # .golangci.local.yml), so a hand edit there, or a template change not yet taken, fails.
         # (-dir is the module's folder from the repo root, which the tool finds itself.)
         Invoke-Step "backend: golangci config" { go run -C ../shared/lint/go . -check -dir backend }
-        # The version shared-tooling's go.yml builds in CI.
+        # The version CI builds.
         Invoke-Step "backend: golangci-lint" {
             go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0 run ./...
         }
@@ -122,7 +122,7 @@ if ($run.backend) {
             & ../shared/test/go/Test-CoverageFloor.ps1 -ProfilePath $coverProfile -Floor 83.5 `
                 -Exclude '/internal/db/(db|models)\.go$', '/internal/db/[^/]+\.sql\.go$'
         }
-        # Known Go vulnerabilities that reach the code, at the release go.yml runs.
+        # Known Go vulnerabilities that reach the code, at the release CI runs.
         Invoke-Step "backend: govulncheck" { go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./... }
     } finally { Pop-Location }
 }
@@ -140,13 +140,12 @@ if ($run.frontend) {
         # ESLint (eslint.config.js) for the scripts and templates, Stylelint
         # (stylelint.config.mjs) for the stylesheets and <style> blocks.
         Invoke-Step "frontend: lint" { npm run lint:check }
-        # Prettier covers what ESLint doesn't: the CSS layer. Formatting used to be
-        # hand-maintained there because themes were authored as raw CSS in a code
-        # editor; themes are token-only now, so the stylesheets are ordinary source
-        # and get the same enforced formatting as everything else.
+        # Prettier covers what ESLint doesn't: the CSS layer. Themes are token-only, so
+        # the stylesheets are ordinary source and get the same enforced formatting as
+        # everything else.
         Invoke-Step "frontend: format" { npm run format:check }
         # Naming rules Prettier can't see, plus the theme-token list agreeing across
-        # tokens.css / theme-tokens.ts / styles.go. See AGENTS.md "CSS conventions".
+        # tokens.css / theme-tokens.ts / themes.go.
         Invoke-Step "frontend: conventions" { npm run lint:conventions }
         Invoke-Step "frontend: typecheck" { npm run typecheck }
         # With coverage, so the floor in vite.config.ts fails here as in CI.
@@ -159,8 +158,8 @@ if ($run.frontend) {
     } finally { Pop-Location }
 }
 
-# Plugin (FFXIV Dalamud) - the third CI job. Only runs on a full check (neither
-# -SkipFrontend nor -SkipBackend), so those flags keep their "only X" meaning.
+# Plugin (FFXIV Dalamud). Only runs on a full check (neither -SkipFrontend nor
+# -SkipBackend), so those flags keep their "only X" meaning.
 # Requires the .NET SDK; no-ops with a clear message when `dotnet` isn't installed
 # so this script still runs on a machine without it.
 if ($run.plugin) {
@@ -173,8 +172,9 @@ if ($run.plugin) {
             Invoke-Step "plugin: dotnet build (warnings = errors)" {
                 dotnet build .\SenpanCompanion.csproj -c Release -p:TreatWarningsAsErrors=true
             }
-            # The analyzers and code style are shared-tooling's (plugins/Directory.Build.props
-            # imports them), so the build above is the lint gate; this checks the formatting.
+            # The analyzers and code style come from the shared/ submodule
+            # (plugins/Directory.Build.props imports them), so the build above is the lint
+            # gate; this checks the formatting.
             Invoke-Step "plugin: dotnet format" { dotnet format --verify-no-changes }
         } finally { Pop-Location }
         # The tests of what doesn't touch the game, as CI's plugin job runs them: from the
@@ -189,10 +189,10 @@ if ($run.plugin) {
     }
 }
 
-# Scripts and the repo - shared-tooling's own checks, as CI's pwsh and docs jobs run them.
-# Like the plugin, only on a full check. PSScriptAnalyzer runs on every TRACKED script
-# (scripts/deploy.config.ps1 is the owner's local copy) with the shared settings; the
-# script says how to install the pinned PSScriptAnalyzer if it is missing.
+# Scripts and the repo - the checks CI's scripts and docs jobs run. Like the plugin, only
+# on a full check. PSScriptAnalyzer runs on every TRACKED script (the untracked
+# scripts/deploy.config.ps1 is not linted) with the shared settings; the script says how
+# to install the pinned PSScriptAnalyzer if it is missing.
 if ($run.repo) {
     $shared = Join-Path $root 'shared'
     if (-not (Test-Path -LiteralPath (Join-Path $shared 'VERSION'))) {

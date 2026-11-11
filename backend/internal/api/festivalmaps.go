@@ -263,8 +263,8 @@ func (h handlers) registerFestivalMaps(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "get-public-festival-map", Method: http.MethodGet, Path: "/festival-maps/public/{idOrSlug}",
 		Summary: "One published festival map",
-		Description: "Found by its shortcode, else its numeric id, so a link posted before a shortcode existed keeps " +
-			"working. Each pitch is resolved for a visitor: the affiliate's card, whether it is open now, its " +
+		Description: "Found by its shortcode, else its numeric id, so a link by id keeps working after the map is " +
+			"given a shortcode. Each pitch is resolved for a visitor: the affiliate's card, whether it is open now, its " +
 			"stamp-rally badge and a raffle running there. A map that isn't published is not found.",
 		Tags: festivalMapTags, Middlewares: huma.Middlewares{public}, Errors: []int{http.StatusNotFound},
 	}, h.getPublicFestivalMap)

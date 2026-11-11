@@ -802,7 +802,7 @@ func (g *Service) onHalftime(gameID int64, readyAt time.Time) {
 // tells the players (when the number that reached the mark has got to them) and leaves
 // the automatic draws paused; no mini-game starts them again if the prompt paused
 // them. Every console hears it was answered, and by whom, and closes its prompt. A
-// second answer is ErrHalftimeAnswered, and one for a game no longer running
+// second answer is ErrHalftimeAnswered, and one for a game that isn't running
 // ErrHalftimeStale.
 func (g *Service) AnswerHalftime(ctx context.Context, gameID int64, minigame bool, by string) error {
 	g.opMu.Lock()
@@ -989,7 +989,7 @@ func (g *Service) Change(ctx context.Context, c Changes) error {
 		} else {
 			g.setAuto(false)
 			// Dropped here, where they are switched off, never in the loop: the loop
-			// clearing it raced a switch back on and lost its first draw.
+			// clearing it would race a switch back on and lose its first draw.
 			g.autoDrawNow.Store(false)
 		}
 	}

@@ -80,7 +80,8 @@ func TestEmaArtistLimitHoldsUnderARace(t *testing.T) {
 	}
 }
 
-// A stored plaque image resolves only to a file directly inside the plaque folder.
+// TestEmaImagePathStaysInThePlaqueFolder checks that a stored plaque image resolves
+// only to a file directly inside the plaque folder.
 func TestEmaImagePathStaysInThePlaqueFolder(t *testing.T) {
 	h := handlers{Deps{DataDir: t.TempDir()}}
 	if h.emaImagePath(emaImageRelDir+"/1-abc.png") == "" {

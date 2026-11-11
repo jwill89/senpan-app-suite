@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
  * Miniature 5x5 pattern preview. Renders the pattern grid as small cells where
- * `on` cells are highlighted. Mirrors the `.pattern-mini` markup used on the
- * player view, game screens, and pattern editor list.
+ * `on` cells are highlighted. Used on the player view, game screens, and
+ * pattern editor list.
  */
 defineProps<{
   /** 5x5 boolean grid; true = required cell. */

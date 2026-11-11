@@ -128,9 +128,9 @@ internal sealed class StampRallyTab : TabBase
 
         // Trustworthy only while the name still matches the one the nearby picker
         // supplied the world with - otherwise it belongs to whoever was picked
-        // before the name was edited. See GaraponTab for the full reasoning: the
-        // game's object table is the best world source in the app, and a card
-        // written without one cannot be matched to that person's other records.
+        // before the name was edited. The game's object table is the best world source
+        // in the app, and a card written without one cannot be matched to that
+        // person's other records.
         var pickedWorld = string.Equals(this.pendingTellName, name, StringComparison.Ordinal)
             ? this.pendingTellWorld
             : string.Empty;
@@ -338,7 +338,7 @@ internal sealed class StampRallyTab : TabBase
         var preview = current != null ? $"{current.Title} ({StatusWord(current.Status)})" : "Select stamp rally...";
 
         // Lock selection while a load/action is in flight so the picked rally and the
-        // loaded detail/log can't diverge (see the same guard on the Garapon picker).
+        // loaded detail/log can't diverge.
         // Snapshot Busy: the Selectable below calls LoadRally, which calls Run(), which sets Busy true
         // synchronously, so re-reading the field at the End would pop a disabled
         // scope that was never pushed and corrupt ImGui's stack for the rest of the

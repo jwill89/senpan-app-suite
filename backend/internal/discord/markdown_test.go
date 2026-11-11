@@ -19,8 +19,8 @@ func TestTimeStyle(t *testing.T) {
 	}
 }
 
-// TestMarkdown verifies the three Milkdown->Discord normalizations:
-// backslash hard breaks, <br> tags, and escaped timestamp tokens.
+// TestMarkdown verifies the Milkdown->Discord normalizations: backslash hard breaks,
+// <br> tags, loose lists, and escaped timestamp tokens and emoji shortcodes.
 func TestMarkdown(t *testing.T) {
 	cases := []struct {
 		name, in, want string
@@ -56,8 +56,8 @@ func TestMarkdown(t *testing.T) {
 		// A bullet (*) item followed by a dash (-) list joins into one tight list.
 		{"mixed markers tighten", "* a\r\n\r\n- b\r\n- c", "* a\n- b\n- c"},
 		// Emoji shortcodes: the serializer escapes the underscores in a multi-word
-		// name, which stops Discord resolving it - so ":tada:" rendered and
-		// ":video_game:" posted as literal text. Unescape inside the token only.
+		// name, which stops Discord resolving it (":video_game:" would show as literal
+		// text where ":tada:" renders). Unescape inside the token only.
 		// These inputs are verbatim mdast-util-to-markdown output (the serializer
 		// Milkdown uses): it escapes the underscore and leaves the colons alone.
 		{"escaped shortcode mid-sentence", "Play :video\\_game: now", "Play :video_game: now"},

@@ -216,8 +216,8 @@ describe('festivalMaps store', () => {
     /**
      * The map labels a stall by its AFFILIATE, so one saved without leaves a blank
      * shape on the plan. There is no default to fall back on either: the venue is
-     * an affiliate in its own right now, with its own logo and links, rather than a
-     * hard-coded name in the form.
+     * an affiliate in its own right, with its own logo and links, not a hard-coded
+     * name in the form.
      */
     it('refuses a stall whose occupant names no affiliate', async () => {
       const store = useFestivalMapsStore()
@@ -252,14 +252,13 @@ describe('festivalMaps store', () => {
     })
 
     /**
-     * The payload used to be built from an explicit list of fields, which had to be
-     * extended every time the editor gained one - and three were missed: the event
-     * Carrd link, the selection colour and the label colour. Each was set in the
+     * The payload is not built from an explicit list of fields, which would have to
+     * be extended every time the editor gains one: a field missing from the list
+     * (the event Carrd link, the selection color, the label color) is set in the
      * editor, saved without complaint, and gone on reload.
      *
-     * Asserted field-by-field against the form rather than by naming today's
-     * fields, so a field added tomorrow is covered without anyone remembering to
-     * come back here.
+     * Asserted field-by-field against the form rather than by naming fields, so a
+     * field added later is covered without anyone remembering to come back here.
      */
     it('sends every field the editor holds, not a hand-maintained subset', async () => {
       const store = useFestivalMapsStore()

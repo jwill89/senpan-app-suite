@@ -1,8 +1,7 @@
 <script setup lang="ts">
 /**
  * End-game winner selection modal (admin) - lets the admin uncheck card IDs
- * that should NOT count as valid winners before ending the game. Mirrors the
- * original "End Game winner selection modal" block.
+ * that should NOT count as valid winners before ending the game.
  */
 import ModalOverlay from '@/components/common/ModalOverlay.vue'
 import { useGameStore } from '@/stores/game'

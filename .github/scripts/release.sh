@@ -5,7 +5,7 @@
 # are ever released.
 #
 # Two things are released, each when its version is new:
-#   - the app (the SPA and the API, one binary, one version since 4.0.0): tag
+#   - the app (the SPA and the API: one binary, one version): tag
 #     v<version> from frontend/package.json, notes from the "### [<version>]" entry
 #     under CHANGELOG.md's "## App" section. The deploy ships the newest of these tags.
 #   - the plugin, which keeps its own four-part version as Dalamud needs: tag

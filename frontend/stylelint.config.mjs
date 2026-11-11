@@ -1,4 +1,4 @@
-// The shared CSS rules (shared-tooling's lint/web), in the .vue files' style blocks as
+// The shared CSS rules (`@jwill89/lint-web`), in the .vue files' style blocks as
 // well. Prettier formats; this catches what formatting cannot (an unknown property, a
 // rule shadowed by one before it, an @import browsers would ignore). The project's own
 // CSS conventions - naming, the scoped-CSS ratchet, the theme tokens - are
@@ -9,10 +9,10 @@ export default {
   rules: {
     // app.css imports its parts by string, which Vite resolves and bundles.
     'import-notation': 'string',
-    // AGENTS.md "CSS conventions": kebab-case, a part joined with `-`, a modifier
-    // with `--`, and no BEM `__` (the shared pattern allows it). The libraries the
-    // stylesheets reskin keep their own names: vue-color's BEM classes
-    // (`vc-input__input`) and ProseMirror's.
+    // Class names are kebab-case, a part joined with `-`, a modifier with `--`, and
+    // no BEM `__` (the shared pattern allows it). The libraries the stylesheets
+    // reskin keep their own names: vue-color's BEM classes (`vc-input__input`) and
+    // ProseMirror's.
     'selector-class-pattern': [
       '^(?:vc-[a-z0-9-]+(?:__[a-z0-9-]+)?|ProseMirror(?:-[a-z]+)*|[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:--[a-z0-9]+(?:-[a-z0-9]+)*)?)$',
       { message: 'Name classes in kebab-case, a modifier after --, no __ (AGENTS.md)' },

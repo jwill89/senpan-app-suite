@@ -1413,7 +1413,7 @@ namespace SenpanCompanion.Api
         /// Answer the half-time prompt
         /// </summary>
         /// <remarks>
-        /// Once per game: every console hears it was answered, and by whom (halftime_resolved), and closes its prompt. A mini-game reaches the boards once the number that reached half-time has (minigame). An answer for a game no longer running, a second answer, or one before half-time is refused (409). Answers the game.
+        /// Once per game: every console hears it was answered, and by whom (halftime_resolved), and closes its prompt. A mini-game reaches the boards once the number that reached half-time has (minigame). An answer for a game that isn't running, a second answer, or one before half-time is refused (409). Answers the game.
         /// </remarks>
         /// <returns>OK</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
@@ -5833,7 +5833,7 @@ namespace SenpanCompanion.Api
     {
 
         /// <summary>
-        /// The app's semantic version: one version for the SPA and the API since 4.0.0.
+        /// The app's semantic version: one version for the SPA and the API.
         /// </summary>
         [Newtonsoft.Json.JsonProperty("version", Required = Newtonsoft.Json.Required.Always)]
         public string Version { get; set; } = default!;
@@ -5954,7 +5954,7 @@ namespace SenpanCompanion.Api
         public System.Collections.Generic.IReadOnlyList<System.Collections.Generic.IReadOnlyList<int>> BoardData { get; set; } = new System.Collections.Generic.List<System.Collections.Generic.IReadOnlyList<int>>();
 
         /// <summary>
-        /// When it was made, RFC 3339 in UTC; null for a card made before this was recorded.
+        /// When it was made, RFC 3339 in UTC; null when no time was recorded for it.
         /// </summary>
         [Newtonsoft.Json.JsonProperty("createdAt", Required = Newtonsoft.Json.Required.AllowNull)]
         public string? CreatedAt { get; set; } = default!;
@@ -6179,7 +6179,7 @@ namespace SenpanCompanion.Api
     {
 
         /// <summary>
-        /// When it was made, RFC 3339 in UTC; null for a card made before this was recorded.
+        /// When it was made, RFC 3339 in UTC; null when no time was recorded for it.
         /// </summary>
         [Newtonsoft.Json.JsonProperty("createdAt", Required = Newtonsoft.Json.Required.AllowNull)]
         public string? CreatedAt { get; set; } = default!;
@@ -8428,7 +8428,7 @@ namespace SenpanCompanion.Api
         public long? AutoInterval { get; set; } = default!;
 
         /// <summary>
-        /// The win patterns to play for: at least one. Those deleted since are left out, and a start none of whose patterns exists any more is refused (422).
+        /// The win patterns to play for: at least one. Those deleted since are left out, and a start none of whose patterns exists is refused (422).
         /// </summary>
         [Newtonsoft.Json.JsonProperty("patternIds", Required = Newtonsoft.Json.Required.Always)]
         public System.Collections.Generic.IReadOnlyList<long> PatternIds { get; set; } = new System.Collections.Generic.List<long>();
@@ -8970,7 +8970,7 @@ namespace SenpanCompanion.Api
     {
 
         /// <summary>
-        /// The game whose prompt this answers (the prompt's gameId). An answer for a game no longer running, or a second answer, is refused (409).
+        /// The game whose prompt this answers (the prompt's gameId). An answer for a game that isn't running, or a second answer, is refused (409).
         /// </summary>
         [Newtonsoft.Json.JsonProperty("gameId", Required = Newtonsoft.Json.Required.Always)]
         public long GameId { get; set; } = default!;
@@ -9722,7 +9722,7 @@ namespace SenpanCompanion.Api
     {
 
         /// <summary>
-        /// The category they are in from now on: a pattern from another one moves into it.
+        /// The category they end up in: a pattern from another one moves into it.
         /// </summary>
         [Newtonsoft.Json.JsonProperty("categoryId", Required = Newtonsoft.Json.Required.Always)]
         public long CategoryId { get; set; } = default!;
@@ -11284,7 +11284,7 @@ namespace SenpanCompanion.Api
         public RaffleInputEntryMode EntryMode { get; set; } = default!;
 
         /// <summary>
-        /// The festival to file it under; null or left out for none. One that no longer exists is refused.
+        /// The festival to file it under; null or left out for none. One that doesn't exist is refused.
         /// </summary>
         [Newtonsoft.Json.JsonProperty("festivalMapId", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public long? FestivalMapId { get; set; } = default!;
@@ -12278,7 +12278,7 @@ namespace SenpanCompanion.Api
         public long CompletedCount { get; set; } = default!;
 
         /// <summary>
-        /// all: a card is complete when every stamp is collected or can't be any more. counts: when it holds requiredFood food stamps and requiredGame game stamps.
+        /// all: a card is complete when every stamp is collected or can never be collected. counts: when it holds requiredFood food stamps and requiredGame game stamps.
         /// </summary>
         [Newtonsoft.Json.JsonProperty("completionMode", Required = Newtonsoft.Json.Required.Always)]
         [Newtonsoft.Json.JsonConverter(typeof(Newtonsoft.Json.Converters.StringEnumConverter))]
@@ -12521,7 +12521,7 @@ namespace SenpanCompanion.Api
         public string NotStampedImage { get; set; } = default!;
 
         /// <summary>
-        /// The rally's whole set of prizes, replacing the old. An empty list clears them.
+        /// The rally's whole set of prizes; those it had are replaced. An empty list clears them.
         /// </summary>
         [Newtonsoft.Json.JsonProperty("prizes", Required = Newtonsoft.Json.Required.Always)]
         public System.Collections.Generic.IReadOnlyList<StampRallyPrizeInput> Prizes { get; set; } = new System.Collections.Generic.List<StampRallyPrizeInput>();
@@ -13552,7 +13552,7 @@ namespace SenpanCompanion.Api
         public string Name { get; set; } = default!;
 
         /// <summary>
-        /// The token its file is served under (GET /api/fonts/pub/f/{token}); it rotates, so a page uses the one it was given.
+        /// The token its file is served under (GET /api/v1/fonts/pub/f/{token}); it rotates, so a page uses the one it was given.
         /// </summary>
         [Newtonsoft.Json.JsonProperty("token", Required = Newtonsoft.Json.Required.Always)]
         public string Token { get; set; } = default!;

@@ -1,5 +1,5 @@
 /**
- * Markdown rendering via markdown-it (replaces the CDN `marked.js`).
+ * Markdown rendering via markdown-it.
  *
  * markdown-it (~100 KB) is loaded LAZILY via dynamic import the first time any
  * markdown is rendered, so it stays out of the initial bundle and only its
@@ -7,8 +7,8 @@
  * has loaded, `renderMarkdown` returns '' and re-renders automatically once
  * ready (it reads the reactive `ready` flag, so the v-html updates).
  *
- * Configured to match the previous behavior: `breaks: true` so single newlines
- * become <br>; raw HTML disabled for safety; linkify on.
+ * Configured with `breaks: true` so single newlines become <br>; raw HTML
+ * disabled for safety; linkify on.
  */
 import { ref } from 'vue'
 
@@ -33,11 +33,10 @@ function ensureLoaded(): Promise<void> {
   loadPromise = import('markdown-it').then(({ default: MarkdownIt }) => {
     const inline = new MarkdownIt({ html: false, breaks: true, linkify: true })
     const flow = new MarkdownIt({ html: false, breaks: false, linkify: true })
-    // markdown-it 15 ships linkify-it 6, which flipped `fuzzyLink` to false by
-    // default - so a bare "www.senpan.cafe" stopped becoming a link while an
-    // explicit https:// one still worked. Authors write both, and the rendering
-    // an admin already knows shouldn't change under them because a transitive
-    // default moved, so keep the pre-15 behavior explicitly.
+    // linkify-it 6 (shipped with markdown-it 15) defaults `fuzzyLink` to false,
+    // which would leave a bare "www.senpan.cafe" unlinked while an explicit
+    // https:// one still links. Authors write both, so turn it on explicitly
+    // rather than depend on a transitive default.
     inline.linkify.set({ fuzzyLink: true })
     flow.linkify.set({ fuzzyLink: true })
     md = inline
@@ -58,8 +57,8 @@ const CODE_SPAN_OR_BREAK_TAG = /(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`)|<br\s*
  * Turns literal <br> tags in the SOURCE into real newlines.
  *
  * Raw HTML is disabled (html: false) so the parser escapes anything tag-shaped,
- * which is what we want for safety - but it meant a description holding a literal
- * "<br />" rendered those five characters to the reader instead of breaking the
+ * which is what we want for safety - but a description holding a literal
+ * "<br />" would render those characters to the reader instead of breaking the
  * line. Text arrives that way from more than one direction: pasted from somewhere
  * that emitted HTML, or serialized by a WYSIWYG editor that writes hard breaks as
  * tags.

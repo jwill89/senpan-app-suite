@@ -287,7 +287,7 @@ type Announcement struct {
 
 // MentionContent is the message text that tags who the mention names, and the
 // allowed-mentions list that lets it ping. roleID is the Discord id of the managed
-// role a "role:" mention names, "" when it no longer resolves: the announcement then
+// role a "role:" mention names, "" when that role isn't found: the announcement then
 // posts without a tag.
 func MentionContent(mention, roleID string) (string, *discord.AllowedMentions) {
 	everyone, role, _ := ParseMention(mention)

@@ -519,15 +519,14 @@ watch(
   color: var(--highlight);
 
   /* The clamped font's own metrics; sample text wraps for long input.
-     Doubled from 2rem so the sample is large enough to judge fine details. */
+     Large enough to judge fine details. */
   font-size: 4rem;
   line-height: 1.3;
   overflow-wrap: anywhere;
 }
 
-/* Highlight the row whose font is currently in the live preview. A warm highlight
-   tint (not the gray --panel-raised-bg used by the ghost buttons' borders) keeps the
-   action buttons clearly visible; a highlight bar marks the selected row. */
+/* Highlight the row whose font is currently in the live preview: a --highlight
+   tint keeps the action buttons clearly visible, and a bar marks the selected row. */
 .row-selected td {
   background: color-mix(in srgb, var(--highlight) 14%, transparent);
 }

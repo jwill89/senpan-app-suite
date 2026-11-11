@@ -138,14 +138,14 @@ function backToList(): void {
   store.selectedMap = null
   screen.value = 'list'
 }
-/**
- * Whether the detail fetch has actually landed. Both entry points below seed a
- * form that saves as a FULL REPLACE, so acting on a list row (which carries no
- * stalls) would delete every pitch on the map. See hasMapDetail.
- */
 /** The selected map's stalls in the shape the public canvas draws. */
 const previewStalls = computed(() => toPublicStalls(selectedStalls.value))
 
+/**
+ * Whether the detail fetch has landed. Edit and duplicate seed a form that saves
+ * as a FULL REPLACE, so acting on a list row (which carries no stalls) would
+ * delete every pitch on the map.
+ */
 const detailReady = computed(() => !store.detailLoading && store.hasMapDetail(store.selectedMap))
 
 function editSelected(): void {
@@ -189,10 +189,9 @@ async function copyMap(m: FestivalMap): Promise<void> {
 /**
  * Where the form leaves you.
  *
- * Saving used to drop the admin back at the map picker, several clicks from the
- * thing they had just been working on - and saving a map is rarely "done with this
- * map": publishing it, or reading how it turned out, is the usual next step. A save
- * leaves the map selected (see saveMap), so it lands on that map's own page.
+ * Saving a map is rarely "done with this map": publishing it, or reading how it
+ * turned out, is the usual next step. A save leaves the map selected (see
+ * saveMap), so it lands on that map's own page.
  *
  * Cancelling goes wherever it came FROM: back to the map when editing one, back to
  * the list when the form was a brand-new map with nothing behind it.
@@ -351,10 +350,7 @@ function setStatus(status: FestivalMapStatus): void {
 
         <!--
           The plan drawn by the SAME component the public map uses, against adapted
-          data. This screen used to re-implement it in its own markup, which is how
-          it drifted: it still labelled stalls by title long after the map had moved
-          to labelling by affiliate, so every untitled stall showed up blank here.
-          One drawing of a festival map, not two kept in step by hand.
+          data: one drawing of a festival map, not two kept in step by hand.
         -->
         <FestivalMapCanvas
           :map-image="store.selectedMap.mapImage"

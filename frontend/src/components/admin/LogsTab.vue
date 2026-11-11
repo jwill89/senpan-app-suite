@@ -3,7 +3,7 @@
  * Admin Server Logs tab (admin-only) - a live-tailing viewer over the backend's
  * structured JSON log, rendered through the shared DataTable.
  *
- * On mount it loads a filtered snapshot from `GET /api/logs`; while open, each
+ * On mount it loads a filtered snapshot from `GET /api/v1/logs`; while open, each
  * new server log line arrives on the admin's live stream (`log` event) and is
  * prepended by the logs store. Common HTTP-request fields (method, status,
  * duration, ip, path) are promoted to typed, colored columns; any other fields
@@ -91,7 +91,7 @@ function fieldNum(row: LogRow, key: string): number | null {
   return null
 }
 
-/** HTTP method label - a line logged for the retired WebSocket path reads as "WS". */
+/** HTTP method label; a line logged for the `/api/ws` path reads as "WS". */
 function methodLabel(row: LogRow): string {
   const m = fieldStr(row, 'method')
   if (!m) {
@@ -421,12 +421,11 @@ onMounted(() => void logs.load())
    there is no blue/violet token at all. So the hue SEEDS below stay literal, the
    way syntax highlighting does.
 
-   What they must not do is assume a dark background - 14 of the 28 shipped themes
-   are light, and the old values (#ff6b6b, #e0a100, #5aa0e6 ...) were picked against
-   the dark default. Since themes are pure token swaps with no light/dark signal in
-   CSS, the fix is to anchor every ink to `--text`: 38% of the final colour is
-   whatever the theme guarantees is readable on this surface, and the remaining 62%
-   carries the hue. Readable on any ground, still obviously red/amber/green. */
+   What they must not do is assume a dark background - themes are light or dark.
+   Since themes are pure token swaps with no light/dark signal in CSS, every ink is
+   anchored to `--text`: 38% of the final colour is whatever the theme guarantees
+   is readable on this surface, and the remaining 62% carries the hue. Readable on
+   any ground, still obviously red/amber/green. */
 .logs-tab {
   --log-ink: 62%;
   --log-tint: 16%;

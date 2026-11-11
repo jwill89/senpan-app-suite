@@ -64,7 +64,7 @@ type Settings struct {
 type UploadedFont struct {
 	Name   string `json:"name" doc:"The uploaded file's name."`
 	Family string `json:"family" doc:"The CSS font family it is served as."`
-	Token  string `json:"token" doc:"The token its file is served under (GET /api/fonts/pub/f/{token}); it rotates, so a page uses the one it was given."`
+	Token  string `json:"token" doc:"The token its file is served under (GET /api/v1/fonts/pub/f/{token}); it rotates, so a page uses the one it was given."`
 }
 
 // Integrations is the key the server uses with an outside service: admin-only, since

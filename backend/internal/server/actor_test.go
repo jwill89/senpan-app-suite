@@ -24,7 +24,7 @@ func TestVerifiedBot(t *testing.T) {
 	}
 
 	// Custom transform-rule header (works on any plan) -> verified; named by UA,
-	// which is trustworthy now that Cloudflare vouched for the source.
+	// which is trustworthy because Cloudflare vouched for the source.
 	if name, ok := verifiedBot(botReq(map[string]string{
 		"X-Verified-Bot": "true", "User-Agent": "Googlebot/2.1",
 	})); !ok || name != "Googlebot/2.1" {

@@ -37,8 +37,8 @@ function registerListeners(): void {
   registered = true
   window.addEventListener('beforeinstallprompt', (e: Event) => {
     // Capture + defer the event so our own footer link can trigger the prompt on
-    // demand. We deliberately do NOT call preventDefault(): modern Chromium no
-    // longer shows an automatic mini-infobar, and calling preventDefault() without
+    // demand. We deliberately do NOT call preventDefault(): modern Chromium
+    // shows no automatic mini-infobar, and calling preventDefault() without
     // a follow-up prompt() logs a noisy "Banner not shown" console message. The
     // saved event's prompt() still works without it.
     deferredPrompt.value = e as BeforeInstallPromptEvent

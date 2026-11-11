@@ -5,8 +5,8 @@
  * logo + establishment screenshot picked from dedicated permanent image
  * categories (System -> Images), exactly like raffle/garapon prize images.
  *
- * A lean cousin of the garapons store: no sub-tables, no public token view, no
- * status lifecycle - owners and hours are edited as repeatable form rows.
+ * No sub-tables, no public token view and no status lifecycle: owners and hours
+ * are edited as repeatable form rows.
  */
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'

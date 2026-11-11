@@ -42,9 +42,9 @@ function setToken(name: string, value: string): void {
  *  format an admin may have saved.
  *
  *  Memoized by input string: `swatchHex` runs this per token in the template, so
- *  an unmemoized version forced ~one layout reflow per token on every re-render
- *  (i.e. every keystroke/colour-drag). Re-renders reuse the same value strings,
- *  so the cache makes them free; only a newly-typed value touches the DOM. */
+ *  without a cache each re-render (every keystroke/colour-drag) would force ~one
+ *  layout reflow per token. Re-renders reuse the same value strings, so the cache
+ *  makes them free; only a newly-typed value touches the DOM. */
 const colorCache = new Map<string, Rgba>()
 
 function parseColor(input: string): Rgba {
@@ -552,7 +552,7 @@ async function revealInPreview(id: string): Promise<void> {
 /* Containment only. Everything below sets GEOMETRY - never colour. The preview
    is built from the app's own objects (.admin-panel, .btn-*, .badge, .board-*,
    .num-cell, .modal-box) so that what an editor sees IS what the app renders;
-   re-declaring a colour here would rebuild the replica this replaced.
+   re-declaring a colour here would build a replica that drifts from the app.
    The stage's `color` is the one exception and is load-bearing: an inherited
    colour is an already-resolved value, so a bare <p> inheriting from the real
    <body> would paint the SAVED theme's --text. Declared here it resolves against

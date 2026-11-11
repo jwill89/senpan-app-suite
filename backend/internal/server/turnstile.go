@@ -10,10 +10,11 @@ import (
 	"time"
 )
 
-// Cloudflare Turnstile is a privacy-friendly "are you a robot?" check. The login
-// form renders a widget (using the public site key) that produces a one-time
-// token; this server verifies that token with Cloudflare before authenticating,
-// so automated brute-force clients can't reach the password check.
+// Cloudflare Turnstile is a privacy-friendly "are you a robot?" check. A public
+// form (the login among them) renders a widget (using the public site key) that
+// produces a one-time token; this server verifies that token with Cloudflare
+// before doing the work, so automated clients can't reach the password check or
+// flood a sign-up.
 
 // turnstileVerifyURL is Cloudflare's siteverify endpoint. A package var so tests
 // can point it at a stub server.

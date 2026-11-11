@@ -48,7 +48,7 @@ export interface RaffleForm extends Omit<RaffleInput, 'availableFrom' | 'availab
  * `availableTo` (if set). This mirrors the server's `raffles.IsOpen` so the two
  * never disagree.
  *
- * The public `GET /raffles` already applies the same window for normal
+ * The public `GET /api/v1/raffles` already applies the same window for normal
  * visitors, so this is a second line of defence for the two cases the list
  * can't cover: a raffle reached by a direct link to its detail page, and an
  * admin browsing the public pages (the list returns every raffle to staff). A
@@ -75,10 +75,9 @@ export function isRaffleEnterable(
 }
 
 /**
- * A raffle's entry mode, defaulting anything unrecognized to 'single'. Raffles
- * saved before entry modes existed carry an empty string, and that has always
- * meant "flat costPerEntry" - so an unknown value must never read as free or
- * as sign-ups-disabled. Mirrors the server's `raffles.NormalizeMode`.
+ * A raffle's entry mode, defaulting anything unrecognized (including an empty
+ * string) to 'single', a flat costPerEntry - so an unknown value must never read
+ * as free or as sign-ups-disabled. Mirrors the server's `raffles.NormalizeMode`.
  */
 export function raffleMode(r: Pick<PricedRaffle, 'entryMode'>): RaffleMode {
   return r.entryMode === 'details' || r.entryMode === 'custom' ? r.entryMode : 'single'

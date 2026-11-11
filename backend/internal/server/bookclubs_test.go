@@ -642,7 +642,7 @@ func TestLookUpTitleIgnoresAnEndpointOffTheAllowlist(t *testing.T) {
 	}
 	decodeInto(t, e.get(t, "/api/v1/book-clubs/yaoi/lookup?q=painter"), http.StatusOK, nil)
 	// The stub rewrites the host, so the path tells which endpoint the request was
-	// for: the default has none, the metadata address had /latest.
+	// for: the default has none, the metadata address has /latest.
 	hit.Lock()
 	defer hit.Unlock()
 	if len(urls) != 1 || urls[0] != "/" {

@@ -437,7 +437,7 @@ export async function exportCardImage(opts: ExportCardOptions): Promise<void> {
 
   // -- Board (centered) -------------------------------------------------------
   // Clip to the board's own corner radius, read off the live element rather than
-  // hardcoded: `.board-wrap` follows `--radius`, which is 0 (square) today. Any
+  // hardcoded: `.board-wrap` follows `--radius`. Any
   // mismatch here would either round off cells or leave corner triangles of the
   // wrong fill, so the value comes from the element being captured. Then stroke a
   // border so the card stands out from the background instead of blending in.

@@ -162,8 +162,8 @@
 
   /* Sizes the label against the stall's own box - see .map-stall-label.
      Size containment only; it deliberately does NOT clip, because the drag
-     handles sit OUTSIDE this box (see .placement-handle). Clipping here is what
-     hid the rotate handle entirely and left the resize handle as an unusable
+     handles sit OUTSIDE this box (see .placement-handle). Clipping here would
+     hide the rotate handle entirely and leave the resize handle an unusable
      nub - the label clips itself instead. */
   container-type: size;
 
@@ -227,13 +227,13 @@
      The `2.2N - 1.2` divisor is what a pitch's TENANT COUNT costs it: at one
      tenant it is exactly 1, so a normal pitch is untouched; at two the ceiling
      drops to a third, because two tenants and the rule between them do not fit in
-     the room written for one - and the label clips rather than overflowing, so
-     they were simply cut off. The 0.2 over a flat halving is the clearance a
-     centred label needs, which spills equally top and bottom when it overruns.
-     Sizing straight off the box - as `26cqh` alone did - meant a tall pitch and
-     a short one on the same plan drew their names at wildly different sizes, and
-     dragging a resize handle rescaled the text the whole way. Now the ceiling
-     engages only below roughly 5% of the map's height.
+     the room written for one, and the label clips rather than overflowing. The
+     0.2 over a flat halving is the clearance a centred label needs, which spills
+     equally top and bottom when it overruns.
+     Sizing straight off the box (`26cqh` alone) would make a tall pitch and a
+     short one on the same plan draw their names at wildly different sizes, and
+     dragging a resize handle would rescale the text the whole way. As a ceiling,
+     it engages only below roughly 5% of the map's height.
      Dropping the declaration on an engine without `cqh` leaves the plain
      inherited size, which is already the uniform one. */
   font-size: max(0.34rem, min(1em, calc(42cqh / (2.2 * var(--stall-occupants, 1) - 1.2))));
@@ -275,16 +275,16 @@
 .map-stall-caption {
   display: block;
 
-  /* Heavier than it was (500): drawn small, over a coloured fill, at whatever size
-     the plan's scale works out to, the lighter weight was hard to read. */
+  /* Bold: drawn small, over a coloured fill, at whatever size the plan's scale
+     works out to, a lighter weight is hard to read. */
   font-weight: 700;
   font-size: 0.82em;
   opacity: 0.9;
 }
 
 /* The stall type sits under the name and any day note, and is the least of the
-   three - lighter than them so the lines read in order, but still heavier than the
-   500 it used to be, which was the weight that was hard to read on a tinted fill. */
+   three - lighter than them so the lines read in order, but still heavy enough to
+   read on a tinted fill. */
 .map-stall-caption--type {
   font-weight: 600;
 }
@@ -323,13 +323,14 @@
      ratio, so this is belt and braces on a subtle behaviour rather than the thing
      that shapes the frame - but the frame narrowing is exactly what the auto
      margins below are for, and it should not be left implicit.
-     The dead space this used to leave is dealt with one level up: see .map-embed. */
+     The dead space such a narrowed frame leaves is dealt with one level up: see
+     .map-embed. */
   max-width: calc(var(--map-frame-height, 80vh) * var(--map-aspect, 1.6));
 
   /* Centred, because a frame narrowed by that cap is narrower than what contains
-     it. Left alone it hugged the left edge with the dead space all on one side -
-     which is what the bare canvas (the admin map screen, with no widget around it)
-     used to do. */
+     it. Left alone it would hug the left edge with the dead space all on one
+     side, as the bare canvas (the admin map screen, with no widget around it)
+     would. */
   margin-inline: auto;
 }
 
@@ -381,14 +382,12 @@
 }
 
 /* The stamp-rally badge. Sized as a share of the pitch - the icon inside fills the
-   box rather than the box following a font size, which would have made every badge
+   box rather than the box following a font size, which would make every badge
    the same size whatever it sat on - so a small stall still gets a small mark.
-   Smaller than the artwork it replaced (which was 26%, capped at 22px), because it
-   no longer has the same job: artwork had to be recognisable AS a picture, where a
-   mark only has to be noticed. At this size it sits at about the height of the
-   stall's own label text, so it reads as another of the stall's markings rather
-   than as a thing dropped on top of it - which is also why it takes the pitch's own
-   label colour. */
+   A mark only has to be noticed, not recognized as a picture, so it is small:
+   about the height of the stall's own label text, so it reads as another of the
+   stall's markings rather than as a thing dropped on top of it - which is also
+   why it takes the pitch's own label colour. */
 .map-stall-stamp {
   position: absolute;
   top: 2px;
@@ -406,9 +405,9 @@
 }
 
 /* A circle has no top-right corner to pin a badge to: the corner of its box is
-   outside the disc, so the badge either floated beside the stall or, pulled far
-   enough in to land on it, sat on top of the name. It goes to the top of the disc
-   instead, centred, in the band the label leaves clear - the label is centred
+   outside the disc, so the badge would either float beside the stall or, pulled
+   far enough in to land on it, sit on top of the name. It goes to the top of the
+   disc instead, centred, in the band the label leaves clear - the label is centred
    vertically and capped at 70% of the height (see .map-stall--round
    .map-stall-label), so nothing else is up there. */
 .map-stall--round .map-stall-stamp {
@@ -440,13 +439,13 @@
   --map-frame-height: 80vh;
 
   /* The WHOLE widget narrows with the plan, not just the frame around it.
-     This is the border a fitted map used to open with. Once the height cap bites -
-     a square or portrait plan on an ordinary screen - the frame shrinks to keep the
-     plan's shape, but the toolbar above it and the stage around it stayed the full
-     width of the page: the plan sat off to one side, under a bar far wider than
-     itself, with dead page beside it that no amount of fitting could reach, because
-     the plan was already as large as it could be. Capping the widget to the same
-     width, and centring it, makes the bar and the plan one object again.
+     Once the height cap bites - a square or portrait plan on an ordinary screen -
+     the frame shrinks to keep the plan's shape; without this the toolbar above it
+     and the stage around it would stay the full width of the page, leaving the
+     plan off to one side under a bar far wider than itself, with dead page beside
+     it that no amount of fitting could reach, because the plan is already as large
+     as it can be. Capping the widget to the same width, and centring it, makes the
+     bar and the plan one object.
      --map-aspect is set inline by the widget from the loaded plan. */
   max-width: calc(var(--map-frame-height) * var(--map-aspect, 1.6));
   margin-inline: auto;
@@ -464,8 +463,8 @@
 
   /* The auto side margins that centre a narrowed widget on our own page have to
      go here. A flex item with an auto margin on the cross axis does not stretch -
-     the margin absorbs the free space instead - so the widget shrank to the width
-     of its own toolbar and sat in the middle of the frame with the plan tiny
+     the margin absorbs the free space instead - so the widget would shrink to the
+     width of its own toolbar and sit in the middle of the frame with the plan tiny
      beside it. */
   margin-inline: 0;
 }
@@ -526,10 +525,10 @@ body.is-embedded {
   font-size: 0.8rem;
 }
 
-/* Its own bar ABOVE the plan, not floating over it. Overlaid, the controls sat on
-   top of whatever the plan showed underneath - and the top of a floor plan is
-   exactly where stalls tend to be. A bar costs a strip of height once and obscures
-   nothing. */
+/* Its own bar ABOVE the plan, not floating over it. Overlaid, the controls would
+   sit on top of whatever the plan shows underneath - and the top of a floor plan
+   is exactly where stalls tend to be. A bar costs a strip of height once and
+   obscures nothing. */
 .map-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -549,7 +548,7 @@ body.is-embedded {
   position: relative;
 }
 
-/* Square off the top of the plan where the bar now meets it, and drop the edge
+/* Square off the top of the plan where the bar meets it, and drop the edge
    they would otherwise draw twice between them. */
 .map-embed .map-viewport {
   border-radius: 0 0 var(--radius) var(--radius);
@@ -735,9 +734,10 @@ body.is-embedded {
 }
 
 /* .status-badge carries a global `margin-left: 6px` for the usual case, where it
-   TRAILS a heading. Here it leads its own row, and that inherited nudge left it
-   6px right of the icon column below - close enough to read as a mistake rather
-   than an indent. Zeroed here only; every other badge still trails its text. */
+   TRAILS a heading. Here it leads its own row, and that inherited nudge would put
+   it 6px right of the icon column below - close enough to read as a mistake
+   rather than an indent. Zeroed here only; every other badge still trails its
+   text. */
 .map-stall-status .status-badge {
   margin-left: 0;
 }
@@ -763,8 +763,8 @@ body.is-embedded {
     inset: 12px 12px auto auto;
 
     /* Wide enough for the three link buttons to share one line. At 380px they
-       broke 1-then-2, which reads as a mistake rather than a wrap. The visitor can
-       still resize it from here. */
+       would break 1-then-2, which reads as a mistake rather than a wrap. The
+       visitor can still resize it from here. */
     width: min(430px, 60%);
     max-height: calc(100% - 24px);
   }
@@ -794,8 +794,9 @@ body.is-embedded {
 
 /* One row of links, aligned with the column of text above it. Every other line in
    the panel - the name, the status, the type, the hours, the prose - starts at the
-   same left edge, and a row of buttons pushed to the far right was the one thing
-   that did not, so it read as belonging to the panel rather than to the stall.
+   same left edge, and a row of buttons pushed to the far right would be the one
+   thing that does not, so it would read as belonging to the panel rather than to
+   the stall.
    Wrapping keeps that edge, so a row too narrow for all three breaks into tidy
    left-hand lines. */
 .map-stall-links {

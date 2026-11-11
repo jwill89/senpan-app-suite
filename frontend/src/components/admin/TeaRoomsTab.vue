@@ -78,7 +78,7 @@ function lockText(t: TeaRoom): string {
 // -- Lock modal ---------------------------------------------------------------
 // Locking asks for the unlock time up front, because a lock set without one is a
 // lock somebody has to remember to lift. The field is optional all the same -
-// blank keeps the old behaviour, locked until an admin says otherwise.
+// blank locks the room until an admin says otherwise.
 const lockTarget = ref<TeaRoom | null>(null)
 const lockUntil = ref('')
 

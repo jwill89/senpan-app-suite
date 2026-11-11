@@ -81,7 +81,7 @@ type PatternMove struct {
 
 // PatternOrder is a category's patterns in their new order.
 type PatternOrder struct {
-	CategoryID int64   `json:"categoryId" minimum:"1" doc:"The category they are in from now on: a pattern from another one moves into it."`
+	CategoryID int64   `json:"categoryId" minimum:"1" doc:"The category they end up in: a pattern from another one moves into it."`
 	OrderedIDs []int64 `json:"orderedIds" minItems:"1" maxItems:"1000" uniqueItems:"true" nullable:"false" doc:"The patterns' ids, in their new order."`
 }
 

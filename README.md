@@ -124,7 +124,7 @@ checkout of its own: the app (`-Target app`, the default: one binary, the SPA in
 it) or the plugin (`-Target plugin`). It checks the live site through Cloudflare and
 rolls back what it changed if that fails. An app deploy also keeps the daily
 database backup installed and pulls the live database into `devdata/` (`-NoDbPull`
-skips that). See [`deploy/README.md`](deploy/README.md) for the host layout (the data
+skips that). See [`docs/ops.md`](docs/ops.md) for the host layout (the data
 folder, the vhost) and host setup.
 
 ## Testing & CI
@@ -156,7 +156,7 @@ folder, the vhost) and host setup.
 - **[`CONTRIBUTING.md`](CONTRIBUTING.md)** - dev workflow, the local checks that
   mirror CI, and versioning/changelog rules.
 - **[`CHANGELOG.md`](CHANGELOG.md)** - the app's and the plugin's version history.
-- **[`deploy/README.md`](deploy/README.md)** - deployment (the data folder and the
+- **[`docs/ops.md`](docs/ops.md)** - deployment (the data folder and the
   vhost, persistent uploads, the font and Carrd hosts, PWA caching).
 
 ## License

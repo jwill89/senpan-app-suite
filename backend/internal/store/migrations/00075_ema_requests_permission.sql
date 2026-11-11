@@ -1,7 +1,7 @@
 -- +goose Up
--- The artist's request queue joined the Ema Plaques page, so its page permission is gone.
--- An account that held it gets the Ema Plaques one in its place (the same page now, in the
--- same spot in its list, once), and the old key leaves every list.
+-- The artist's request queue is part of the Ema Plaques page, so it has no page
+-- permission of its own. An account that held festival-ema-requests gets festival-ema in
+-- its place (at the same spot in its list, once), and the old key leaves every list.
 UPDATE users
 SET permissions = (
   SELECT json_group_array(v) FROM (

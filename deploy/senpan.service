@@ -2,12 +2,12 @@
 # the concrete host layout OUT of the repo: copy it to
 # /etc/systemd/system/<service-name>.service on the host and replace the
 # placeholders below - <service-user>, /opt/<app>, <service-name> - with your
-# values. See deploy/README.md for a worked example. (deploy.ps1 does NOT ship this
-# file; the running unit lives only on the host.) It READS the running unit at each
-# backend deploy: User=/Group= are who the daily database backup runs as (so keep a
-# fixed User=, never DynamicUser=), the -db on ExecStart is the database it snapshots,
-# backs up and pulls, -addr is where it asks /api/version on the host and the vhost
-# proxies to, and -data is the data folder the plugin repository is published into.
+# values. (deploy.ps1 does NOT ship this file; the running unit lives only on the
+# host.) It READS the running unit at each backend deploy: User=/Group= are who the
+# daily database backup runs as (so keep a fixed User=, never DynamicUser=), the -db
+# on ExecStart is the database it snapshots, backs up and pulls, -addr is where it
+# asks /healthz on the host and the vhost proxies to, and -data is the data folder
+# the plugin repository is published into.
 
 [Unit]
 Description=Senpan App Suite Service
@@ -19,8 +19,8 @@ StartLimitIntervalSec=60
 [Service]
 Type=simple
 # Run as a dedicated, unprivileged system account - nothing here needs root
-# (the listen addr is :8080, non-privileged; all paths are ordinary files). See
-# deploy/README.md "Running as a non-root user" for the one-time useradd + chown.
+# (the listen addr is :8080, non-privileged; all paths are ordinary files). Create the
+# account once with useradd and chown /opt/<app> to it.
 User=<service-user>
 Group=<service-user>
 WorkingDirectory=/opt/<app>
@@ -29,22 +29,19 @@ WorkingDirectory=/opt/<app>
 # itself; nothing of it is under a web server's document root.
 ExecStart=/opt/<app>/app-suite -addr :8080 -db /opt/<app>/data/database.sqlite -data /opt/<app>/data
 
-# Auto-restart on failure, with increasing back-off
+# Restart on failure after 5 seconds; five starts within 60 seconds stop the retries.
 Restart=on-failure
 RestartSec=5
 
 # -- Configuration & secrets --
-# Config comes from the flags in ExecStart above OR from APPSUITE_* env vars. Two
-# of them are SECRETS - the session cookie secret and the Turnstile secret - so
-# keep them OUT of this unit file: an inline `Environment=SECRET=...` value is
-# world-readable via `systemctl show` and /proc/<pid>/environ. Put secrets in a
-# root-owned 0600 env file instead and load it here (the leading `-` makes it
-# optional, so the service still starts if it's absent):
+# Config comes from the flags in ExecStart above OR from APPSUITE_* env vars. The
+# Turnstile secret is a SECRET, so keep it OUT of this unit file: an inline
+# `Environment=SECRET=...` value is world-readable via `systemctl show` and
+# /proc/<pid>/environ. Put secrets in a root-owned 0600 env file instead and load it
+# here (the leading `-` makes it optional, so the service still starts if it's
+# absent):
 #
 #   /etc/senpan/senpan.env   (chown root:root, chmod 600):
-#     APPSUITE_SESSION_SECRET=<fixed 64+ hex, e.g. `openssl rand -hex 32`; unused by
-#                              this version, but the Discord bot release seals its
-#                              token with it - keep it set and unchanged>
 #     APPSUITE_TURNSTILE_SECRET=<Cloudflare Turnstile secret key>
 #     APPSUITE_TURNSTILE_SITEKEY=<Cloudflare Turnstile public site key>  # public, but
 #                              kept alongside the pair for convenience

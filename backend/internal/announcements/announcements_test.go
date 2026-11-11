@@ -286,7 +286,7 @@ func TestMentionContent(t *testing.T) {
 	if am != nil && len(am.Parse) != 0 {
 		t.Errorf("role: parse should be empty to suppress other mentions, got %+v", am.Parse)
 	}
-	// A role that no longer resolves posts without a tag.
+	// A role that isn't found posts without a tag.
 	if c, am := announcements.MentionContent("role:7", ""); c != "" || am != nil {
 		t.Errorf("missing role: got content=%q allowed=%+v", c, am)
 	}

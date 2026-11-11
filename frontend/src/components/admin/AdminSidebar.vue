@@ -1,18 +1,17 @@
 <script setup lang="ts">
 /**
  * Admin sidebar navigation - accordion sections (Bingo / Senpan Tea House /
- * Atelier Yao / System). Section headers are pure accordion toggles: clicking
- * one shows/hides the items it contains and never navigates, and any number of
- * sections can be open at once (independent toggles). Only the items navigate
- * (via the router). A section is hidden entirely when the account can't access
- * any of its pages. The active item's highlight reads from the admin store,
- * which the router guard keeps in sync with the matched route.
+ * Festival / Atelier Yao / System). Section headers are pure accordion toggles:
+ * clicking one shows/hides the items it contains and never navigates, and any
+ * number of sections can be open at once (independent toggles). Only the items
+ * navigate (via the router). A section is hidden entirely when the account can't
+ * access any of its pages. The active item's highlight reads from the admin
+ * store, which the router guard keeps in sync with the matched route.
  *
- * NOTE: the nav items are intentionally <button>s (with programmatic
- * router.push), not <RouterLink>/<a>. app.css (and user-authored custom themes)
- * style `.admin-nav-items button`, so switching to anchors would silently break
- * the sidebar's appearance under existing themes. The minor RouterLink perks
- * (middle-click / open-in-new-tab) aren't worth that theme-fidelity cost here.
+ * The nav items are intentionally <button>s (with programmatic router.push),
+ * not <RouterLink>/<a>: the stylesheets target `.admin-nav-items button`, so
+ * anchors would lose the sidebar's styling. The RouterLink perks (middle-click /
+ * open-in-new-tab) aren't worth that here.
  */
 import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -74,8 +73,8 @@ const showTeahouse = computed(() =>
     ...BOOK_CLUBS.map((c) => `bookclub-${c.slug}`),
   ].some(can),
 )
-// Festival now also hosts Raffles (moved out of Senpan Tea House). The Raffles
-// page keeps its `teahouse-raffles` permission/route id; only its placement moved.
+// The Festival section hosts Raffles, whose page keeps its `teahouse-raffles`
+// permission and route id.
 const showFestival = computed(() =>
   [
     'festival-map',

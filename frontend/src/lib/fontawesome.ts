@@ -14,8 +14,8 @@
  * `<font-awesome-icon :icon="[prefix, name]" />` component (registered globally
  * in main.ts) - e.g. `:icon="['fad', 'gear']"` / `:icon="['fas', 'trash']"` /
  * `:icon="['fab', 'discord']"`. Vue owns the rendered <svg> directly, so there
- * is no `dom.watch()` / MutationObserver (the old hosted-kit approach); core
- * auto-injects its CSS, which supplies the duotone primary/secondary layering.
+ * is no `dom.watch()` / MutationObserver; core auto-injects its CSS, which
+ * supplies the duotone primary/secondary layering.
  *
  * To add an icon: import its `fa...` name from the matching style module below
  * (alias solid imports with the `Solid` suffix to avoid name clashes with the
@@ -163,8 +163,8 @@ import {
 import { faStar as faStarRegular } from '@awesome.me/kit-46204fb6f1/icons/classic/regular'
 import { faDiscord } from '@fortawesome/free-brands-svg-icons'
 
-// Kit icons, the standalone brand icon, and the SVG core are all on FontAwesome 7
-// now, so their IconDefinition types line up directly - no cast needed.
+// Kit icons, the standalone brand icon, and the SVG core are all on FontAwesome 7,
+// so their IconDefinition types line up directly - no cast needed.
 const icons: IconDefinition[] = [
   // Duotone - headers, sidebar sections/nav, decorative.
   faAt,

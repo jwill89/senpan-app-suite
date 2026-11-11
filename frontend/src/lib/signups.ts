@@ -17,8 +17,8 @@
  * Every accessor is defensive. localStorage throws outright in some privacy
  * modes, is absent in SSR-ish contexts, and can hold anything a previous version
  * (or a curious user) left behind - so a failure degrades to "nothing saved"
- * rather than breaking the page. Records written before the home world had its own
- * field are split on read (see splitName), so an upgrade does not strand anyone.
+ * rather than breaking the page. A record holding the whole "Name @ World" in its
+ * name is split on read (see splitName), so it still matches what the server stores.
  */
 import { splitParticipantLabel } from './participant'
 
@@ -28,7 +28,7 @@ export interface SavedRallySignup {
   rallyId: number
   rallyTitle: string
   name: string
-  /** Home world, kept apart from the name as the server now stores it. */
+  /** Home world, kept apart from the name as the server stores it. */
   world: string
   cardToken: string
   /** Absent when the rally had no open linked garapon at sign-up time. */
@@ -157,11 +157,10 @@ function read(): SavedSignup[] {
  * Normalizes a stored name/world pair, splitting a composed "Name @ World" when the
  * world is missing.
  *
- * Entries written before the world had its own field hold the whole thing in `name`
- * and no `world` at all - so without this, `world` would be undefined at runtime
- * while the type promised a string, and the name would no longer match what the
- * server now stores. This is the browser-side counterpart to schema v66's backfill,
- * and it uses the same splitter, so both sides land on the same person.
+ * A stored entry may hold the whole thing in `name` and no `world` at all - so
+ * without this, `world` would be undefined at runtime while the type promised a
+ * string, and the name would not match what the server stores. It uses the same
+ * splitter as the server, so both sides land on the same person.
  */
 function splitName(name: unknown, world: unknown): { name: string; world: string } {
   const storedName = typeof name === 'string' ? name : ''

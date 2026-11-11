@@ -6,10 +6,9 @@ import (
 )
 
 // TestTruncateRunesRespectsTheLimit pins the arithmetic. The ellipsis counts
-// toward the cap, and keeping n-1 runes before appending three more returned n+2 -
-// so every truncated field came back OVER the Discord limit it was truncated to
-// satisfy, and Discord rejects the whole payload with a 400. That only showed up
-// on long content, which is exactly when truncation runs.
+// toward the cap, so a truncated field is never over the Discord limit it was
+// truncated to meet; Discord rejects the whole payload with a 400 when one is. That
+// only shows on long content, which is exactly when truncation runs.
 func TestTruncateRunesRespectsTheLimit(t *testing.T) {
 	cases := []struct {
 		name string
@@ -39,9 +38,9 @@ func TestTruncateRunesRespectsTheLimit(t *testing.T) {
 // TestEmbedRespectsDiscordTotalBudget pins the 6000-character cap. Discord sums
 // title, description, every field name and value, and the footer, and rejects the
 // WHOLE payload with a 400 when that exceeds 6000 - so a long enough announcement
-// simply failed to post, with the failure surfacing as a webhook error rather than
-// anything about length. The 25-field cap was enforced but dropped silently, which
-// is worse than failing: the announcement arrived looking complete.
+// would fail to post, with the failure surfacing as a webhook error rather than
+// anything about length. Dropping fields silently would be worse than failing: the
+// announcement would arrive looking complete.
 func TestEmbedRespectsDiscordTotalBudget(t *testing.T) {
 	b := NewEmbed().Title("A long announcement")
 	// Each field is at the per-field cap, so ~6 of them reach the total budget.

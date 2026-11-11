@@ -541,8 +541,8 @@ func TestFestivalMap_PublicPitchCarriesEveryOccupant(t *testing.T) {
 	if len(occupants) != 2 {
 		t.Fatalf("public occupants = %d; want 2", len(occupants))
 	}
-	// The festival ran in 2026-08; neither day is open now, so both read closed
-	// rather than one being silently promoted.
+	// Both days are in the past, so neither is open and both read closed rather
+	// than one being silently promoted.
 	for _, o := range occupants {
 		if o.(map[string]any)["isOpen"].(bool) {
 			t.Errorf("occupant %v is open outside the festival", o)
@@ -767,7 +767,7 @@ func TestFestivalMap_RallyOccupantLinkBadgesThePublicMap(t *testing.T) {
 		t.Error("The Great Below is badged for a stamp that belongs to Flora")
 	}
 
-	// The rally's own stall name now comes from the occupant.
+	// The rally's own stall name comes from the occupant.
 	rally, _ := env.rallyDetail(t, rallyID)
 	stamp := rally["stamps"].([]any)[0].(map[string]any)
 	if stamp["stallName"] != "Flora Teahouse" {
@@ -1013,7 +1013,7 @@ func TestFestivalMap_RaffleKeepsItsMapWhenTheStallGoesAway(t *testing.T) {
 		http.StatusOK, nil)
 
 	after := env.raffleDetail(t, raffleID)["raffle"].(map[string]any)
-	// It is still part of the festival - it just isn't pinned to a pitch any more.
+	// It is still part of the festival - it just isn't pinned to a pitch.
 	if after["festivalMapId"] == nil {
 		t.Error("the raffle lost its festival map along with the stall")
 	}

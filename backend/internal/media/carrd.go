@@ -153,7 +153,7 @@ func (c *Carrd) project(folder string) Project {
 
 // Projects lists the projects by title, ignoring case.
 func (c *Carrd) Projects() ([]Project, error) {
-	if err := os.MkdirAll(c.dir(), 0o755); err != nil { //nolint:gosec // a public folder, served by the web server
+	if err := os.MkdirAll(c.dir(), 0o755); err != nil { //nolint:gosec // a public folder, served by the app
 		return nil, err
 	}
 	entries, err := os.ReadDir(c.dir())
@@ -210,7 +210,7 @@ func (c *Carrd) CreateProject(reqTitle, reqFolder string) (Project, error) {
 	if folder == "" {
 		return Project{}, invalid("title", "Could not derive a folder name - use letters or numbers in the title or folder")
 	}
-	if err := os.MkdirAll(c.dir(), 0o755); err != nil { //nolint:gosec // a public folder, served by the web server
+	if err := os.MkdirAll(c.dir(), 0o755); err != nil { //nolint:gosec // a public folder, served by the app
 		return Project{}, err
 	}
 	if err := c.taken(title, folder, ""); err != nil {

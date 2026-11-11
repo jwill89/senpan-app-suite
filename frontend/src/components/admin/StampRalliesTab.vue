@@ -7,7 +7,7 @@
  *             pause/resume + passwords) and prizes, and links to the sub-pages.
  *   - cards:  issue participant card links + the issued-card table (copy/delete).
  *   - logs:   the event-wide "View Logs" stamp collection table - sortable, with a
- *             participant's rows always grouped together. Live-refreshed over the WS.
+ *             participant's rows always grouped together. Live-refreshed over the staff event stream.
  *   - form:   the create/edit form (StampRallyFormTab), a Back sub-page.
  */
 import { computed, ref, useTemplateRef } from 'vue'

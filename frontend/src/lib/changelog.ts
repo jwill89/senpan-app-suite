@@ -17,7 +17,7 @@ export { changelog }
 export type { ChangelogSection, ChangelogEntry, ChangelogGroup }
 
 /** The changelog's sections: the app and the plugin, versioned apart, and the
- * frontend's and backend's own histories from before the app's one version (4.0.0). */
+ * frontend's and backend's own separate histories. */
 export type ChangelogComponent = 'app' | 'plugin' | 'frontend' | 'backend'
 
 /** Human labels for each section (modal titles, etc.). */
@@ -37,7 +37,7 @@ export const PLUGIN_REPO_URL = 'https://apps.senpan.cafe/plugin/pluginmaster.jso
  * version - what Dalamud actually serves - instead of the version baked into this
  * bundle at build time. Publishing a new plugin (deploy `-Target plugin`) then
  * refreshes the shown version without a frontend rebuild. Relative so it stays
- * same-origin (the SPA and `/plugin/` share the doc root in production); in dev it
+ * same-origin (the app serves both the SPA and `/plugin/`); in dev it
  * 404s and the caller falls back to the bundled changelog version.
  */
 export const PLUGIN_MASTER_PATH = '/plugin/pluginmaster.json'
@@ -75,7 +75,9 @@ export interface InstallStep {
 
 /**
  * Dalamud install steps for the plugin, shown as a distinct panel (not mixed into
- * the changelog). Mirrors plugins/README.md.
+ * the changelog): generate an access token here, add the Senpan repository under
+ * Dalamud's custom plugin repositories, install the plugin, and connect it with the
+ * token.
  */
 export const PLUGIN_INSTALL_STEPS: InstallStep[] = [
   {

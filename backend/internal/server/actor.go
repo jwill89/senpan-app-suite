@@ -66,7 +66,7 @@ func (s *Server) fillActor(r *http.Request, a *requestActor) {
 //
 // The bot's own User-Agent is used as the name when Cloudflare sends no category,
 // and that UA is trustworthy here precisely because Cloudflare already verified
-// the source - it is no longer a spoofable self-claim.
+// the source, so it is not a spoofable self-claim.
 //
 // This is a logging hint only, never a security decision. Like CF-Connecting-IP
 // it is forgeable by a client that reaches the origin without passing through

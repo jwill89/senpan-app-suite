@@ -19,9 +19,8 @@ namespace SenpanCompanion.Windows;
 /// status, its 50%-off discount, and its lock. Everything else about a room
 /// (subtitle, image, hashtags, Discord posting, reordering) stays on the website.
 ///
-/// A lock either waits on a person, as locks always did, or carries an unlock time
-/// the server lifts it at. The expiry arrives back as a `tea_room_unlocked` event,
-/// which this panel turns into an in-game alert - so an operator learns a room is
+/// A lock either waits on a person or carries an unlock time the server lifts it at.
+/// The expiry arrives back as a `tea_room_unlocked` event, which this panel turns into an in-game alert - so an operator learns a room is
 /// free while looking at the game, not at this window.
 ///
 /// A tea-rooms change from anywhere marks the list stale, and the Refresh button

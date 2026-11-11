@@ -140,7 +140,7 @@ func TestAffiliatesValidation(t *testing.T) {
 	}
 }
 
-// A reorder answers the list as it is now; an empty list, a repeat and an unknown id
+// A reorder answers the list as it stands; an empty list, a repeat and an unknown id
 // are each a 422.
 func TestAffiliatesReorder(t *testing.T) {
 	env := newTestEnv(t)

@@ -23,15 +23,15 @@ export function placementStyle(p: Placement): CSSProperties {
 }
 
 /**
- * Display name for a stamp's stall, mirroring Go's StampRallyStamp.DisplayStall:
+ * Display name for a stamp's stall, matching the server's `StampRallyStamp.stall`:
  * the first non-blank of the map occupant's stall name, then the affiliate, then
  * the venue's own default.
  *
  * The stall name has to come first. A rally linked to a festival map takes its
  * stamps from PITCH OCCUPANTS, and the server joins that occupant's name - so
- * naming a map-linked stamp by its affiliate showed the partner behind the booth
- * rather than the booth, and "Senpan Tea House" for any occupant with no affiliate
- * at all, which is exactly the case a festival map exists to describe.
+ * naming a map-linked stamp by its affiliate would show the partner behind the
+ * booth rather than the booth, and "Senpan Tea House" for any occupant with no
+ * affiliate at all, which is exactly the case a festival map exists to describe.
  */
 export function stallName(stallNameValue: string, affiliateName = ''): string {
   return stallNameValue.trim() || affiliateName.trim() || 'Senpan Tea House'
@@ -39,8 +39,7 @@ export function stallName(stallNameValue: string, affiliateName = ''): string {
 
 /**
  * The stamp types, in picker order. Anything unrecognized (including the empty
- * value every stamp written before types existed carries) reads as a food stamp,
- * matching the server's normalization.
+ * value) reads as a food stamp, matching the server's normalization.
  */
 export const STAMP_TYPES: { value: StampType; label: string }[] = [
   { value: 'food', label: 'Food Stamp' },

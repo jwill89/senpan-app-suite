@@ -2,10 +2,8 @@
 /**
  * Card preview modal (admin) - shows a card's board, a Copy-ID button, and
  * inline-editable player name + details (double-click to edit, Enter/blur to
- * save, Escape to cancel). Mirrors the original "Card preview modal" block.
- *
- * Autofocus of the edit input (which app.js did via $refs + $nextTick) is
- * reproduced with a template ref watched against the editing field.
+ * save, Escape to cancel). The edit input is focused by a template ref watched
+ * against the editing field.
  */
 import { nextTick, useTemplateRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -29,7 +27,7 @@ function copyCardUrl(): void {
   ui.copyToClipboard(window.location.origin + href)
 }
 
-// Focus the inline-edit input when an edit begins (matches app.js behaviour).
+// Focus the inline-edit input when an edit begins.
 watch(
   () => cards.previewCardEditing,
   async (field) => {

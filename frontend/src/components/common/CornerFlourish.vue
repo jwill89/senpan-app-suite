@@ -11,7 +11,7 @@
  * images/flourishes). When set, its markup is fetched once (shared across the
  * four corners via a module cache) and inlined here; when unset, the built-in
  * default below is used. Source artwork is oriented for the TOP-LEFT corner; the
- * other three corners reuse this markup, mirrored with CSS transforms (app.css section 6).
+ * other three corners reuse this markup, mirrored with CSS transforms (player.css).
  */
 import { ref, watch } from 'vue'
 import { useAppStore } from '@/stores/app'
@@ -26,7 +26,7 @@ const svgCache = new Map<string, Promise<string>>()
  * Sanitizes fetched flourish SVG markup before it's inlined via v-html: parses it,
  * requires an <svg> root, drops active-content elements (<script>/<foreignObject>
  * and other embedding/scripting vectors), and strips on* event handlers and
- * javascript:/data: hrefs. Defense in depth against a tampered/legacy theme asset
+ * javascript:/data: hrefs. Defense in depth against a tampered theme asset
  * (the server sanitizes on upload); returns '' for anything that isn't clean SVG.
  */
 function sanitizeFlourishSvg(markup: string): string {
@@ -109,7 +109,7 @@ watch(
   <!-- Active theme's board flourish (inlined for export capture). The markup is
        admin-configured and server-sanitized on upload, and sanitizeFlourishSvg()
        above re-sanitizes it client-side before this v-html as defense in depth. -->
-  <!-- eslint-disable-next-line vue/no-v-html -->
+  <!-- eslint-disable-next-line vue/no-v-html -- the markup is server-sanitized on upload and re-sanitized by sanitizeFlourishSvg() -->
   <span v-if="customSvg" class="corner-flourish-svg" aria-hidden="true" v-html="customSvg"></span>
   <!-- Built-in default artwork (used when no theme flourish is selected). -->
   <svg

@@ -54,13 +54,13 @@ func (e *testEnv) spend(t *testing.T, id int64) {
 	}
 }
 
-// TestAnnouncementEditDoesNotRepostSpentOnce is the regression for the worst kind
-// of bug this codebase can have: one that talks to Discord. A one-time
-// announcement that has already gone out is left by the scheduler with no cursor
-// and not live. The edit used to re-resolve onceLocal and arm it unconditionally,
-// so fixing a typo in a posted announcement re-armed it and the next 30-second
-// sweep sent the whole thing again - @everyone and all. The cursor belongs to the
-// scheduler, not the form, exactly as skipCount does.
+// TestAnnouncementEditDoesNotRepostSpentOnce guards against the worst kind of bug
+// this codebase can have: one that talks to Discord. A one-time announcement that
+// has already gone out is left by the scheduler with no cursor and not live. An
+// edit must not re-resolve onceLocal and arm it unconditionally, or fixing a typo
+// in a posted announcement would re-arm it and the next 30-second sweep would send
+// the whole thing again - @everyone and all. The cursor belongs to the scheduler,
+// not the form, exactly as skipCount does.
 func TestAnnouncementEditDoesNotRepostSpentOnce(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)

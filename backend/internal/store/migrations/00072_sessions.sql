@@ -1,9 +1,8 @@
 -- +goose Up
--- Sign-ins move from memory into the database (4.1.0), so a deploy or restart no
--- longer signs everyone out. The table is scs's SQLite store's own shape: the token
--- (a SHA-256 hash of the cookie's, see the server's session store), the gob-encoded
--- session, and when it expires as a Julian day number, which the store compares
--- with julianday('now').
+-- Keeps sign-ins in the database, so a deploy or restart doesn't sign everyone out.
+-- The table is scs's SQLite store's own shape: the token (a SHA-256 hash of the
+-- cookie's), the gob-encoded session, and when it expires as a Julian day number,
+-- which the store compares with julianday('now').
 CREATE TABLE sessions (
   token TEXT PRIMARY KEY,
   data BLOB NOT NULL,

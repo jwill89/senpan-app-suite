@@ -127,13 +127,13 @@ export function stallStyle(
     // the app highlight when the admin has not picked one.
     '--stall-selection': selectionColor || 'var(--highlight)',
     // The label's colour, likewise per pitch. White by default: a label fixed to a
-    // dark colour only reads on a pale fill, and a pitch tinted anything deep left
-    // its own name barely legible.
+    // dark colour only reads on a pale fill, and a pitch tinted anything deep would
+    // leave its own name barely legible.
     '--stall-text': textColor || '#ffffff',
     // How many tenants share this pitch. The label's size ceiling is written for
-    // ONE - roughly a name and a caption - so a pitch with two had its second
-    // tenant clipped by the label's own overflow. Dividing by the count gives each
-    // of them about the room one would have had.
+    // ONE - roughly a name and a caption - so a pitch with two would have its
+    // second tenant clipped by the label's own overflow. Dividing by the count
+    // gives each of them about the room one would have had.
     '--stall-occupants': String(Math.max(1, occupantCount)),
   }
 }
@@ -142,7 +142,7 @@ export function stallStyle(
  * A circle's on-screen height as a percentage of the map box - what its width
  * works out to once `aspect-ratio: 1` squares it against a box `boxWidth` by
  * `boxHeight` pixels. The editor needs it to keep a circle inside the plan, since
- * `placement.height` no longer describes where its bottom edge lands.
+ * `placement.height` does not describe where its bottom edge lands.
  */
 export function circleHeightPct(widthPct: number, boxWidth: number, boxHeight: number): number {
   if (boxHeight <= 0) {
@@ -162,11 +162,7 @@ export function stallOperator(affiliateName: string): string {
  *   Sun, Aug 30, 2026, 8:00 PM - 1:00 AM EST
  *
  * FESTIVAL ONLY, which is why it lives here rather than in lib/datetime: the rest
- * of the app keeps its own formats, and this is not a house style being rolled out.
- *
- * The previous line came from `toLocaleString()`: "8/30/2026, 8:00:00 PM to
- * 8/31/2026, 1:00:00 AM" - two full timestamps, seconds nobody set, and the date
- * repeated for what a reader thinks of as one evening.
+ * of the app keeps its own formats.
  *
  * The end is ALWAYS a time alone, never a second date. A festival evening that
  * runs past midnight is one sitting to the people at it, and repeating the date on
@@ -272,9 +268,9 @@ export function occupantsOnDay<T extends { times: EventTime[] }>(
     return occupants
   }
   // Assigned by GREATEST overlap against the whole day list, the same way the day
-  // label is decided - see occupantDays. Matching on any overlap at all put a Day 1
-  // vendor under the Day 2 filter, because real festival days are broad spans that
-  // run minutes into one another. With no day list to compare against there is
+  // label is decided - see occupantDays. Matching on any overlap at all would put a
+  // Day 1 vendor under the Day 2 filter, because real festival days are broad spans
+  // that run minutes into one another. With no day list to compare against there is
   // nothing to be principal about, so fall back to plain overlap.
   const days = reference.length > 1 ? reference : [day]
   return occupants.filter((o) =>
@@ -286,7 +282,7 @@ export function occupantsOnDay<T extends { times: EventTime[] }>(
  * Whether `now` falls inside any of the ranges. An empty list is unbounded -
  * the same reading an empty availability window gets everywhere else in the app:
  * nothing was stated, so nothing is excluded. Mirrors the server's
- * withinAnyEventTime, which is what actually decides `isActive` / `isOpen`;
+ * `festival.WithinAnyEventTime`, which is what actually decides `isActive` / `isOpen`;
  * this is for previewing an unsaved form.
  */
 export function isWithinAny(times: EventTime[], now: number): boolean {
@@ -309,9 +305,9 @@ export interface Pan {
  * The zoom at which the whole plan fits inside the viewport.
  *
  * The viewport is a fixed shape but the canvas takes its height from the plan
- * image, so the two only match when the image happens to share that aspect. This
- * used to be assumed rather than computed, which is why a taller plan opened
- * cropped and "Fit" only restored the same crop.
+ * image, so the two only match when the image happens to share that aspect. The
+ * fit is computed rather than assumed, so a taller plan does not open cropped with
+ * "Fit" only restoring the same crop.
  *
  * Returns 1 for a canvas that has not been measured yet, so a caller has a sane
  * value before the image has loaded.
@@ -354,8 +350,8 @@ export function clampPan(pan: Pan, canvas: Size, viewport: Size, zoom: number): 
 /**
  * Splits a trailing parenthetical off an occupant title.
  *
- * Admins write titles like "Flora Teahouse (Day 1)" - the form has always
- * suggested exactly that - so the day is part of the typed text rather than a
+ * Admins write titles like "Flora Teahouse (Day 1)" - the form suggests
+ * exactly that - so the day is part of the typed text rather than a
  * field. The map labels a pitch by its AFFILIATE, and that parenthetical belongs
  * on its own line underneath; this is only about WHERE it renders, so a title
  * without one yields no note and nothing is invented for it.
@@ -379,8 +375,8 @@ export function splitTitleNote(title: string): { title: string; note: string } {
  * What the map draws as a pitch occupant's label: the affiliate, always.
  *
  * The affiliate is who a visitor is looking for, and a stall title is optional -
- * so labelling by title left untitled pitches blank. An occupant with no affiliate
- * is the venue's own booth.
+ * so labelling by title would leave untitled pitches blank. An occupant with no
+ * affiliate is named by its own title.
  */
 export function occupantMapLabel(occupant: {
   title?: string
@@ -391,10 +387,9 @@ export function occupantMapLabel(occupant: {
   if (affiliate) {
     return affiliate
   }
-  // No affiliate: a record from before one was required. Its own title is the only
-  // thing that names it - and naming it after the venue instead was actively wrong,
-  // since a pitch with no affiliate is not necessarily the venue's own. One such
-  // pitch is titled "Atelier YAO" and was being drawn as "Senpan Tea House".
+  // No affiliate: its own title is the only thing that names it. Naming it after
+  // the venue instead would be wrong, since a pitch with no affiliate is not
+  // necessarily the venue's own (one is titled "Atelier YAO").
   return (occupant.title ?? '').trim()
 }
 
@@ -419,11 +414,11 @@ export const MAX_VIEWPORT_ASPECT = 5 // 5:1, a long banner
 /**
  * The shape to give the map frame for a plan of the given aspect (width / height).
  *
- * The frame used to be a fixed 16/10 whatever the plan was, so anything else had to
- * be zoomed out to fit and sat letterboxed between empty margins. Taking the shape
- * from the plan means it fills the frame at the size it was drawn. A plan outside
- * the bounds is letterboxed inside the nearest allowed shape instead, which the fit
- * and the centring already handle.
+ * A fixed frame shape would force any plan of another aspect to be zoomed out to
+ * fit, letterboxed between empty margins. Taking the shape from the plan means it
+ * fills the frame at the size it was drawn. A plan outside the bounds is
+ * letterboxed inside the nearest allowed shape instead, which the fit and the
+ * centring already handle.
  *
  * Returns 0 for a plan whose size is not known yet, meaning "leave the CSS default".
  */
@@ -458,9 +453,9 @@ function overlapMs(a: EventTime, b: EventTime): number {
  * rather than to every day it touches at all. Real festival days are entered as
  * broad spans that run into one another - a "Day 1" of 7:35pm to 7:35pm the next
  * evening ends after "Day 2" has begun - so a vendor booked for Day 1 clips the
- * start of Day 2 by minutes. Counting that as "present on Day 2" put the vendor on
- * both days: it showed under the Day 2 filter, and named no day at all, because it
- * appeared to be there throughout.
+ * start of Day 2 by minutes. Counting that as "present on Day 2" would put the
+ * vendor on both days: it would show under the Day 2 filter, and name no day at
+ * all, because it would appear to be there throughout.
  *
  * An occupant keeping no hours of its own follows the festival, so it belongs to
  * every day.
@@ -523,9 +518,9 @@ export function isDayRestricted(
  * The days a pitch's occupants should be judged against.
  *
  * Normally the festival's own days. But a festival need not declare any - plenty
- * are set up with the hours only on the stalls - and then there was nothing to
- * compare an occupant to, so no occupant ever counted as day-restricted and no
- * pitch ever named a day. In that case the pitch's own occupants describe the days
+ * are set up with the hours only on the stalls - and then there is nothing to
+ * compare an occupant to, so no occupant would count as day-restricted and no
+ * pitch would name a day. In that case the pitch's own occupants describe the days
  * between them: a booth held by one vendor on Saturday and another on Sunday
  * defines a two-day reference without the festival saying a word.
  */
@@ -576,7 +571,7 @@ export function occupantDayNote(
   // Then the names of the REFERENCE days this occupant actually overlaps. This is
   // the case that matters in practice: a festival names its days ("Day 1", "Day 2")
   // and its vendors just carry hours, so the vendor's own ranges are often
-  // unlabelled - and reading the name off the vendor found nothing to say.
+  // unlabelled - so reading the name off the vendor alone finds nothing to say.
   const overlapped = occupantDays(occupant, reference)
     .map((day) => day.label.trim())
     .filter(Boolean)
@@ -626,11 +621,9 @@ export function occupantListLabel(occupant: {
 /**
  * An admin map's stalls in the shape the public canvas draws.
  *
- * The admin detail screen used to re-implement the plan in its own markup, which
- * is how it drifted: it still labelled stalls by title long after the map itself
- * had moved to labelling by affiliate, so every untitled stall showed up blank.
- * Rendering the real component against adapted data means there is one drawing of
- * a festival map, not two that have to be kept in step by hand.
+ * The admin detail screen renders the real public component against these adapted
+ * stalls, so there is one drawing of a festival map, not two that have to be kept
+ * in step by hand.
  *
  * The fields the canvas does not read - a stall's rally badge, its raffle, whether
  * it is open right now - are left off rather than invented: this is a preview of

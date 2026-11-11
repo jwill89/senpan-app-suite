@@ -36,7 +36,8 @@ const (
 	// settingSecret is the settings key of the HMAC key the link tokens are made with.
 	// It never leaves the server.
 	settingSecret = "font_url_secret" //nolint:gosec // the setting's key, not its value
-	// settingLegacyOrigins is the single allowlist from before each font had its own.
+	// settingLegacyOrigins is a site allowlist shared by every font, read only so
+	// MigrateMeta can give each font its own and then empty it.
 	settingLegacyOrigins = "font_allowed_origins"
 )
 
@@ -131,7 +132,7 @@ func (f *Fonts) MetaMap(ctx context.Context) map[string]fonts.Meta {
 }
 
 // saveMetaMap saves the map, dropping entries with nothing in them and the
-// migration-only legacy flag.
+// read-only LegacyOriginal flag.
 func (f *Fonts) saveMetaMap(ctx context.Context, metas map[string]fonts.Meta) error {
 	for key, m := range metas {
 		m.LegacyOriginal = false
@@ -450,9 +451,9 @@ func (f *Fonts) refreshDerivativeByKey(key string) error {
 	return f.refreshDerivative(fonts.Group{Key: key}) // no files left: removes the copy
 }
 
-// sweepDerivatives removes converted copies no font expects: leftovers of an older
-// naming, copies made redundant by an uploaded WOFF2, and orphans of fonts renamed or
-// deleted.
+// sweepDerivatives removes converted copies no font expects: copies under a name no
+// font maps to, copies made redundant by an uploaded WOFF2, and orphans of fonts
+// renamed or deleted.
 func (f *Fonts) sweepDerivatives() {
 	entries, err := os.ReadDir(f.derivedDir())
 	if err != nil {
@@ -495,9 +496,9 @@ func (f *Fonts) MigrateDerivatives() {
 	}
 }
 
-// MigrateMeta upgrades metadata from before fonts were grouped, once and idempotently:
-// entries keyed by file name move to their font, with the old "original" flag becoming
-// the served format, and the single allowlist becomes each font's own.
+// MigrateMeta converts metadata kept per file, once and idempotently: entries keyed by
+// file name move to their font, with the "original" flag becoming the served format,
+// and the shared allowlist becomes each font's own.
 func (f *Fonts) MigrateMeta(ctx context.Context) {
 	metas := f.MetaMap(ctx)
 	changed := false

@@ -6,11 +6,12 @@ const flags = Object.entries(serverFlags)
   .map(([flag, value]) => `${flag} "${value}"`)
   .join(' ')
 
-// The end-to-end run (`npm run test:e2e`), on shared-tooling's Playwright settings: the
+// The end-to-end run (`npm run test:e2e`), on the shared Playwright settings: the
 // app as production runs it - the Go binary, built from this checkout with the front
 // end's build embedded (build it first: `task test:e2e` does), serving the API, its
-// live event streams and the SPA - started on a throwaway database and web root in the OS temp
-// folder (e2e/server/prepare.ts). Locally on Windows it drives the installed Edge.
+// live event streams and the SPA - started on a throwaway database and data folder in
+// the OS temp folder (e2e/server/prepare.ts). Locally on Windows it drives the
+// installed Edge.
 export default defineConfig({
   ...playwrightDefaults,
   use: {

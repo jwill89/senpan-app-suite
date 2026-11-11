@@ -29,8 +29,7 @@
 
 /* The login / register / no-access boxes are dialogs, not pages, so their title
    takes the PANEL-level treatment: the quiet 1px muted hairline and the trailing
-   period, matching `.admin-panel > h3`. (Without this they were the one piece of
-   chrome that picked up the display face but none of the heading grammar.) */
+   period, matching `.admin-panel > h3`. */
 .admin-login .box h2 {
   font-size: 1.5rem;
   line-height: 1.15;
@@ -221,8 +220,8 @@
     z-index: 1200;
     padding: 12px 0;
 
-    /* A keyline, not a shadow: the drawer floats over the content, and with
-       elevation gone the dimmed backdrop plus a stronger right edge is what
+    /* A keyline, not a shadow: the drawer floats over the content, and without
+       elevation the dimmed backdrop plus a stronger right edge is what
        separates it. --control-border reads on both panel surfaces. */
     border-right: 1px solid var(--control-border);
     border-bottom: none;
@@ -361,8 +360,7 @@
 }
 
 /* Centered mini grid inside saved pattern card. Only the vertical spacing is
-   local now - `width: fit-content` moved to the base `.pattern-mini`, which is
-   what made this card the one place the cell gap was already even. */
+   local; `width: fit-content` is on the base `.pattern-mini`. */
 .saved-pattern .pattern-mini {
   margin: 24px auto 8px;
 }
@@ -466,12 +464,8 @@
   cursor: grabbing;
 }
 
-/* Drag handle shown on reorderable cards; renders the FontAwesome `bars` icon. */
-
-/* The reorder grip on a manager row. Affiliates, Announcements and Tea Rooms each
-   carried an identical per-tab copy of the layout half of this (`.aff-drag`,
-   `.ann-drag`, `.room-drag`) applied ALONGSIDE this class; those are folded in
-   here, so the markup needs one class instead of two. */
+/* The reorder grip on reorderable cards and manager rows; renders the
+   FontAwesome `bars` icon. It stretches to the row's height. */
 .drag-handle {
   display: inline-flex;
   align-items: center;
@@ -818,16 +812,16 @@
    `.color-picker` re-maps its surfaces + fields to the app theme tokens (so it
    blends into any modal/panel and stays legible), and the descendant selectors
    keep the edge over the library's own single-class styles regardless of load
-   order. Used by StampColorPicker (player stamp-colour modal); the Themes-tab
-   helper uses a native colour input instead. */
+   order. Used by ColorPicker.vue: the player stamp-color modal and the theme
+   editor's alpha tokens. */
 .color-picker .vc-chrome {
   width: 100%;
   max-width: 320px;
   background: var(--panel-raised-bg);
   border-radius: var(--radius);
 
-  /* Keyline instead of the former 18px drop shadow - this panel sits over page
-     content and still needs a hard edge to separate from it. */
+  /* Keyline, not a drop shadow - this panel sits over page content and still
+     needs a hard edge to separate from it. */
   border: 1px solid var(--control-border);
   font-family: inherit;
 }
@@ -883,8 +877,7 @@
 }
 
 /* Individual raffle card (clickable, with optional image + body). A solid
-   surface + border so the card still reads as a card when it has no prize image
-   (previously it had no fill and collapsed into floating text). */
+   surface + border so the card still reads as a card when it has no prize image. */
 .media-card {
   border-radius: 0;
   width: 280px;
@@ -897,8 +890,7 @@
   overflow: hidden;
 }
 
-/* Hover: border colour + the 2px nudge carry the feedback. The drop shadow that
-   used to accompany them is gone with the rest of the elevation. */
+/* Hover: border colour + the 2px nudge carry the feedback (no drop shadow). */
 .media-card:hover {
   border-color: var(--accent-2);
   transform: translateY(-2px);
@@ -1015,7 +1007,7 @@
   background: transparent;
 }
 
-/* The divider's default color matches the raised card it now sits on, so give it
+/* The divider's default color matches the raised card it sits on, so give it
    a contrasting line (the token built to read on --panel-raised-bg). */
 .admin-panel .called-divider {
   border-top-color: var(--control-border);

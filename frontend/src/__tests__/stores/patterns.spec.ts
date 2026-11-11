@@ -243,9 +243,9 @@ describe('editableGroups stays in step with server state', () => {
   /**
    * The drag view holds shallow COPIES of the patterns so vue-draggable-plus can
    * reorder them, which means it drifts the moment `patterns` changes underneath
-   * it. It used to be rebuilt in only two places, so deleting a pattern, renaming
-   * one, or reading the list again after a live change each left the admin editing
-   * a list that no longer matched what a save would write.
+   * it. It must be rebuilt wherever `patterns` changes - deleting a pattern, renaming
+   * one, or reading the list again after a live change - or the admin edits a list
+   * that does not match what a save would write.
    */
   it('follows a replaced patterns array (delete, or the list read again)', async () => {
     const s = usePatternsStore()

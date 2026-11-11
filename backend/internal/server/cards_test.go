@@ -26,7 +26,7 @@ func srvValidBoard() [][]int {
 	}
 }
 
-// cardSummary is a card as the list and cards_update give it.
+// cardSummary is a card as the list and update-card give it.
 type cardSummary struct {
 	ID           string  `json:"id"`
 	PlayerName   string  `json:"playerName"`
@@ -201,9 +201,9 @@ func TestCardsGenerate(t *testing.T) {
 }
 
 // TestGeneratedCardIDsAreUniqueWithinTheBatch pins batch-local uniqueness. The id
-// generator checked the DB, but nothing in the batch was saved until the end - so
-// two cards in one run could take the same id, and the insert then kept one of
-// them, silently handing out fewer cards than were asked for.
+// generator checks the DB, but nothing in the batch is saved until the end - so
+// without it two cards in one run could take the same id, and the insert would keep
+// one of them, silently handing out fewer cards than were asked for.
 func TestGeneratedCardIDsAreUniqueWithinTheBatch(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
@@ -306,7 +306,7 @@ func TestCardsUpdate(t *testing.T) {
 	}
 }
 
-// A delete answers 204, then 404 for the same card, and the card no longer plays.
+// A delete answers 204, then 404 for the same card, and the card doesn't play.
 func TestCardsDelete(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)

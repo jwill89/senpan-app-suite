@@ -1,9 +1,9 @@
 <Project>
   <!--
-    The shared .NET analyzers at their recommended level, and the shared C# code style
-    checked in the build (shared-tooling's lint/dotnet). The documentation file is made only
-    so the build can see unused usings (IDE0005); nothing reads it. The plugin's own
-    exceptions are below the project marker in the repo-root .editorconfig.
+    The .NET analyzers at their recommended level, and the C# code style, checked in the
+    build so a departure fails it. The documentation file is made only so the build can see
+    unused usings (IDE0005); nothing reads it. The plugin's own exceptions are in the
+    repo-root .editorconfig.
   -->
   <Import Project="$(MSBuildThisFileDirectory)..\shared\lint\dotnet\analyzers.props" />
 </Project>

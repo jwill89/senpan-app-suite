@@ -1,8 +1,8 @@
 /**
  * Shared "load behind a spinner" wrapper for the admin stores.
  *
- * Every plain list loader repeated the same shape: flip a loading flag on, fetch
- * + assign, surface any thrown error as an error toast, and clear the flag in a
+ * Every plain list loader has the same shape: flip a loading flag on, fetch +
+ * assign, surface any thrown error as an error toast, and clear the flag in a
  * `finally`. This owns that boilerplate so a loader is just its fetch + assign.
  */
 import type { Ref } from 'vue'
@@ -17,8 +17,8 @@ const depth = new WeakMap<Ref<boolean>, number>()
 
 /**
  * Runs `task` with `flag` held true for its duration. Any error thrown by `task`
- * is surfaced as an error toast (matching the stores' existing behavior); the
- * flag is only cleared once every concurrent `withLoading` on it has settled.
+ * is surfaced as an error toast; the flag is only cleared once every concurrent
+ * `withLoading` on it has settled.
  */
 export async function withLoading(flag: Ref<boolean>, task: () => Promise<void>): Promise<void> {
   depth.set(flag, (depth.get(flag) ?? 0) + 1)

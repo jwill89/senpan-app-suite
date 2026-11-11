@@ -25,11 +25,11 @@ public static class Chime
     ///
     /// SND_ASYNC means PlaySound returns immediately and keeps reading this memory
     /// for the time the tone lasts, but the P/Invoke marshaller only pins a managed
-    /// array for the duration of the CALL - so a compacting GC during playback was
-    /// free to relocate the buffer out from under winmm, leaving it streaming
-    /// whatever now occupies that address. Pinning for the process lifetime is the
-    /// fix and costs two small permanently-pinned arrays; the sounds exist for as
-    /// long as the plugin does, so there is nothing to free.
+    /// array for the duration of the CALL - so a compacting GC during playback could
+    /// relocate the buffer out from under winmm, leaving it streaming whatever then
+    /// occupies that address. Pinning for the process lifetime prevents that and costs
+    /// two small permanently-pinned arrays; the sounds exist for as long as the plugin
+    /// does, so there is nothing to free.
     /// </summary>
     private static IntPtr winnerWav;
     private static IntPtr unlockWav;

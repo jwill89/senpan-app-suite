@@ -4,10 +4,10 @@
 
 /* ================================================================
    33. PHONE LAYOUT - small-screen tweaks (<=560px)
-   Player view never had a mobile breakpoint; the board is handled by the
-   self-limiting .board-cell --cell-size, and these rules tighten the
-   surrounding chrome and let the right column shrink below its 300px desktop
-   min-width so nothing forces horizontal page overflow on a phone.
+   The board is handled by the self-limiting .board-cell --cell-size, and
+   these rules tighten the surrounding chrome and let the right column shrink
+   below its 300px desktop min-width so nothing forces horizontal page overflow
+   on a phone.
    ================================================================ */
 @media (width <= 560px) {
   /* Tighter shells so content gets the width it needs. */
@@ -36,7 +36,7 @@
 
   /* All three columns become wrapped, full-width blocks on phones - drop the
      desktop min-width floors so they fit a 320px viewport (the fluid board
-     cells shrink to fill the now-narrow board column). */
+     cells shrink to fill the narrow board column). */
   .player-col-board,
   .player-col-called,
   .player-col-info {
@@ -45,7 +45,7 @@
     width: 100%;
   }
 
-  /* Scale board typography down with the (now smaller) cells. The player board
+  /* Scale board typography down with the smaller cells. The player board
      keeps its enlarged desktop type (1.95rem) at wide widths, but on a phone the
      cells are far smaller, so bring the number/FREE type back down so it fits the
      cell instead of forcing the grid wider than the card. */
@@ -107,8 +107,8 @@
   }
 
   /* Must MATCH the specificity of the rules that start the pulse
-     (.conn-badge.is-connecting .conn-dot) - a media query adds none, so the
-     shorter selector simply lost and the dot kept animating. */
+     (.conn-badge.is-connecting .conn-dot) - a media query adds none, so a
+     shorter selector would lose and the dot would keep animating. */
   .conn-badge.is-connecting .conn-dot,
   .conn-badge.is-reconnecting .conn-dot {
     animation: none;

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * Admin Winners Log tab - paginated, sortable table of past game winners with
- * per-page controls. Mirrors the original `adminTab==='bingo-winners-log'` block.
+ * per-page controls.
  */
 import { ref, useTemplateRef } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'

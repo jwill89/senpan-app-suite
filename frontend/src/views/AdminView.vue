@@ -6,10 +6,9 @@
  * verification, halftime prompt, end-game, card preview) live here so they
  * overlay any tab.
  *
- * Loads the initial admin data set once when the dashboard mounts (this used to
- * happen in the App shell after a successful login; now it runs whenever the
- * admin area is entered, including via a direct link / refresh). Logout
- * closes the live stream implicitly (App's route watcher) and returns home.
+ * Loads the initial admin data set once when the dashboard mounts, so it runs
+ * whenever the admin area is entered, including via a direct link / refresh.
+ * Logout closes the live stream implicitly (App's route watcher) and returns home.
  */
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -103,8 +102,8 @@ if (auth.hasPermission('teahouse-tea-rooms')) {
 
 // -- Mobile nav drawer --------------------------------------------------------
 // On narrow viewports the sidebar collapses into a hamburger-triggered drawer
-// (see app.css). Selecting a nav item navigates, so close the drawer on every
-// route change; tapping the backdrop closes it too.
+// (see assets/styles/admin.css). Selecting a nav item navigates, so close the
+// drawer on every route change; tapping the backdrop closes it too.
 const navOpen = ref(false)
 watch(
   () => router.currentRoute.value.fullPath,

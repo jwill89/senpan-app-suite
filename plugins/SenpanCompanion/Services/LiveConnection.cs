@@ -54,7 +54,7 @@ public sealed class LiveConnection : IDisposable
     /// </summary>
     public event Action? Opened;
 
-    /// <summary>The server no longer had the events since the last one heard: read everything again.</summary>
+    /// <summary>The server doesn't hold the events since the last one heard: read everything again.</summary>
     public event Action? Resync;
 
     /// <summary>A number was drawn: the game, the number and every winning card so far.</summary>

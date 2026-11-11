@@ -3,8 +3,7 @@
  * base image, plus its publish status) and the public read side (the published
  * maps and one map's interactive view).
  *
- * Structurally the stamp-rally store's sibling - an event owning positioned
- * sub-entities, authored in a visual editor - with two differences: a map is
+ * An event owning positioned sub-entities, authored in a visual editor. A map is
  * published rather than opened/closed, and its public side is a browsable page
  * rather than a per-participant token.
  */
@@ -346,7 +345,7 @@ export const useFestivalMapsStore = defineStore('festivalMaps', () => {
     }
     // Every stall names who runs it. The map LABELS a stall by its affiliate, so
     // one saved without leaves a blank shape on the plan - and the venue is an
-    // affiliate in its own right now, so there is no default to fall back on.
+    // affiliate in its own right, so there is no default to fall back on.
     const missing = f.stalls.findIndex((stall) =>
       stall.occupants.some((o) => o.affiliateId === null),
     )

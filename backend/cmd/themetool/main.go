@@ -1,10 +1,13 @@
-// Command themetool inspects and adjusts the saved themes in a Bingo-App SQLite
-// database for WCAG 2.1 contrast. It reuses the app's own store package so it
+// Command themetool inspects and adjusts the saved themes in the app's SQLite
+// database for WCAG contrast. It reuses the app's own store package so it
 // reads/writes tokens exactly as the server does.
 //
-//	go run ./cmd/themetool dump   <db>
-//	go run ./cmd/themetool check  <db>
-//	go run ./cmd/themetool apply  <db> <changes.json>
+//	go run ./cmd/themetool dump    <db>
+//	go run ./cmd/themetool check   <db>
+//	go run ./cmd/themetool sqldump <db>
+//	go run ./cmd/themetool apply   <db> <changes.json>
+//
+// sqldump prints the SQL that brings another database's themes to this one's.
 //
 // changes.json: {"update":{"<id>":{"<token>":"<value>",...}},
 //
@@ -54,8 +57,8 @@ type pair struct {
 // light themes). Keep in sync with .btn-caution in base.css.
 const CautionText = "#1f1a06"
 
-// A pair's fg may be a token name OR a literal "#hex" (used for the fixed
-// caution-button ink). bg is always a token name.
+// pairs is every pairing checked. A pair's fg may be a token name OR a literal
+// "#hex" (used for the fixed caution-button ink). bg is always a token name.
 var pairs = []pair{
 	{"text", "page-bg", "body / page", false},
 	{"text", "panel-bg", "body / panel", false},

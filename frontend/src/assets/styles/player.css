@@ -30,10 +30,10 @@
 }
 
 /* Home page logo. No drop-shadow: the artwork already carries a soft shadow of
-   its own, so the CSS one was doubling it, and elevation is out generally. The
-   logo includes the wordmark, so it IS the page title: the <h1> holds it and
-   nothing else, so it adds no type of its own. `appTitle` is its alt text, and
-   still drives the browser tab + player topbar. */
+   its own, and the UI uses no elevation. The logo includes the wordmark, so it
+   IS the page title: the <h1> holds it and nothing else, so it adds no type of
+   its own. `appTitle` is its alt text, and also drives the browser tab + player
+   topbar. */
 .home-logo {
   display: block;
   width: min(240px, 62vw);
@@ -43,8 +43,8 @@
 /* One column of distinct full-width rows: the primary task, then the
    destinations. Hierarchy comes from WEIGHT rather than width - the primary panel
    has the larger title, the only input, and roughly double the height. Columns
-   were worse: at the narrower measure the destination copy wrapped to three lines
-   beside a one-line button, and the conditional Raffles row left a hole. */
+   read worse: at the narrower measure the destination copy wraps to three lines
+   beside a one-line button, and the conditional Raffles row leaves a hole. */
 .home-stack {
   display: flex;
   flex-direction: column;
@@ -124,7 +124,8 @@
 }
 
 /* Subtle admin login link at bottom of home page. Dimmed, but no further than its
-   label still reads at 4.5:1 (0.7 is 4.9:1 on the default theme; 0.5 was 3.3:1). */
+   label still reads at 4.5:1 (0.7 is 4.9:1 on the default theme; 0.5 would be
+   3.3:1). */
 .home-admin {
   opacity: 0.7;
   transition: opacity 0.2s;
@@ -203,8 +204,8 @@
    10. BINGO BOARD - 5x5 player board with B-I-N-G-O header
    ================================================================ */
 
-/* Outer wrapper - a flat square frame around the cells. The 40px halo is gone
-   with the rest of the elevation; the gradient still separates it from the page. */
+/* Outer wrapper - a flat square frame around the cells, with no halo; the
+   gradient separates it from the page. */
 .board-wrap {
   position: relative;
   background: linear-gradient(145deg, var(--board-gradient-start), var(--board-gradient-end));
@@ -706,9 +707,9 @@
   gap: 16px;
 }
 
-/* Column 1: the board keeps a readable minimum (~68px cells, as before) but may
+/* Column 1: the board keeps a readable minimum (~68px cells) but may
    grow to fill its column when there's room - capped modestly so it never
-   dominates the row. min-width 396px = the old 5x68px board + padding. */
+   dominates the row. min-width 396px = a 5x68px board + padding. */
 .player-col-board {
   flex: 1 1 396px;
   min-width: 396px;
@@ -806,8 +807,8 @@
 
 /* Per-player "It's Yoever" toggles (effects / sounds) above the action buttons.
    One labeled row of `.toggle-btn--sm` segments, laid out like the Sound row
-   above it - two labeled switch rows wrapped onto three lines in the board
-   column once the labels grew. */
+   above it - two labeled switch rows would wrap onto three lines in the board
+   column. */
 .yoever-row {
   display: flex;
   align-items: center;
@@ -851,9 +852,8 @@
   gap: 4px;
 }
 
-/* One B-I-N-G-O column. The rest of this family has always lived here, but the
-   column wrapper was scoped to CalledNumbers.vue, so the tracker could not be
-   reused anywhere else (the theme preview needs it). */
+/* One B-I-N-G-O column. The wrapper is shared, not scoped to CalledNumbers.vue,
+   so the tracker can be reused elsewhere (the theme preview needs it). */
 .numbers-col {
   position: relative;
 }
@@ -949,13 +949,10 @@
 /* 5x5 mini grid layout for pattern previews.
    Tracks are `auto` and the box is `fit-content` ON PURPOSE. The cells carry a
    fixed px size, so a track wider than its cell leaves slack that reads as extra
-   gap: with `1fr` inside a .pattern-card (width: 100px) the tracks grew to 18.4px
-   around 16px cells, turning the 2px gap into 4.4px. Game Presets, Current Game
-   and the player's win-patterns panel were all spaced differently from the
-   Patterns manager, which looked right only because it set width: fit-content
-   itself. Sizing the grid to its cells makes every pattern preview identical.
-   `margin-inline: auto` keeps it centred now that the box no longer fills its
-   container. */
+   gap: with `1fr` inside a .pattern-card (width: 100px) the tracks would grow to
+   18.4px around 16px cells, turning the 2px gap into 4.4px. Sizing the grid to
+   its cells makes every pattern preview identical. `margin-inline: auto` keeps
+   the shrunken box centred in its container. */
 .pattern-mini {
   display: grid;
   grid-template-columns: repeat(5, auto);

@@ -7,7 +7,8 @@ import (
 	"testing"
 )
 
-// The checker passes an answer the document declares and catches one it doesn't.
+// TestProblemCatchesAnswersTheDocumentDoesNotDeclare checks that the checker passes
+// an answer the document declares and catches one it doesn't.
 func TestProblemCatchesAnswersTheDocumentDoesNotDeclare(t *testing.T) {
 	const json = "application/json"
 	for _, c := range []struct {
@@ -31,7 +32,8 @@ func TestProblemCatchesAnswersTheDocumentDoesNotDeclare(t *testing.T) {
 	}
 }
 
-// Each event of a stream is held to the schema the document gives its name.
+// TestEventProblem checks that each event of a stream is held to the schema the
+// document gives its name.
 func TestEventProblem(t *testing.T) {
 	const at = `"at":"2026-11-09T20:00:00Z"`
 	for _, c := range []struct {
@@ -61,8 +63,8 @@ func TestEventProblem(t *testing.T) {
 	}
 }
 
-// The checker reads a stream through, failing a test on an event the document
-// doesn't have.
+// TestEventCheckerReadsEvents checks that the checker reads a stream through,
+// failing a test on an event the document doesn't have.
 func TestEventCheckerReadsEvents(t *testing.T) {
 	stream := "id: 9\nevent: ping\ndata: {\"id\":0,\"type\":\"ping\",\"gameId\":null,\"at\":\"2026-11-09T20:00:00Z\",\"payload\":{}}\n\n" +
 		": a comment\n\n"

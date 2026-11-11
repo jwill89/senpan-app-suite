@@ -88,9 +88,8 @@ function back(): void {
               {{ entry.rallyTitle }}
               <span v-if="entry.completed" class="badge badge--success">Complete</span>
             </h3>
-            <!-- Which record this is. A card issued before worlds had their own
-                 field, or one staff typed by hand, may be spelled differently from
-                 what was just searched for. -->
+            <!-- Which record this is. A card staff typed by hand, for one, may be
+                 spelled differently from what was just searched for. -->
             <p class="text-muted text-sm mb-8">
               Held by
               <strong>{{ participantLabel(entry.participantName, entry.world) }}</strong>

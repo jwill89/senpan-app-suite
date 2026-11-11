@@ -57,8 +57,8 @@ describe('ThemeTokenEditor', () => {
     const wrapper = mount(ThemeTokenEditor, { props: { modelValue: defaultTokens() } })
     // Anchored on the pairing id (what "Find in preview" queries) plus the real
     // global object, so each assertion tests the UI kind rather than a preview-only
-    // class name. The preview is built from the app's own objects now, so asserting
-    // the real class is also what proves it still looks like the app.
+    // class name. The preview is built from the app's own objects, so asserting
+    // the real class is also what proves it looks like the app.
     expect(wrapper.find('button.btn-neutral[data-pair~="neutral-btn"]').exists()).toBe(true)
     expect(wrapper.find('a[data-pair~="link-panel"]').exists()).toBe(true)
     expect(wrapper.find('.winner-chip[data-pair~="winner-chip"]').exists()).toBe(true)
@@ -69,9 +69,8 @@ describe('ThemeTokenEditor', () => {
     const broken = { ...defaultTokens(), text: '#1a1c17', 'page-bg': '#1a1c17' }
     const wrapper = mount(ThemeTokenEditor, { props: { modelValue: broken } })
     // `--fail` is the class a failing pairing actually produces (PairStatus is
-    // 'fail' | 'aa' | 'aaa'). This previously asserted `--error`, a name the
-    // stylesheet never defined - so it passed while every error row rendered
-    // untinted. Assert the modifier that is really styled.
+    // 'fail' | 'aa' | 'aaa'). Assert the modifier the stylesheet really styles, or
+    // the test would pass while every error row rendered untinted.
     const findings = wrapper.findAll('.wcag-finding--fail')
     expect(findings.length).toBeGreaterThan(0)
     // Each finding carries a chip and a Find-in-preview button.

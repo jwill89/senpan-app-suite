@@ -467,7 +467,7 @@ describe('public sign-up + lookup', () => {
       ),
     )
     const s = useStampRalliesStore()
-    // Name and world go as two fields, the way every system now stores a person.
+    // Name and world go as two fields, the way every system stores a person.
     expect(await s.signUp(3, '  Yao Ming  ', '  Balmung  ')).toBe(true)
     const call = callTo('POST', '/stamp-rallies/{id}/sign-up')
     expect(call?.[1].params.path).toEqual({ id: 3 })
@@ -650,7 +650,7 @@ describe('copyRallyForm', () => {
 
   /**
    * A save is a FULL REPLACE, and the admin LIST leaves stamps/prizes empty. So
-   * seeding the form from a list row and saving it deleted every stamp on the
+   * seeding the form from a list row and saving it would delete every stamp on the
    * rally, taking every participant's collected rows with it. Both entry points
    * must refuse a rally that has not had its detail loaded.
    */
@@ -777,7 +777,7 @@ describe('festival map linkage', () => {
 
     expect(store.rallyForm!.festivalMapId).toBe(4)
     expect(store.mapStalls).toHaveLength(1)
-    // The old stall id belonged to the previously-linked map, so it can't stand.
+    // A stall id from the map the rally was switched away from can't stand.
     expect(store.rallyForm!.stamps[0]!.occupantId).toBeNull()
   })
 

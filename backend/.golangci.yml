@@ -55,10 +55,10 @@ linters:
       exclude-functions:
         - (net/http.ResponseWriter).Write
         - github.com/danielgtaylor/huma/v2.WriteErr
-        # The store writes its row loops by hand (there is no generated query layer), and a
-        # deferred rows.Close runs after rows.Err() has been read: rowserrcheck holds every
-        # query to that. A result set read to the end was already closed by Next, and on an
-        # early return the error being returned is the one that matters.
+        # A deferred rows.Close follows a loop that has read to the end and checked rows.Close
+        # and rows.Err (sqlc's generated methods are written this way). A result set read to
+        # the end was already closed by Next, and on an early return the error being
+        # returned is the one that matters.
         - (*database/sql.Rows).Close
   exclusions:
     rules:
@@ -71,9 +71,9 @@ linters:
       - path: _test\.go
         linters: [errcheck]
         text: "Error return value of `[^`]*\\.Close` is not checked"
-      # Everything the server writes lands in the web root's upload trees (images/, carrd/,
-      # fonts/), kept world-readable like the rest of the document root: Apache serves
-      # images/ and carrd/ as its own user (deploy/README.md, "Running as a non-root user").
+      # The server package's tests lay out data-folder fixtures (images/, carrd/, fonts/)
+      # with directories at 0755 and files at 0644, wider than gosec's G301 (0750) and
+      # G306 (0600) allow; they hold no credentials.
       - path: internal/server/
         linters: [gosec]
         text: "G30[16]:"

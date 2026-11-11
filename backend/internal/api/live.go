@@ -208,7 +208,7 @@ func toPage(perms ...string) live.Audience { return live.Audience{Staff: true, P
 // toAdmins is the admins alone.
 var toAdmins = live.Audience{Staff: true, Admins: true}
 
-// Resources are the data resource_changed names, each with the pages that show it:
+// resources are the data resource_changed names, each with the pages that show it:
 // an account holding any of them hears of a change (an admin holds every one). An
 // empty list is the admins' alone. A book club's reading lists are its own,
 // "bookclub-<slug>", heard by that club's page.
@@ -293,12 +293,12 @@ func (h handlers) publish(msg live.Message, to live.Audience) {
 // -- The streams ------------------------------------------------------------------
 
 type staffStreamInput struct {
-	LastEventID string `header:"Last-Event-ID" doc:"The id of the last event this client got, sent when it reopens the stream: the events since it that the account may hear come first. One the server no longer keeps is answered with resync."`
+	LastEventID string `header:"Last-Event-ID" doc:"The id of the last event this client got, sent when it reopens the stream: the events since it that the account may hear come first. One the server doesn't keep is answered with resync."`
 }
 
 type boardStreamInput struct {
 	ID          string `path:"id" pattern:"^[A-Za-z0-9]{6}$" patternDescription:"six letters or digits" doc:"The board's card id, in any case."`
-	LastEventID string `header:"Last-Event-ID" doc:"The id of the last event this board got, sent when it reopens the stream: the events since it come first. One the server no longer keeps is answered with resync."`
+	LastEventID string `header:"Last-Event-ID" doc:"The id of the last event this board got, sent when it reopens the stream: the events since it come first. One the server doesn't keep is answered with resync."`
 }
 
 var cardIDPattern = regexp.MustCompile(`^[A-Za-z0-9]{6}$`)
@@ -468,7 +468,7 @@ func (h handlers) streamBoard(ctx context.Context, _ *boardStreamInput, send sse
 }
 
 // stream sends a stream's events until it ends: its client goes, the hub ends it,
-// its card is deleted, or recheck (staff's) says its account may no longer follow it.
+// its card is deleted, or recheck (staff's) says its account may not follow it.
 // Each event carries its id as the SSE id, but the ping and a log line don't, so a
 // client resumes from the last event in the feed.
 func (h handlers) stream(ctx context.Context, f *feed, send sse.Sender, recheck func() bool) {

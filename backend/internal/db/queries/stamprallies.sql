@@ -144,8 +144,9 @@ WHERE stamp_rally_cards.id = sqlc.arg(card_id) AND stamp_rally_cards.rally_id = 
 SELECT stamp_id, stamped_at FROM stamp_rally_collected WHERE card_id = ? AND stamp_id IS NOT NULL;
 
 -- name: CollectStamp :execrows
--- Keeps the participant's, the stall's and the stamp's type as they are now. A card
--- holds a stamp once: the unique pair makes a second collect insert nothing.
+-- Records the participant's name, the stall's name and the stamp's type as they are
+-- when the stamp is collected. A card holds a stamp once: the unique pair makes a
+-- second collect insert nothing.
 INSERT INTO stamp_rally_collected (rally_id, card_id, stamp_id, participant_name, stall_name, stamp_type)
 VALUES (?, ?, ?, ?, ?, ?)
 ON CONFLICT (card_id, stamp_id) DO NOTHING;

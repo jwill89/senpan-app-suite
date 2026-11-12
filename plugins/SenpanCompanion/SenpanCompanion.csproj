@@ -17,7 +17,7 @@
     <AssemblyName>SenpanCompanionAdmin</AssemblyName>
     <Version>4.0.0.0</Version>
     <Description>Senpan Admin Companion: operate Senpan Tea House app services from inside FFXIV.</Description>
-    <PackageProjectUrl>https://github.com/jwill89/senpan-app-suite</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/jwill89/app-senpan-suite</PackageProjectUrl>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>

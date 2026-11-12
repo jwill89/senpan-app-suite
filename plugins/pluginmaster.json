@@ -8,7 +8,7 @@
     "Punchline": "Allows Senpan Tea House staff to use various app services right from the game.",
     "Changelog": "Works with the Senpan server from 5.0.0 on (and needs it). Live updates arrive over its event stream and pick up where they left off after a drop. A half-time prompt or End Game confirm closes when another console answers it, the draw delay is the one every console shares, and the raffle, garapon, stamp rally, tea room and winners pages refresh when their records change anywhere. A refused action shows the server's own reason.",
     "Tags": ["bingo", "raffle", "venue", "senpan"],
-    "RepoUrl": "https://github.com/jwill89/senpan-app-suite",
+    "RepoUrl": "https://github.com/jwill89/app-senpan-suite",
     "ApplicableVersion": "any",
     "DalamudApiLevel": 15,
     "TestingDalamudApiLevel": 15,

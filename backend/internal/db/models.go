@@ -90,6 +90,15 @@ type Card struct {
 	World        string
 }
 
+type DiscordInvite struct {
+	ID        int64
+	TokenHash string
+	Kind      string
+	UserID    sql.NullInt64
+	CreatedAt string
+	ExpiresAt string
+}
+
 type EmaBoard struct {
 	ID            int64
 	FestivalMapID int64
@@ -432,6 +441,14 @@ type User struct {
 	CreatedAt     *string
 	LastLoginAt   *string
 	PasswordEpoch int64
+}
+
+type UserDiscord struct {
+	UserID      int64
+	DiscordID   string
+	Username    string
+	DisplayName string
+	LinkedAt    string
 }
 
 type UserPasskey struct {

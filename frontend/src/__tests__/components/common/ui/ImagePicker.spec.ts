@@ -147,7 +147,13 @@ describe('ImagePicker', () => {
   describe('upload control', () => {
     /** Signs in a user holding exactly the given permission keys. */
     function signIn(...permissions: string[]): void {
-      useAuthStore().user = { id: 1, username: 'u', isAdmin: false, permissions } satisfies Account
+      useAuthStore().user = {
+        id: 1,
+        username: 'u',
+        isAdmin: false,
+        permissions,
+        hasPassword: true,
+      } satisfies Account
     }
 
     it('is hidden for users without the system-images permission', async () => {

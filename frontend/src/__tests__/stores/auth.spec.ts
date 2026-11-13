@@ -18,7 +18,14 @@ vi.mock('@/api/client', async (importOriginal) => ({
 import { SIGN_UP_DONE, useAuthStore } from '@/stores/auth'
 
 function account(overrides: Partial<Account> = {}): Account {
-  return { id: 1, username: 'tester', isAdmin: false, permissions: [], ...overrides }
+  return {
+    id: 1,
+    username: 'tester',
+    isAdmin: false,
+    permissions: [],
+    hasPassword: true,
+    ...overrides,
+  }
 }
 
 beforeEach(() => {

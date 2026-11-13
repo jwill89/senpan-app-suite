@@ -77,6 +77,13 @@ type Server struct {
 	// Public Ema plaque submissions (designs and artist requests share it). A visitor
 	// sends one or two a festival, so this only stops a flood.
 	emaLimiter *rateLimiter
+	// Discord sign-ins started and admins' Discord links opened. Each start leaves a
+	// state in the session store until it expires, so every one counts; a person who
+	// cancels at Discord and tries again a few times stays well under it.
+	discordLimiter *rateLimiter
+	// discordOAuth signs people in with Discord; off until SetDiscordSignIn gives it
+	// the application's credentials.
+	discordOAuth *discord.OAuth
 	// discord sends every outbound Discord post. Its dev-safety valves (see
 	// SetWebhookPolicy) are off in production, where a post goes to the webhook the
 	// feature configured.
@@ -121,6 +128,13 @@ func (s *Server) RunAutoDrawScheduler(ctx context.Context) {
 func (s *Server) SetTurnstile(secret, siteKey string) {
 	s.turnstileSecret = strings.TrimSpace(secret)
 	s.turnstileSiteKey = strings.TrimSpace(siteKey)
+}
+
+// SetDiscordSignIn turns on signing in with Discord, with the Discord application's id
+// (its OAuth client id) and secret. Either empty leaves it off.
+func (s *Server) SetDiscordSignIn(clientID, clientSecret string) {
+	s.discordOAuth.ClientID = strings.TrimSpace(clientID)
+	s.discordOAuth.ClientSecret = strings.TrimSpace(clientSecret)
 }
 
 // SetWebhookPolicy installs the outbound-Discord safety valves used when the
@@ -211,6 +225,8 @@ func New(ctx context.Context, st *store.Store, hub *live.Hub, dataDir string, al
 		passkeyBeginLimiter: newRateLimiter(30, 10*time.Minute),
 		dashboardLimiter:    newRateLimiter(120, 10*time.Minute),
 		emaLimiter:          newRateLimiter(10, 10*time.Minute),
+		discordLimiter:      newRateLimiter(30, 10*time.Minute),
+		discordOAuth:        &discord.OAuth{},
 	}
 
 	// The operations (internal/api) are mounted on the mux, which sits behind the
@@ -218,6 +234,8 @@ func New(ctx context.Context, st *store.Store, hub *live.Hub, dataDir string, al
 	api.New(s.mux, api.Deps{
 		Store:             st,
 		Discord:           s.discord,
+		DiscordOAuth:      s.discordOAuth,
+		DiscordLimit:      s.discordLimiter,
 		AniList:           s.anilist,
 		Version:           version.Version,
 		Live:              hub,

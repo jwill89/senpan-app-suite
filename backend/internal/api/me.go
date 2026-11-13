@@ -25,6 +25,7 @@ type Account struct {
 	Username    string   `json:"username" doc:"Its username."`
 	IsAdmin     bool     `json:"isAdmin" doc:"Whether it is an admin, who holds every permission and alone manages accounts and the integrations."`
 	Permissions []string `json:"permissions" nullable:"false" doc:"The page permissions it has been granted. An admin holds every one, listed here or not."`
+	HasPassword bool     `json:"hasPassword" doc:"Whether it has a password. An account made with Discord has none until one is set; setting one, or adding a passkey, then asks for no current password."`
 }
 
 // Me is who is signed in.
@@ -59,7 +60,7 @@ type newTokenOutput struct{ Body NewToken }
 
 type changePasswordInput struct {
 	Body struct {
-		CurrentPassword string `json:"currentPassword" maxLength:"1024" doc:"The account's password now."`
+		CurrentPassword string `json:"currentPassword,omitempty" maxLength:"1024" doc:"The account's password now; ignored when it has none."`
 		NewPassword     string `json:"newPassword" minLength:"8" maxLength:"1024" doc:"The password to change it to, at least 8 characters."`
 	}
 }
@@ -73,8 +74,9 @@ func (h handlers) registerMe(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "change-password", Method: http.MethodPut, Path: "/me/password",
 		Summary: "Change the account's password", Tags: accountTags, DefaultStatus: http.StatusNoContent,
-		Description: "Signs out every other session and revokes the account's token; this browser stays signed in.",
-		Security:    secured, Middlewares: huma.Middlewares{h.session(api)},
+		Description: "Signs out every other session and revokes the account's token; this browser stays signed in. " +
+			"An account with no password (one made with Discord) sets its first.",
+		Security: secured, Middlewares: huma.Middlewares{h.session(api)},
 	}, h.changePassword)
 	huma.Register(api, huma.Operation{
 		OperationID: "get-token", Method: http.MethodGet, Path: "/me/token",
@@ -130,12 +132,15 @@ func (h handlers) changePassword(ctx context.Context, in *changePasswordInput) (
 	return nil, nil
 }
 
-// checkPassword is nil when password is account id's, or a 422 naming the field
-// (location) it came in.
+// checkPassword is nil when password is account id's, or when the account has none
+// to confirm (one made with Discord), or a 422 naming the field (location) it came in.
 func (h handlers) checkPassword(ctx context.Context, id int64, password, location string) error {
 	hash, err := h.read().GetPasswordHash(ctx, id)
 	if err != nil {
 		return h.fail("read a password", err)
+	}
+	if hash == "" {
+		return nil
 	}
 	if ok, _ := auth.Verify(password, hash); !ok {
 		return huma.Error422UnprocessableEntity("That isn't this account's password.", &huma.ErrorDetail{
@@ -211,5 +216,5 @@ func accountOf(u *model.User) *Account {
 	if perms == nil {
 		perms = []string{}
 	}
-	return &Account{ID: u.ID, Username: u.Username, IsAdmin: u.IsAdmin, Permissions: perms}
+	return &Account{ID: u.ID, Username: u.Username, IsAdmin: u.IsAdmin, Permissions: perms, HasPassword: u.HasPassword}
 }

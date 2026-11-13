@@ -40,7 +40,7 @@ const Prefix = "/api/v1"
 // ContractVersion is the API contract's own version, apart from the app's: it moves
 // only when the API surface changes, and the document carries it
 // as info.version.
-const ContractVersion = "5.1.0"
+const ContractVersion = "5.2.0"
 
 // SessionCookie is the session cookie's name, for the document's security scheme.
 const SessionCookie = "session"
@@ -101,6 +101,12 @@ type Deps struct {
 	Turnstile func(ctx context.Context, response, ip string) bool
 	// Discord posts to Discord webhooks.
 	Discord *discord.Sender
+	// DiscordOAuth signs people in with Discord; nil, or without credentials, turns
+	// Discord sign-in off.
+	DiscordOAuth *discord.OAuth
+	// DiscordLimit counts every Discord sign-in started and every admin's Discord
+	// link opened, by client address.
+	DiscordLimit Limiter
 	// AniList looks titles up for the book clubs.
 	AniList *anilist.Client
 
@@ -188,6 +194,7 @@ func New(mux *http.ServeMux, d Deps) huma.API {
 	h.registerStyles(api)
 	h.registerSignIn(api)
 	h.registerPasskeys(api)
+	h.registerDiscordSignIn(api)
 	h.registerMe(api)
 	h.registerUsers(api)
 	h.registerPatterns(api)

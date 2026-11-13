@@ -16,6 +16,18 @@ The app's major version rises for a breaking change to the JSON API or the live 
 
 The SPA and the API, one binary, one version (since 4.0.0).
 
+### [5.4.0] - 2026-11-13
+
+Needs a one-time step in the Discord Developer Portal (docs/ops.md, Upgrading to 5.4.0).
+
+#### Added
+
+- Sign in with Discord, from the sign-in page, for an account linked to a Discord account. Nobody signs up by signing in with Discord.
+- On the Users page, an admin makes a one-time Discord sign-up link: whoever opens it gets an active account named after their Discord username, with no pages until an admin grants them. The link works for a week.
+- On the Users page, an admin makes a one-time link that links a Discord account to an existing account and signs its owner in, or unlinks one. The link works for a day; only the admin account links its own.
+- The Users page shows the Discord account each account signs in with, and an admin can rename an account.
+- An account made with Discord sets its first password, or adds a passkey, without being asked for a current password. Unlinking Discord or removing a passkey is refused when it would leave the account no way to sign in.
+
 ### [5.3.0] - 2026-11-11
 
 Needs a one-time step at deploy (docs/ops.md, Upgrading to 5.3.0).

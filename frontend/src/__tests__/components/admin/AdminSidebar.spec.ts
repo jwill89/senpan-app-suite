@@ -12,7 +12,7 @@ import { useAuthStore } from '@/stores/auth'
 import type { Account } from '@/api/client'
 
 function makeUser(partial: Partial<Account>): Account {
-  return { id: 1, username: 'u', isAdmin: false, permissions: [], ...partial }
+  return { id: 1, username: 'u', isAdmin: false, permissions: [], hasPassword: true, ...partial }
 }
 
 /** Mounts the sidebar with the given logged-in account. The AppVersions footer

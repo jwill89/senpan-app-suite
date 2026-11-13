@@ -434,8 +434,9 @@ router.beforeEach(async (to) => {
   }
 
   // If already authenticated, skip the login/register pages straight to the
-  // account's first permitted page (auth was resolved above for these routes).
-  if (isAuthPage && auth.user) {
+  // account's first permitted page (auth was resolved above for these routes) -
+  // unless a Discord sign-in sent the browser there with a reason to show.
+  if (isAuthPage && auth.user && !to.query.error) {
     return { name: firstAllowedAdminRoute(auth) ?? 'admin-no-access' }
   }
 

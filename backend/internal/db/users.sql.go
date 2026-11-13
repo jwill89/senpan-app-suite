@@ -9,6 +9,19 @@ import (
 	"context"
 )
 
+const createDiscordUser = `-- name: CreateDiscordUser :one
+INSERT INTO users (username, password_hash, is_active) VALUES (?, '', 1) RETURNING id
+`
+
+// An account made from an admin's Discord sign-up link: active, with no password, no
+// permissions and no admin role.
+func (q *Queries) CreateDiscordUser(ctx context.Context, username string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, createDiscordUser, username)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const createUser = `-- name: CreateUser :exec
 INSERT INTO users (username, password_hash) VALUES (?, ?)
 `
@@ -48,7 +61,8 @@ func (q *Queries) GetPasswordHash(ctx context.Context, id int64) (string, error)
 
 const getUser = `-- name: GetUser :one
 
-SELECT id, username, is_admin, is_active, permissions, created_at, last_login_at, password_epoch
+SELECT id, username, is_admin, is_active, permissions, created_at, last_login_at, password_epoch,
+  CAST(password_hash != '' AS INTEGER) AS has_password
 FROM users WHERE id = ?
 `
 
@@ -61,13 +75,16 @@ type GetUserRow struct {
 	CreatedAt     *string
 	LastLoginAt   *string
 	PasswordEpoch int64
+	HasPassword   int64
 }
 
-// Accounts: a username, an argon2id password hash, whether the account is an admin
+// Accounts: a username, an argon2id password hash (” for an account made with
+// Discord, which has no password until one is set), whether the account is an admin
 // and is active, its page permissions (a JSON array of keys), and its password
 // epoch, which a session must match. Every query that reads an account selects the
-// same columns, in the same order, and never the hash: only the two queries that
-// check or set a password touch it, so the hash reaches nothing else.
+// same columns, in the same order, and never the hash, only whether there is one:
+// only the two queries that check or set a password touch it, so the hash reaches
+// nothing else.
 func (q *Queries) GetUser(ctx context.Context, id int64) (*GetUserRow, error) {
 	row := q.db.QueryRowContext(ctx, getUser, id)
 	var i GetUserRow
@@ -80,12 +97,14 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (*GetUserRow, error) {
 		&i.CreatedAt,
 		&i.LastLoginAt,
 		&i.PasswordEpoch,
+		&i.HasPassword,
 	)
 	return &i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, is_admin, is_active, permissions, created_at, last_login_at, password_epoch
+SELECT id, username, is_admin, is_active, permissions, created_at, last_login_at, password_epoch,
+  CAST(password_hash != '' AS INTEGER) AS has_password
 FROM users WHERE username = ?
 `
 
@@ -98,6 +117,7 @@ type GetUserByUsernameRow struct {
 	CreatedAt     *string
 	LastLoginAt   *string
 	PasswordEpoch int64
+	HasPassword   int64
 }
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (*GetUserByUsernameRow, error) {
@@ -112,12 +132,14 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (*GetU
 		&i.CreatedAt,
 		&i.LastLoginAt,
 		&i.PasswordEpoch,
+		&i.HasPassword,
 	)
 	return &i, err
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, username, is_admin, is_active, permissions, created_at, last_login_at, password_epoch
+SELECT id, username, is_admin, is_active, permissions, created_at, last_login_at, password_epoch,
+  CAST(password_hash != '' AS INTEGER) AS has_password
 FROM users ORDER BY username
 `
 
@@ -130,6 +152,7 @@ type ListUsersRow struct {
 	CreatedAt     *string
 	LastLoginAt   *string
 	PasswordEpoch int64
+	HasPassword   int64
 }
 
 func (q *Queries) ListUsers(ctx context.Context) ([]*ListUsersRow, error) {
@@ -150,6 +173,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]*ListUsersRow, error) {
 			&i.CreatedAt,
 			&i.LastLoginAt,
 			&i.PasswordEpoch,
+			&i.HasPassword,
 		); err != nil {
 			return nil, err
 		}
@@ -162,6 +186,20 @@ func (q *Queries) ListUsers(ctx context.Context) ([]*ListUsersRow, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const renameUser = `-- name: RenameUser :exec
+UPDATE users SET username = ? WHERE id = ?
+`
+
+type RenameUserParams struct {
+	Username string
+	ID       int64
+}
+
+func (q *Queries) RenameUser(ctx context.Context, arg RenameUserParams) error {
+	_, err := q.db.ExecContext(ctx, renameUser, arg.Username, arg.ID)
+	return err
 }
 
 const setPassword = `-- name: SetPassword :exec

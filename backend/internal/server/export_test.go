@@ -29,6 +29,16 @@ func (rt rewriteHostRoundTripper) RoundTrip(req *http.Request) (*http.Response, 
 	return http.DefaultTransport.RoundTrip(req)
 }
 
+// RouteDiscordSignInForTest turns Discord sign-in on with test credentials and points
+// it at a stand-in for Discord at baseURL, which answers /authorize, /token and /me.
+func (s *Server) RouteDiscordSignInForTest(baseURL string) {
+	s.discordOAuth.ClientID = "senpan-test"
+	s.discordOAuth.ClientSecret = "not-a-secret"
+	s.discordOAuth.AuthURL = baseURL + "/authorize"
+	s.discordOAuth.TokenURL = baseURL + "/token"
+	s.discordOAuth.MeURL = baseURL + "/me"
+}
+
 // The following expose pure, unexported helpers to the external server_test
 // package so their logic can be unit-tested without spinning up the HTTP server.
 var (

@@ -8,6 +8,9 @@ RETURNING id, name, created_at, last_used_at;
 -- name: ListPasskeys :many
 SELECT id, name, created_at, last_used_at FROM user_passkeys WHERE user_id = ? ORDER BY created_at, id;
 
+-- name: CountPasskeys :one
+SELECT COUNT(*) FROM user_passkeys WHERE user_id = ?;
+
 -- name: ListPasskeyCredentials :many
 SELECT credential FROM user_passkeys WHERE user_id = ?;
 

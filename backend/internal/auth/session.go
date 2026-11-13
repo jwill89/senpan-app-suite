@@ -20,6 +20,15 @@ const (
 	// challenge between its two steps.
 	SessionPasskeyLogin    = "webauthn_login"    //nolint:gosec // a session key's name, not a credential
 	SessionPasskeyRegister = "webauthn_register" //nolint:gosec // a session key's name, not a credential
+	// A Discord sign-in keeps, between its start and Discord sending the browser
+	// back: the state it sent and when that expires, the PKCE verifier whose
+	// challenge went with it, the page to land on, and the admin's link it was
+	// started from (its id), if any.
+	SessionDiscordState    = "discord_state"
+	SessionDiscordUntil    = "discord_state_until"
+	SessionDiscordVerifier = "discord_verifier"
+	SessionDiscordNext     = "discord_next"
+	SessionDiscordInvite   = "discord_invite"
 )
 
 // SignIn makes the request's session u's: it moves to a new id first (so a session

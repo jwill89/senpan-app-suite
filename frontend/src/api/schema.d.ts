@@ -275,6 +275,66 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/auth/discord/callback': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Finish signing in with Discord
+     * @description Where Discord sends the browser back. Signed in, it answers 302 to the page the start named, or the admin area. Otherwise it answers 302 to `/admin/login?error=` with `discord_denied` (declined at Discord), `discord_not_linked` (no account is linked to that Discord account), `discord_inactive` (the account isn't active; a link to it is still made), `discord_link_expired` (the admin's link was used or expired meanwhile), `discord_taken` (the Discord account is linked to another account, and the link is left unused) or `discord_failed`. The start's state answers once, for ten minutes.
+     */
+    get: operations['finish-discord-sign-in']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/auth/discord/invite/{token}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Open an admin's Discord link
+     * @description A page the browser opens, not a call: the link an admin made to sign someone up with Discord, or to link a Discord account to an account. It answers 302 to Discord's consent page, the link's secret kept in the session rather than the address bar, or to `/admin/login?error=` with `discord_link_expired` (unknown, used or expired), `discord_busy` (the start's limit, which this shares) or `discord_unavailable`. The link is used up only when the sign-in finishes.
+     */
+    get: operations['open-discord-invite']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/auth/discord/start': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Start signing in with Discord
+     * @description A page the browser opens, not a call. It answers 302 to Discord's consent page, or to `/admin/login?error=discord_unavailable` when the server has no Discord application. Thirty starts (and links opened) from one address within 10 minutes hold it back for the rest of the 10 minutes, answering 302 to `/admin/login?error=discord_busy`.
+     */
+    get: operations['start-discord-sign-in']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/auth/login': {
     parameters: {
       query?: never
@@ -823,11 +883,31 @@ export interface paths {
     }
     /**
      * The client's configuration
-     * @description The non-secret configuration a page needs before sign-in: the Turnstile site key.
+     * @description The non-secret configuration a page needs before sign-in: the Turnstile site key, and whether Discord sign-in is on.
      */
     get: operations['get-config']
     put?: never
     post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/discord-invites': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Make a link to sign up or link a Discord account
+     * @description The answer is the only time the link is shown. Only the admin account itself may make a link to it (403). 503 when the server has no Discord application.
+     */
+    post: operations['create-discord-invite']
     delete?: never
     options?: never
     head?: never
@@ -1783,7 +1863,7 @@ export interface paths {
     put?: never
     /**
      * Start adding a passkey
-     * @description Asks for the account's password, so a session left open can't add a way in.
+     * @description Asks for the account's password, so a session left open can't add a way in; an account with none (made with Discord) is asked for nothing.
      */
     post: operations['begin-passkey']
     delete?: never
@@ -1802,7 +1882,10 @@ export interface paths {
     get?: never
     put?: never
     post?: never
-    /** Remove a passkey */
+    /**
+     * Remove a passkey
+     * @description Refused (409) when it is the account's last way to sign in: no password, no other passkey and no Discord account.
+     */
     delete: operations['delete-passkey']
     options?: never
     head?: never
@@ -1819,7 +1902,7 @@ export interface paths {
     get?: never
     /**
      * Change the account's password
-     * @description Signs out every other session and revokes the account's token; this browser stays signed in.
+     * @description Signs out every other session and revokes the account's token; this browser stays signed in. An account with no password (one made with Discord) sets its first.
      */
     put: operations['change-password']
     post?: never
@@ -2955,8 +3038,31 @@ export interface paths {
     delete: operations['delete-user']
     options?: never
     head?: never
-    /** Change an account */
+    /**
+     * Change an account
+     * @description A username another account has, or the admin account's, is refused (409).
+     */
     patch: operations['update-user']
+    trace?: never
+  }
+  '/users/{id}/discord': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    post?: never
+    /**
+     * Unlink an account's Discord account
+     * @description Only the admin account itself may unlink its own (403). Refused (409) when Discord is the account's only way to sign in: set a password for it first.
+     */
+    delete: operations['unlink-discord']
+    options?: never
+    head?: never
+    patch?: never
     trace?: never
   }
   '/version': {
@@ -3055,6 +3161,8 @@ export type webhooks = Record<string, never>
 export interface components {
   schemas: {
     Account: {
+      /** @description Whether it has a password. An account made with Discord has none until one is set; setting one, or adding a passkey, then asks for no current password. */
+      hasPassword: boolean
       /**
        * Format: int64
        * @description The account's id.
@@ -3389,8 +3497,8 @@ export interface components {
       interval: number
     }
     BeginPasskeyInputBody: {
-      /** @description The account's password: adding a way to sign in asks for the one it has, so an unattended session can't add one. */
-      password: string
+      /** @description The account's password: adding a way to sign in asks for the one it has, so an unattended session can't add one. Ignored when it has none. */
+      password?: string
     }
     Board: {
       /** @description The card, with its numbers. */
@@ -3630,14 +3738,23 @@ export interface components {
       uploaded: string[]
     }
     ChangePasswordInputBody: {
-      /** @description The account's password now. */
-      currentPassword: string
+      /** @description The account's password now; ignored when it has none. */
+      currentPassword?: string
       /** @description The password to change it to, at least 8 characters. */
       newPassword: string
     }
     ClientConfig: {
+      /** @description Whether signing in with Discord is set up (GET /auth/discord/start). */
+      discordSignIn: boolean
       /** @description The Cloudflare Turnstile site key the sign-in, sign-up and public entry forms show; empty when the bot check is off. */
       turnstileSiteKey: string
+    }
+    CreateDiscordInviteInputBody: {
+      /**
+       * Format: int64
+       * @description The account the link links a Discord account to; it replaces a link made for it before, and works for a day. Left out, the link signs someone up instead: it makes an active account with no permissions, named after their Discord account, and works for a week.
+       */
+      userId?: number
     }
     DeletedCount: {
       /**
@@ -3645,6 +3762,20 @@ export interface components {
        * @description How many were deleted.
        */
       deleted: number
+    }
+    DiscordAccount: {
+      /** @description The name it shows on Discord, as of its last sign-in here; empty when it has none. */
+      displayName: string
+      /** @description When it was linked, RFC 3339 in UTC. */
+      linkedAt: string
+      /** @description Its Discord username, as of its last sign-in here. */
+      username: string
+    }
+    DiscordInvite: {
+      /** @description When it stops working, RFC 3339 in UTC. */
+      expiresAt: string
+      /** @description The link. Shown this once; it works once, for whoever opens it, so send it only to the person it is for. */
+      url: string
     }
     DiscordWebhook: {
       /** @description The Discord webhook: https, on Discord, under /api/webhooks/. Empty for none. A webhook grants posting access to a channel, so only staff with the page see it. */
@@ -6992,6 +7123,10 @@ export interface components {
     User: {
       /** @description When it was made, RFC 3339 in UTC. */
       createdAt: string | null
+      /** @description The Discord account it signs in with, or null when none is linked. */
+      discord: components['schemas']['DiscordAccount'] | null
+      /** @description Whether it has a password. An account made with Discord has none until one is set; setting one, or adding a passkey, then asks for no current password. */
+      hasPassword: boolean
       /**
        * Format: int64
        * @description The account's id.
@@ -7017,6 +7152,8 @@ export interface components {
       password?: string
       /** @description Its page permissions, replacing what it holds (an empty list takes them all away). */
       permissions?: string[]
+      /** @description A new username. Its sessions, token, passkeys and Discord account carry on. */
+      username?: string
     }
     UserList: {
       /** @description Every account, by username. */
@@ -8613,6 +8750,103 @@ export interface operations {
       }
       /** @description Internal Server Error */
       500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'finish-discord-sign-in': {
+    parameters: {
+      query?: {
+        /** @description The authorization code Discord issued. */
+        code?: string
+        /** @description The state this sign-in's start sent to Discord. */
+        state?: string
+        /** @description Discord's reason, when the sign-in was declined. */
+        error?: string
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Found */
+      302: {
+        headers: {
+          Location?: string
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'open-discord-invite': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The link's secret. */
+        token: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Found */
+      302: {
+        headers: {
+          Location?: string
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'start-discord-sign-in': {
+    parameters: {
+      query?: {
+        /** @description A path on this site to land on once signed in. Anything else is ignored, and the admin area is used. */
+        next?: string
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Found */
+      302: {
+        headers: {
+          Location?: string
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Error */
+      default: {
         headers: {
           [name: string]: unknown
         }
@@ -11455,6 +11689,75 @@ export interface operations {
       }
       /** @description Error */
       default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'create-discord-invite': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateDiscordInviteInputBody']
+      }
+    }
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['DiscordInvite']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Service Unavailable */
+      503: {
         headers: {
           [name: string]: unknown
         }
@@ -15994,6 +16297,15 @@ export interface operations {
       }
       /** @description Not Found */
       404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
         headers: {
           [name: string]: unknown
         }
@@ -20844,6 +21156,81 @@ export interface operations {
       }
       /** @description Not Found */
       404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'unlink-discord': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The account's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
         headers: {
           [name: string]: unknown
         }

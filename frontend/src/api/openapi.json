@@ -4,6 +4,10 @@
       "Account": {
         "additionalProperties": false,
         "properties": {
+          "hasPassword": {
+            "description": "Whether it has a password. An account made with Discord has none until one is set; setting one, or adding a passkey, then asks for no current password.",
+            "type": "boolean"
+          },
           "id": {
             "description": "The account's id.",
             "format": "int64",
@@ -25,7 +29,7 @@
             "type": "string"
           }
         },
-        "required": ["id", "username", "isAdmin", "permissions"],
+        "required": ["id", "username", "isAdmin", "permissions", "hasPassword"],
         "type": "object"
       },
       "AddPasskeyInputBody": {
@@ -823,12 +827,11 @@
         "additionalProperties": false,
         "properties": {
           "password": {
-            "description": "The account's password: adding a way to sign in asks for the one it has, so an unattended session can't add one.",
+            "description": "The account's password: adding a way to sign in asks for the one it has, so an unattended session can't add one. Ignored when it has none.",
             "maxLength": 1024,
             "type": "string"
           }
         },
-        "required": ["password"],
         "type": "object"
       },
       "Board": {
@@ -1373,7 +1376,7 @@
         "additionalProperties": false,
         "properties": {
           "currentPassword": {
-            "description": "The account's password now.",
+            "description": "The account's password now; ignored when it has none.",
             "maxLength": 1024,
             "type": "string"
           },
@@ -1384,18 +1387,34 @@
             "type": "string"
           }
         },
-        "required": ["currentPassword", "newPassword"],
+        "required": ["newPassword"],
         "type": "object"
       },
       "ClientConfig": {
         "additionalProperties": false,
         "properties": {
+          "discordSignIn": {
+            "description": "Whether signing in with Discord is set up (GET /auth/discord/start).",
+            "type": "boolean"
+          },
           "turnstileSiteKey": {
             "description": "The Cloudflare Turnstile site key the sign-in, sign-up and public entry forms show; empty when the bot check is off.",
             "type": "string"
           }
         },
-        "required": ["turnstileSiteKey"],
+        "required": ["turnstileSiteKey", "discordSignIn"],
+        "type": "object"
+      },
+      "CreateDiscordInviteInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "userId": {
+            "description": "The account the link links a Discord account to; it replaces a link made for it before, and works for a day. Left out, the link signs someone up instead: it makes an active account with no permissions, named after their Discord account, and works for a week.",
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
         "type": "object"
       },
       "DeletedCount": {
@@ -1408,6 +1427,40 @@
           }
         },
         "required": ["deleted"],
+        "type": "object"
+      },
+      "DiscordAccount": {
+        "additionalProperties": false,
+        "properties": {
+          "displayName": {
+            "description": "The name it shows on Discord, as of its last sign-in here; empty when it has none.",
+            "type": "string"
+          },
+          "linkedAt": {
+            "description": "When it was linked, RFC 3339 in UTC.",
+            "type": "string"
+          },
+          "username": {
+            "description": "Its Discord username, as of its last sign-in here.",
+            "type": "string"
+          }
+        },
+        "required": ["username", "displayName", "linkedAt"],
+        "type": "object"
+      },
+      "DiscordInvite": {
+        "additionalProperties": false,
+        "properties": {
+          "expiresAt": {
+            "description": "When it stops working, RFC 3339 in UTC.",
+            "type": "string"
+          },
+          "url": {
+            "description": "The link. Shown this once; it works once, for whoever opens it, so send it only to the person it is for.",
+            "type": "string"
+          }
+        },
+        "required": ["url", "expiresAt"],
         "type": "object"
       },
       "DiscordWebhook": {
@@ -8246,6 +8299,21 @@
             "description": "When it was made, RFC 3339 in UTC.",
             "type": ["string", "null"]
           },
+          "discord": {
+            "description": "The Discord account it signs in with, or null when none is linked.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DiscordAccount"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hasPassword": {
+            "description": "Whether it has a password. An account made with Discord has none until one is set; setting one, or adding a passkey, then asks for no current password.",
+            "type": "boolean"
+          },
           "id": {
             "description": "The account's id.",
             "format": "int64",
@@ -8279,10 +8347,12 @@
           "isActive",
           "createdAt",
           "lastLoginAt",
+          "discord",
           "id",
           "username",
           "isAdmin",
-          "permissions"
+          "permissions",
+          "hasPassword"
         ],
         "type": "object"
       },
@@ -8310,6 +8380,14 @@
             },
             "maxItems": 100,
             "type": "array"
+          },
+          "username": {
+            "description": "A new username. Its sessions, token, passkeys and Discord account carry on.",
+            "maxLength": 32,
+            "minLength": 1,
+            "pattern": "[\\p{L}\\p{N}\\p{P}\\p{S}]",
+            "patternDescription": "more than spaces",
+            "type": "string"
           }
         },
         "type": "object"
@@ -8526,7 +8604,7 @@
   "info": {
     "description": "The Senpan App Suite's API, used by the SPA and the Senpan Admin Companion plugin. Errors are RFC 9457 problem details; fields are camelCase; times are RFC 3339 in UTC.",
     "title": "Senpan App Suite",
-    "version": "5.1.0"
+    "version": "5.2.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -10424,6 +10502,155 @@
         ],
         "summary": "Skip an announcement's upcoming occurrences",
         "tags": ["Announcements"]
+      }
+    },
+    "/auth/discord/callback": {
+      "get": {
+        "description": "Where Discord sends the browser back. Signed in, it answers 302 to the page the start named, or the admin area. Otherwise it answers 302 to `/admin/login?error=` with `discord_denied` (declined at Discord), `discord_not_linked` (no account is linked to that Discord account), `discord_inactive` (the account isn't active; a link to it is still made), `discord_link_expired` (the admin's link was used or expired meanwhile), `discord_taken` (the Discord account is linked to another account, and the link is left unused) or `discord_failed`. The start's state answers once, for ten minutes.",
+        "operationId": "finish-discord-sign-in",
+        "parameters": [
+          {
+            "description": "The authorization code Discord issued.",
+            "explode": false,
+            "in": "query",
+            "name": "code",
+            "schema": {
+              "description": "The authorization code Discord issued.",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The state this sign-in's start sent to Discord.",
+            "explode": false,
+            "in": "query",
+            "name": "state",
+            "schema": {
+              "description": "The state this sign-in's start sent to Discord.",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Discord's reason, when the sign-in was declined.",
+            "explode": false,
+            "in": "query",
+            "name": "error",
+            "schema": {
+              "description": "Discord's reason, when the sign-in was declined.",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Found",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "description": "Where the browser goes next.",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Finish signing in with Discord",
+        "tags": ["Sign-in"]
+      }
+    },
+    "/auth/discord/invite/{token}": {
+      "get": {
+        "description": "A page the browser opens, not a call: the link an admin made to sign someone up with Discord, or to link a Discord account to an account. It answers 302 to Discord's consent page, the link's secret kept in the session rather than the address bar, or to `/admin/login?error=` with `discord_link_expired` (unknown, used or expired), `discord_busy` (the start's limit, which this shares) or `discord_unavailable`. The link is used up only when the sign-in finishes.",
+        "operationId": "open-discord-invite",
+        "parameters": [
+          {
+            "description": "The link's secret.",
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "description": "The link's secret.",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Found",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "description": "Where the browser goes next.",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Open an admin's Discord link",
+        "tags": ["Sign-in"]
+      }
+    },
+    "/auth/discord/start": {
+      "get": {
+        "description": "A page the browser opens, not a call. It answers 302 to Discord's consent page, or to `/admin/login?error=discord_unavailable` when the server has no Discord application. Thirty starts (and links opened) from one address within 10 minutes hold it back for the rest of the 10 minutes, answering 302 to `/admin/login?error=discord_busy`.",
+        "operationId": "start-discord-sign-in",
+        "parameters": [
+          {
+            "description": "A path on this site to land on once signed in. Anything else is ignored, and the admin area is used.",
+            "explode": false,
+            "in": "query",
+            "name": "next",
+            "schema": {
+              "description": "A path on this site to land on once signed in. Anything else is ignored, and the admin area is used.",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Found",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "description": "Where the browser goes next.",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Start signing in with Discord",
+        "tags": ["Sign-in"]
       }
     },
     "/auth/login": {
@@ -14360,7 +14587,7 @@
     },
     "/config": {
       "get": {
-        "description": "The non-secret configuration a page needs before sign-in: the Turnstile site key.",
+        "description": "The non-secret configuration a page needs before sign-in: the Turnstile site key, and whether Discord sign-in is on.",
         "operationId": "get-config",
         "responses": {
           "200": {
@@ -14386,6 +14613,94 @@
         },
         "summary": "The client's configuration",
         "tags": ["System"]
+      }
+    },
+    "/discord-invites": {
+      "post": {
+        "description": "The answer is the only time the link is shown. Only the admin account itself may make a link to it (403). 503 when the server has no Discord application.",
+        "operationId": "create-discord-invite",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDiscordInviteInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscordInvite"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "token": []
+          }
+        ],
+        "summary": "Make a link to sign up or link a Discord account",
+        "tags": ["Users"]
       }
     },
     "/ema-boards": {
@@ -20566,7 +20881,7 @@
     },
     "/me/passkeys/begin": {
       "post": {
-        "description": "Asks for the account's password, so a session left open can't add a way in.",
+        "description": "Asks for the account's password, so a session left open can't add a way in; an account with none (made with Discord) is asked for nothing.",
         "operationId": "begin-passkey",
         "requestBody": {
           "content": {
@@ -20614,6 +20929,7 @@
     },
     "/me/passkeys/{id}": {
       "delete": {
+        "description": "Refused (409) when it is the account's last way to sign in: no password, no other passkey and no Discord account.",
         "operationId": "delete-passkey",
         "parameters": [
           {
@@ -20641,6 +20957,16 @@
               }
             },
             "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "422": {
             "content": {
@@ -20677,7 +21003,7 @@
     },
     "/me/password": {
       "put": {
-        "description": "Signs out every other session and revokes the account's token; this browser stays signed in.",
+        "description": "Signs out every other session and revokes the account's token; this browser stays signed in. An account with no password (one made with Discord) sets its first.",
         "operationId": "change-password",
         "requestBody": {
           "content": {
@@ -26893,6 +27219,7 @@
         "tags": ["Users"]
       },
       "patch": {
+        "description": "A username another account has, or the admin account's, is refused (409).",
         "operationId": "update-user",
         "parameters": [
           {
@@ -26948,6 +27275,16 @@
             },
             "description": "Not Found"
           },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "422": {
             "content": {
               "application/problem+json": {
@@ -26978,6 +27315,90 @@
           }
         ],
         "summary": "Change an account",
+        "tags": ["Users"]
+      }
+    },
+    "/users/{id}/discord": {
+      "delete": {
+        "description": "Only the admin account itself may unlink its own (403). Refused (409) when Discord is the account's only way to sign in: set a password for it first.",
+        "operationId": "unlink-discord",
+        "parameters": [
+          {
+            "description": "The account's id.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "The account's id.",
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "token": []
+          }
+        ],
+        "summary": "Unlink an account's Discord account",
         "tags": ["Users"]
       }
     },

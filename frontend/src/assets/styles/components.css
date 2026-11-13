@@ -160,6 +160,19 @@
   justify-content: center;
 }
 
+/* A secret shown once to be copied - an access token, a sign-up link: the value in
+   a read-only field that takes the row's width, its Copy button beside it. */
+.copy-field {
+  display: flex;
+  gap: 8px;
+}
+
+.copy-field-input {
+  flex: 1;
+  min-width: 0;
+  font-family: monospace;
+}
+
 /* ================================================================
    6. PAGINATION BAR - Page navigation controls
    ================================================================ */

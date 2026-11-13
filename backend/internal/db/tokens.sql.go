@@ -39,7 +39,8 @@ func (q *Queries) GetToken(ctx context.Context, userID int64) (*GetTokenRow, err
 }
 
 const getUserByToken = `-- name: GetUserByToken :one
-SELECT u.id, u.username, u.is_admin, u.is_active, u.permissions, u.created_at, u.last_login_at, u.password_epoch
+SELECT u.id, u.username, u.is_admin, u.is_active, u.permissions, u.created_at, u.last_login_at, u.password_epoch,
+  CAST(u.password_hash != '' AS INTEGER) AS has_password
 FROM user_tokens t JOIN users u ON u.id = t.user_id
 WHERE t.token_hash = ?
 `
@@ -53,6 +54,7 @@ type GetUserByTokenRow struct {
 	CreatedAt     *string
 	LastLoginAt   *string
 	PasswordEpoch int64
+	HasPassword   int64
 }
 
 func (q *Queries) GetUserByToken(ctx context.Context, tokenHash string) (*GetUserByTokenRow, error) {
@@ -67,6 +69,7 @@ func (q *Queries) GetUserByToken(ctx context.Context, tokenHash string) (*GetUse
 		&i.CreatedAt,
 		&i.LastLoginAt,
 		&i.PasswordEpoch,
+		&i.HasPassword,
 	)
 	return &i, err
 }

@@ -8,8 +8,9 @@ import (
 )
 
 // Capability tokens travel in the URL path: /api/v1/garapon-players/{token},
-// /api/v1/stamp-cards/{token}, /api/v1/fonts/pub/f/{token}, and the SPA referer
-// forms /garapon/{token}, /stamp-card/{token}. Those tokens are bearer
+// /api/v1/stamp-cards/{token}, /api/v1/fonts/pub/f/{token}, an admin's Discord link
+// /api/v1/auth/discord/invite/{token}, and the SPA referer forms /garapon/{token},
+// /stamp-card/{token}. Those tokens are bearer
 // credentials, so the request logger must not write them verbatim to the rotating
 // file, the /api/v1/logs viewer, or the admins' live log events. The trailing
 // slash on each prefix keeps the admin routes (/api/v1/garapons/{id}, integer
@@ -18,6 +19,7 @@ var tokenPathPrefixes = []string{
 	"/api/v1/garapon-players/",
 	"/api/v1/stamp-cards/",
 	"/api/v1/fonts/pub/f/",
+	"/api/v1/auth/discord/invite/",
 	"/garapon/",
 	"/stamp-card/",
 }
@@ -55,10 +57,11 @@ func redactSensitivePath(path string) string {
 	return path
 }
 
-// redactTokenQuery replaces the value of a `token` query parameter with a fixed
-// placeholder. No route accepts a token in the query, but a client can still send
-// one, and it must not reach the log. Other parameters are left intact. Returns
-// raw unchanged when there is no token.
+// redactTokenQuery replaces the value of a `token` query parameter, and of the
+// `code` Discord sends back to its sign-in callback, with a fixed placeholder. No
+// route accepts a token in the query, but a client can still send one, and neither
+// must reach the log. Other parameters are left intact. Returns raw unchanged when
+// there is neither.
 func redactTokenQuery(raw string) string {
 	if raw == "" {
 		return ""
@@ -67,10 +70,16 @@ func redactTokenQuery(raw string) string {
 	if err != nil {
 		return raw
 	}
-	if _, ok := vals["token"]; !ok {
+	changed := false
+	for _, key := range []string{"token", "code"} {
+		if _, ok := vals[key]; ok {
+			vals.Set(key, "REDACTED")
+			changed = true
+		}
+	}
+	if !changed {
 		return raw
 	}
-	vals.Set("token", "REDACTED")
 	return vals.Encode()
 }
 

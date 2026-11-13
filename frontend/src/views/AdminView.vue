@@ -10,7 +10,7 @@
  * whenever the admin area is entered, including via a direct link / refresh.
  * Logout closes the live stream implicitly (App's route watcher) and returns home.
  */
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import AdminSidebar from '@/components/admin/AdminSidebar.vue'
 import WinnerVerifyModal from '@/components/admin/WinnerVerifyModal.vue'
@@ -139,6 +139,9 @@ async function logout(): Promise<void> {
 }
 
 // -- Change-password modal (available to every logged-in account) --------------
+// An account made with Discord has no password: it sets its first here, with no
+// current password to give.
+const hasPassword = computed(() => auth.user?.hasPassword ?? true)
 const showChangePw = ref(false)
 const currentPw = ref('')
 const newPw = ref('')
@@ -172,13 +175,19 @@ async function submitChangePw(): Promise<void> {
   }
   savingPw.value = true
   try {
+    const firstPassword = !hasPassword.value
     await unwrap(
       api.PUT('/me/password', {
-        body: { currentPassword: currentPw.value, newPassword: newPw.value },
+        body: firstPassword
+          ? { newPassword: newPw.value }
+          : { currentPassword: currentPw.value, newPassword: newPw.value },
       }),
     )
-    ui.notify('Password changed', 'success')
+    ui.notify(firstPassword ? 'Password set' : 'Password changed', 'success')
     showChangePw.value = false
+    if (firstPassword) {
+      void auth.checkAuth()
+    }
   } catch (e) {
     pwError.value = (e as Error).message
   } finally {
@@ -379,13 +388,20 @@ function fmtPasskeyTime(ts: string | null): string {
 
     <ModalOverlay
       v-if="showChangePw"
-      aria-label="Change password"
+      :aria-label="hasPassword ? 'Change password' : 'Set a password'"
       box-style="max-width: 420px"
       @close="showChangePw = false"
     >
-      <h3><font-awesome-icon :icon="['fad', 'lock']" /> Change Password</h3>
+      <h3>
+        <font-awesome-icon :icon="['fad', 'lock']" />
+        {{ hasPassword ? 'Change Password' : 'Set a Password' }}
+      </h3>
+      <p v-if="!hasPassword" class="text-muted access-token-intro mb-12">
+        This account signs in with Discord and has no password yet. Set one to sign in with your
+        username and password too.
+      </p>
       <form autocomplete="off" @submit.prevent="submitChangePw">
-        <FormField label="Current password" html-for="cur-pw">
+        <FormField v-if="hasPassword" label="Current password" html-for="cur-pw">
           <input id="cur-pw" v-model="currentPw" type="password" autocomplete="current-password" />
         </FormField>
         <FormField label="New password" html-for="new-pw">
@@ -412,7 +428,7 @@ function fmtPasskeyTime(ts: string | null): string {
           </button>
           <button type="submit" class="btn-action" :disabled="savingPw">
             <LoadingSpinner v-if="savingPw" label="Saving..." />
-            <template v-else>Change Password</template>
+            <template v-else>{{ hasPassword ? 'Change Password' : 'Set Password' }}</template>
           </button>
         </div>
       </form>
@@ -439,10 +455,10 @@ function fmtPasskeyTime(ts: string | null): string {
           label="Your new token - copy it now, it won't be shown again"
           html-for="pat-value"
         >
-          <div class="access-token-reveal">
+          <div class="copy-field">
             <input
               id="pat-value"
-              class="access-token-input"
+              class="copy-field-input"
               :value="newToken"
               readonly
               @focus="($event.target as HTMLInputElement).select()"
@@ -513,8 +529,8 @@ function fmtPasskeyTime(ts: string | null): string {
       <h3><font-awesome-icon :icon="['fad', 'user-key']" /> Passkeys</h3>
       <p class="text-muted access-token-intro">
         A passkey lets you sign in with your device's fingerprint, face, PIN, or a security key
-        instead of your password. You can add more than one (e.g. one per device); your password
-        still works too.
+        instead of your password. You can add more than one (e.g. one per device); your other ways
+        to sign in still work too.
       </p>
 
       <p v-if="passkeysLoading"><LoadingSpinner label="Loading..." /></p>
@@ -551,7 +567,7 @@ function fmtPasskeyTime(ts: string | null): string {
               maxlength="60"
             />
           </FormField>
-          <FormField label="Your password" html-for="pk-password">
+          <FormField v-if="hasPassword" label="Your password" html-for="pk-password">
             <input
               id="pk-password"
               v-model="passkeyPassword"
@@ -607,16 +623,6 @@ function fmtPasskeyTime(ts: string | null): string {
 
 .access-token-note {
   font-size: 0.85rem;
-}
-
-.access-token-reveal {
-  display: flex;
-  gap: 8px;
-}
-
-.access-token-input {
-  flex: 1;
-  font-family: monospace;
 }
 
 .access-token-meta {

@@ -138,12 +138,21 @@ The preflight is answered for an allowed origin (`GET`, the `If-None-Match` head
 
 ## Authentication (orientation)
 
-Identity comes from either a **session cookie** (set by signing in, `POST /api/v1/auth/login` or
-`POST /api/v1/auth/passkey/finish`; `GET /api/v1/me` says who it is) or a
+Identity comes from either a **session cookie** (set by signing in, `POST /api/v1/auth/login`,
+`POST /api/v1/auth/passkey/finish` or Discord's callback; `GET /api/v1/me` says who it is) or a
 **personal access token** - `Authorization: Bearer pat_...`, never in a URL. A token inherits its account's permissions, so external clients
 (e.g. the FFXIV plugin) pass through the same guards as the SPA. An operation that
 needs sign-in answers 401 when there is none, and 403 when the account lacks the
 access.
+
+Signing in with Discord is three pages the browser opens rather than calls:
+`GET /api/v1/auth/discord/start`, `GET /api/v1/auth/discord/callback` (where Discord sends
+the browser back) and `GET /api/v1/auth/discord/invite/{token}` (an admin's one-time link
+to sign up, or to link a Discord account to an account, made with
+`POST /api/v1/discord-invites`). Each answers 302 whatever happens: signed in, to the admin
+area or the page `?next=` named; otherwise to `/admin/login?error=discord_*` with the
+reason. `GET /api/v1/config`'s `discordSignIn` says whether it is set up. An account made
+with Discord has no password until it sets one (`hasPassword` on the account).
 
 Grantable page-permission keys: `bingo-game`, `bingo-cards`, `bingo-winners-log`,
 `bingo-patterns`, `bingo-presets`, `teahouse-announcements`, `teahouse-affiliates`,

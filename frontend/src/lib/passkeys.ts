@@ -23,10 +23,13 @@ export function passkeysSupported(): boolean {
 
 /**
  * Adds a passkey to the signed-in account under `name`, and answers it. Adding a
- * way to sign in asks for the account's password.
+ * way to sign in asks for the account's password; an account with none (made
+ * with Discord) passes none.
  */
-export async function addPasskey(name: string, password: string): Promise<Passkey> {
-  const options = await unwrap(api.POST('/me/passkeys/begin', { body: { password } }))
+export async function addPasskey(name: string, password?: string): Promise<Passkey> {
+  const options = await unwrap(
+    api.POST('/me/passkeys/begin', { body: password ? { password } : {} }),
+  )
   const publicKey = PublicKeyCredential.parseCreationOptionsFromJSON(
     options.publicKey as PublicKeyCredentialCreationOptionsJSON,
   )

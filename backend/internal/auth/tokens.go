@@ -35,3 +35,18 @@ func HashToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])
 }
+
+// linkTokenBytes is the size of the secret in an admin's Discord link.
+const linkTokenBytes = 32
+
+// NewLinkToken makes the secret of a link an admin hands out (to sign up, or to link a
+// Discord account): 32 random bytes in base64url, and the hash it is kept and looked
+// up by (HashToken).
+func NewLinkToken() (token, hash string, err error) {
+	buf := make([]byte, linkTokenBytes)
+	if _, err = rand.Read(buf); err != nil {
+		return "", "", err
+	}
+	token = base64.RawURLEncoding.EncodeToString(buf)
+	return token, HashToken(token), nil
+}

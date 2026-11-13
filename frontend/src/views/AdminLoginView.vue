@@ -3,14 +3,18 @@
  * Admin login. On success navigates to the post-login destination (the
  * `redirect` query param if present, else the admin dashboard). The admin's
  * initial data load happens in AdminView when the dashboard mounts.
+ *
+ * Signing in with Discord leaves the page for Discord and comes back through the
+ * server, which lands on the destination itself, or back here with `?error=`.
  */
-import { onMounted, ref, useTemplateRef } from 'vue'
+import { computed, onMounted, ref, useTemplateRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import FormField from '@/components/common/ui/FormField.vue'
 import TurnstileWidget from '@/components/common/TurnstileWidget.vue'
 import { api, unwrap } from '@/api/client'
 import { passkeysSupported } from '@/lib/passkeys'
+import { discordSignInError, discordStartUrl } from '@/lib/discordSignIn'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -36,9 +40,17 @@ const turnstileSiteKey = ref('')
 const turnstileToken = ref('')
 const turnstile = useTemplateRef<InstanceType<typeof TurnstileWidget>>('turnstile')
 
+/** Whether the server has Discord sign-in set up (from GET /config). */
+const discordSignIn = ref(false)
+
+/** Why a Discord sign-in sent the browser back here; a sign-in tried since wins. */
+const shownError = computed(() => auth.authError || discordSignInError(route.query.error))
+
 onMounted(async () => {
   try {
-    turnstileSiteKey.value = (await unwrap(api.GET('/config'))).turnstileSiteKey
+    const config = await unwrap(api.GET('/config'))
+    turnstileSiteKey.value = config.turnstileSiteKey
+    discordSignIn.value = config.discordSignIn
   } catch {
     turnstileSiteKey.value = '' // config probe failed -> behave as if disabled
   }
@@ -72,6 +84,12 @@ async function passkeyLogin(): Promise<void> {
   if (ok) {
     void router.push(safeRedirect(route.query.redirect))
   }
+}
+
+/** Leaves for Discord; the server brings the browser back signed in, or here with a reason. */
+function discordLogin(): void {
+  const next = typeof route.query.redirect === 'string' ? safeRedirect(route.query.redirect) : ''
+  window.location.assign(discordStartUrl(next))
 }
 
 function goHome(): void {
@@ -119,18 +137,30 @@ function goHome(): void {
           </button>
         </div>
       </form>
-      <template v-if="passkeysSupported()">
+      <template v-if="passkeysSupported() || discordSignIn">
         <div class="login-or"><span>or</span></div>
-        <button
-          type="button"
-          class="btn-neutral login-passkey"
-          :disabled="auth.loggingIn"
-          @click="passkeyLogin"
-        >
-          <font-awesome-icon :icon="['fad', 'user-key']" /> Sign in with a passkey
-        </button>
+        <div class="login-alternatives">
+          <button
+            v-if="discordSignIn"
+            type="button"
+            class="btn-neutral w-full"
+            :disabled="auth.loggingIn"
+            @click="discordLogin"
+          >
+            <font-awesome-icon :icon="['fab', 'discord']" /> Sign in with Discord
+          </button>
+          <button
+            v-if="passkeysSupported()"
+            type="button"
+            class="btn-neutral w-full"
+            :disabled="auth.loggingIn"
+            @click="passkeyLogin"
+          >
+            <font-awesome-icon :icon="['fad', 'user-key']" /> Sign in with a passkey
+          </button>
+        </div>
       </template>
-      <p v-if="auth.authError" class="error-msg">{{ auth.authError }}</p>
+      <p v-if="shownError" class="error-msg" role="alert">{{ shownError }}</p>
     </div>
   </div>
 </template>
@@ -153,8 +183,8 @@ function goHome(): void {
   background: color-mix(in srgb, var(--text) 15%, transparent);
 }
 
-.login-passkey {
-  width: 100%;
-  justify-content: center;
+.login-alternatives {
+  display: grid;
+  gap: 10px;
 }
 </style>

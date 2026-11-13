@@ -14,6 +14,7 @@ func TestRedactSensitivePath(t *testing.T) {
 		"/api/v1/stamp-cards/lookup",    // the lookup sits where a card's token would
 		"/api/v1/settings",              // ordinary route
 		"/api/v1/fonts/pub/kit.css",     // font kit (not a token file)
+		"/api/v1/auth/discord/callback", // Discord's callback (its code is a query)
 		"/",                             // root
 	}
 	for _, p := range unchanged {
@@ -49,8 +50,9 @@ func TestRedactSensitivePath(t *testing.T) {
 	for _, p := range []string{
 		"/api/v1/stamp-cards/ABC/stamp",
 		"/api/v1/fonts/pub/f/XYZ",
-		"/stamp-card/DEF", // SPA referer form
-		"/garapon/GHI",    // SPA referer form
+		"/api/v1/auth/discord/invite/JKL", // an admin's Discord link
+		"/stamp-card/DEF",                 // SPA referer form
+		"/garapon/GHI",                    // SPA referer form
 	} {
 		if redactSensitivePath(p) == p {
 			t.Errorf("redactSensitivePath(%q) left the token unredacted", p)
@@ -61,6 +63,10 @@ func TestRedactSensitivePath(t *testing.T) {
 func TestRedactTokenQuery(t *testing.T) {
 	if got := redactTokenQuery("token=snp_secret&x=1"); got == "token=snp_secret&x=1" {
 		t.Errorf("token query not redacted: %q", got)
+	}
+	// Discord's authorization code, sent back to the sign-in callback.
+	if got := redactTokenQuery("code=abc123&state=xyz"); got != "code=REDACTED&state=xyz" {
+		t.Errorf("Discord's code not redacted: %q", got)
 	}
 	if got := redactTokenQuery("a=1&b=2"); got != "a=1&b=2" {
 		t.Errorf("non-token query changed: %q", got)

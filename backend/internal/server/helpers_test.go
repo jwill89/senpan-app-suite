@@ -72,6 +72,7 @@ func TestAdminMutationResource(t *testing.T) {
 		"/api/v1/raffles/9/enter",             // public sign-up - its operation tells raffles
 		"/api/v1/raffles/9/lookup",            // public search - changes nothing
 		"/api/v1/auth/login",                  // signing in
+		"/api/v1/discord-invites",             // a link shows on no page
 		"/api/v1/me/token",                    // self-service
 		"/api/v1/game/end",                    // the game's own events
 		"/api/v1/cards/all",                   // cards_changed

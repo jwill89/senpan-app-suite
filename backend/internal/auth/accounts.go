@@ -25,7 +25,7 @@ const (
 
 // Row is an account as every account query reads it: db.GetUserRow and the rows of
 // the other account queries have these fields in this order, so each converts to a
-// Row. The password hash is never among them.
+// Row. The password hash is never among them, only whether there is one.
 type Row struct {
 	ID            int64
 	Username      string
@@ -35,6 +35,7 @@ type Row struct {
 	CreatedAt     *string
 	LastLoginAt   *string
 	PasswordEpoch int64
+	HasPassword   int64
 }
 
 // User is the account a row holds.
@@ -45,6 +46,7 @@ func (r Row) User() (*model.User, error) {
 		IsAdmin:       r.IsAdmin == 1,
 		IsActive:      r.IsActive == 1,
 		PasswordEpoch: r.PasswordEpoch,
+		HasPassword:   r.HasPassword == 1,
 	}
 	if r.CreatedAt != nil {
 		u.CreatedAt = *r.CreatedAt

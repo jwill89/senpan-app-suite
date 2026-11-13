@@ -69,7 +69,7 @@ type addPasskeyInput struct {
 
 type beginPasskeyInput struct {
 	Body struct {
-		Password string `json:"password" maxLength:"1024" doc:"The account's password: adding a way to sign in asks for the one it has, so an unattended session can't add one."`
+		Password string `json:"password,omitempty" maxLength:"1024" doc:"The account's password: adding a way to sign in asks for the one it has, so an unattended session can't add one. Ignored when it has none."`
 	}
 }
 
@@ -99,7 +99,7 @@ func (h handlers) registerPasskeys(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "begin-passkey", Method: http.MethodPost, Path: "/me/passkeys/begin",
 		Summary: "Start adding a passkey", Tags: accountTags,
-		Description: "Asks for the account's password, so a session left open can't add a way in.",
+		Description: "Asks for the account's password, so a session left open can't add a way in; an account with none (made with Discord) is asked for nothing.",
 		Security:    secured, Middlewares: huma.Middlewares{h.session(api)},
 	}, h.beginPasskey)
 	huma.Register(api, huma.Operation{
@@ -111,8 +111,9 @@ func (h handlers) registerPasskeys(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "delete-passkey", Method: http.MethodDelete, Path: "/me/passkeys/{id}",
 		Summary: "Remove a passkey", Tags: accountTags, DefaultStatus: http.StatusNoContent,
-		Security: secured, Middlewares: huma.Middlewares{h.session(api)},
-		Errors: []int{http.StatusNotFound},
+		Description: "Refused (409) when it is the account's last way to sign in: no password, no other passkey and no Discord account.",
+		Security:    secured, Middlewares: huma.Middlewares{h.session(api)},
+		Errors: []int{http.StatusNotFound, http.StatusConflict},
 	}, h.deletePasskey)
 }
 
@@ -299,14 +300,44 @@ func (h handlers) addPasskey(ctx context.Context, in *addPasskeyInput) (*passkey
 }
 
 func (h handlers) deletePasskey(ctx context.Context, in *passkeyIDInput) (*struct{}, error) {
-	n, err := h.write().DeletePasskey(ctx, db.DeletePasskeyParams{ID: in.ID, UserID: Who(ctx).ID})
+	u := Who(ctx)
+	tx, q, err := h.begin(ctx)
+	if err != nil {
+		return nil, h.fail("remove a passkey", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	n, err := q.DeletePasskey(ctx, db.DeletePasskeyParams{ID: in.ID, UserID: u.ID})
 	if err != nil {
 		return nil, h.fail("remove a passkey", err)
 	}
 	if n == 0 {
 		return nil, huma.Error404NotFound("This account has no such passkey.")
 	}
+	if !u.HasPassword {
+		if last, err := lastWayIn(ctx, q, u.ID); err != nil {
+			return nil, h.fail("count an account's ways to sign in", err)
+		} else if last {
+			return nil, huma.Error409Conflict("This is the account's only way to sign in. Set a password first.")
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, h.fail("remove a passkey", err)
+	}
 	return nil, nil
+}
+
+// lastWayIn reports whether account id, which has no password, is left with no
+// passkey and no Discord account to sign in with.
+func lastWayIn(ctx context.Context, q *db.Queries, id int64) (bool, error) {
+	passkeys, err := q.CountPasskeys(ctx, id)
+	if err != nil || passkeys > 0 {
+		return false, err
+	}
+	_, err = q.GetDiscordLink(ctx, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return true, nil
+	}
+	return false, err
 }
 
 // webAuthn is the relying party for the site the request came to: its host is the

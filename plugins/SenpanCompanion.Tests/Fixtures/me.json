@@ -1,6 +1,7 @@
 {
   "$schema": "http://127.0.0.1:8080/api/v1/schemas/Me.json",
   "account": {
+    "hasPassword": true,
     "id": 4,
     "isAdmin": false,
     "permissions": ["bingo-game", "teahouse-raffles"],

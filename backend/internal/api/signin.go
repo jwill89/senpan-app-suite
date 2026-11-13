@@ -74,10 +74,11 @@ func (h handlers) signIn(ctx context.Context, in *signInInput) (*meOutput, error
 	if err != nil {
 		return nil, h.fail("read the account signing in", err)
 	}
-	// An unknown name costs the same argon2 work as a wrong password and answers the
-	// same, so the form can't be used to find out who has an account.
+	// An unknown name, or an account with no password (made with Discord), costs the
+	// same argon2 work as a wrong password and answers the same, so the form can't be
+	// used to find out who has an account.
 	valid := false
-	if u != nil {
+	if u != nil && hash != "" {
 		valid, _ = auth.Verify(in.Body.Password, hash)
 	} else {
 		auth.DummyVerify(in.Body.Password)

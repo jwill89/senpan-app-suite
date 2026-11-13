@@ -5077,6 +5077,12 @@ namespace SenpanCompanion.Api
     {
 
         /// <summary>
+        /// Whether it has a password. An account made with Discord has none until one is set; setting one, or adding a passkey, then asks for no current password.
+        /// </summary>
+        [Newtonsoft.Json.JsonProperty("hasPassword", Required = Newtonsoft.Json.Required.Always)]
+        public bool HasPassword { get; set; } = default!;
+
+        /// <summary>
         /// The account's id.
         /// </summary>
         [Newtonsoft.Json.JsonProperty("id", Required = Newtonsoft.Json.Required.Always)]
@@ -5900,10 +5906,10 @@ namespace SenpanCompanion.Api
     {
 
         /// <summary>
-        /// The account's password: adding a way to sign in asks for the one it has, so an unattended session can't add one.
+        /// The account's password: adding a way to sign in asks for the one it has, so an unattended session can't add one. Ignored when it has none.
         /// </summary>
-        [Newtonsoft.Json.JsonProperty("password", Required = Newtonsoft.Json.Required.Always)]
-        public string Password { get; set; } = default!;
+        [Newtonsoft.Json.JsonProperty("password", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public string? Password { get; set; } = default!;
 
     }
 
@@ -6457,10 +6463,10 @@ namespace SenpanCompanion.Api
     {
 
         /// <summary>
-        /// The account's password now.
+        /// The account's password now; ignored when it has none.
         /// </summary>
-        [Newtonsoft.Json.JsonProperty("currentPassword", Required = Newtonsoft.Json.Required.Always)]
-        public string CurrentPassword { get; set; } = default!;
+        [Newtonsoft.Json.JsonProperty("currentPassword", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public string? CurrentPassword { get; set; } = default!;
 
         /// <summary>
         /// The password to change it to, at least 8 characters.
@@ -6475,10 +6481,28 @@ namespace SenpanCompanion.Api
     {
 
         /// <summary>
+        /// Whether signing in with Discord is set up (GET /auth/discord/start).
+        /// </summary>
+        [Newtonsoft.Json.JsonProperty("discordSignIn", Required = Newtonsoft.Json.Required.Always)]
+        public bool DiscordSignIn { get; set; } = default!;
+
+        /// <summary>
         /// The Cloudflare Turnstile site key the sign-in, sign-up and public entry forms show; empty when the bot check is off.
         /// </summary>
         [Newtonsoft.Json.JsonProperty("turnstileSiteKey", Required = Newtonsoft.Json.Required.Always)]
         public string TurnstileSiteKey { get; set; } = default!;
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class CreateDiscordInviteInputBody
+    {
+
+        /// <summary>
+        /// The account the link links a Discord account to; it replaces a link made for it before, and works for a day. Left out, the link signs someone up instead: it makes an active account with no permissions, named after their Discord account, and works for a week.
+        /// </summary>
+        [Newtonsoft.Json.JsonProperty("userId", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public long? UserId { get; set; } = default!;
 
     }
 
@@ -6491,6 +6515,48 @@ namespace SenpanCompanion.Api
         /// </summary>
         [Newtonsoft.Json.JsonProperty("deleted", Required = Newtonsoft.Json.Required.Always)]
         public long Deleted { get; set; } = default!;
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class DiscordAccount
+    {
+
+        /// <summary>
+        /// The name it shows on Discord, as of its last sign-in here; empty when it has none.
+        /// </summary>
+        [Newtonsoft.Json.JsonProperty("displayName", Required = Newtonsoft.Json.Required.Always)]
+        public string DisplayName { get; set; } = default!;
+
+        /// <summary>
+        /// When it was linked, RFC 3339 in UTC.
+        /// </summary>
+        [Newtonsoft.Json.JsonProperty("linkedAt", Required = Newtonsoft.Json.Required.Always)]
+        public string LinkedAt { get; set; } = default!;
+
+        /// <summary>
+        /// Its Discord username, as of its last sign-in here.
+        /// </summary>
+        [Newtonsoft.Json.JsonProperty("username", Required = Newtonsoft.Json.Required.Always)]
+        public string Username { get; set; } = default!;
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class DiscordInvite
+    {
+
+        /// <summary>
+        /// When it stops working, RFC 3339 in UTC.
+        /// </summary>
+        [Newtonsoft.Json.JsonProperty("expiresAt", Required = Newtonsoft.Json.Required.Always)]
+        public string ExpiresAt { get; set; } = default!;
+
+        /// <summary>
+        /// The link. Shown this once; it works once, for whoever opens it, so send it only to the person it is for.
+        /// </summary>
+        [Newtonsoft.Json.JsonProperty("url", Required = Newtonsoft.Json.Required.Always)]
+        public string Url { get; set; } = default!;
 
     }
 
@@ -13570,6 +13636,18 @@ namespace SenpanCompanion.Api
         public string? CreatedAt { get; set; } = default!;
 
         /// <summary>
+        /// The Discord account it signs in with, or null when none is linked.
+        /// </summary>
+        [Newtonsoft.Json.JsonProperty("discord", Required = Newtonsoft.Json.Required.AllowNull)]
+        public DiscordAccount? Discord { get; set; } = default!;
+
+        /// <summary>
+        /// Whether it has a password. An account made with Discord has none until one is set; setting one, or adding a passkey, then asks for no current password.
+        /// </summary>
+        [Newtonsoft.Json.JsonProperty("hasPassword", Required = Newtonsoft.Json.Required.Always)]
+        public bool HasPassword { get; set; } = default!;
+
+        /// <summary>
         /// The account's id.
         /// </summary>
         [Newtonsoft.Json.JsonProperty("id", Required = Newtonsoft.Json.Required.Always)]
@@ -13634,6 +13712,12 @@ namespace SenpanCompanion.Api
         /// </summary>
         [Newtonsoft.Json.JsonProperty("permissions", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public System.Collections.Generic.IReadOnlyList<string>? Permissions { get; set; } = default!;
+
+        /// <summary>
+        /// A new username. Its sessions, token, passkeys and Discord account carry on.
+        /// </summary>
+        [Newtonsoft.Json.JsonProperty("username", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public string? Username { get; set; } = default!;
 
     }
 

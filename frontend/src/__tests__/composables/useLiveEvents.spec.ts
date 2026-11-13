@@ -103,8 +103,16 @@ function send(e: { type: string; [field: string]: unknown }) {
 
 function signIn(account: Partial<Account>) {
   const auth = useAuthStore()
-  auth.user = { id: 1, username: 'staff', isAdmin: false, permissions: [], ...account }
-  auth.isAdmin = auth.user.isAdmin
+  const user: Account = {
+    id: 1,
+    username: 'staff',
+    isAdmin: false,
+    permissions: [],
+    hasPassword: true,
+    ...account,
+  }
+  auth.user = user
+  auth.isAdmin = user.isAdmin
 }
 
 beforeEach(() => {

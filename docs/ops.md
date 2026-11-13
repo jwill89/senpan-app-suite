@@ -86,7 +86,11 @@ The unit holds no secret. The service's secrets are the variables of `/etc/<serv
 APPSUITE_SESSION_SECRET=<a long random string>
 APPSUITE_TURNSTILE_SECRET=<Cloudflare Turnstile secret key>
 APPSUITE_TURNSTILE_SITEKEY=<Cloudflare Turnstile public site key>
+DISCORD_APPLICATION_ID=<the Discord application's id, its OAuth client id>
+DISCORD_CLIENT_SECRET=<the Discord application's OAuth client secret>
 ```
+
+Signing in with Discord is on when both `DISCORD_*` variables are set, and the startup log says which (`Discord sign-in enabled`, or a warning that it is off). The application must list the sign-in's redirect URL, `https://apps.senpan.cafe/api/v1/auth/discord/callback`, under OAuth2 -> Redirects in the Discord Developer Portal, exactly; a dev server behind Vite's proxy needs `http://localhost:8080/api/v1/auth/discord/callback` there too. The file may also hold the application's `DISCORD_PUBLIC_KEY` and the bot's `DISCORD_BOT_TOKEN`, which nothing reads yet.
 
 Create it on the host, as root, so the values are typed there and nowhere else (`openssl rand -hex 32` makes the session secret): `install -d -m 755 /etc/senpan`, then `( umask 077; cat > /etc/senpan/senpan.env )`, paste the lines and end with Ctrl-D, then `chown root:root /etc/senpan/senpan.env && chmod 600 /etc/senpan/senpan.env`. `APPSUITE_CORS_ORIGINS`, for cross-origin browser clients (normally unset: the app is same-origin), goes in the same file. A change to the file takes effect on `systemctl restart senpan`.
 
@@ -266,6 +270,10 @@ Cloudflare. Lock the origin to Cloudflare's IP ranges (or Authenticated Origin
 Pulls) if you need it to be tamper-proof. Capability tokens in request
 paths/queries/Referer are redacted to a short correlation hash before logging, so
 draw/stamp/font links never appear verbatim in the log or the viewer.
+
+## Upgrading to 5.4.0
+
+5.4.0 adds signing in with Discord, which reads `DISCORD_APPLICATION_ID` and `DISCORD_CLIENT_SECRET` from [the env file](#the-env-file) (on the live droplet since 2026-11-13). Before the deploy, in the Discord Developer Portal, add `https://apps.senpan.cafe/api/v1/auth/discord/callback` to the application's OAuth2 -> Redirects. Without it Discord refuses every sign-in with an invalid `redirect_uri`. The migration (v76) adds two tables and changes no row. After the deploy, `journalctl -u senpan | grep "Discord sign-in"` says it is enabled, and the sign-in page shows **Sign in with Discord**.
 
 ## Upgrading to 5.3.0
 

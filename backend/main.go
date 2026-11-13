@@ -112,6 +112,11 @@ func run() error {
 		tsSiteKey = os.Getenv("APPSUITE_TURNSTILE_SITEKEY")
 	}
 
+	// Signing in with Discord: the Discord application's id and OAuth client secret,
+	// from the env file. Off unless both are set.
+	discordClientID := strings.TrimSpace(os.Getenv("DISCORD_APPLICATION_ID"))
+	discordClientSecret := strings.TrimSpace(os.Getenv("DISCORD_CLIENT_SECRET"))
+
 	// The SPA, from the build embedded at compile time. A binary built without it
 	// stops here rather than serving a site with no pages.
 	site, err := web.New(web.Dist())
@@ -123,6 +128,7 @@ func run() error {
 	srv := server.New(ctx, db, hub, *dataDir, allowedOrigins)
 	srv.SetSite(site)
 	srv.SetTurnstile(tsSecret, tsSiteKey)
+	srv.SetDiscordSignIn(discordClientID, discordClientSecret)
 	srv.SetLogFile(*logFile) // GET /api/v1/logs tails this file
 
 	// Outbound-Discord safety valves. A development server is normally pointed at a
@@ -153,6 +159,11 @@ func run() error {
 		slog.Info("Cloudflare Turnstile bot check enabled on the login form")
 	} else {
 		slog.Warn("Cloudflare Turnstile not configured; login bot check disabled")
+	}
+	if discordClientID != "" && discordClientSecret != "" {
+		slog.Info("Discord sign-in enabled")
+	} else {
+		slog.Warn("Discord sign-in not configured (DISCORD_APPLICATION_ID, DISCORD_CLIENT_SECRET); it is off")
 	}
 
 	httpServer := &http.Server{

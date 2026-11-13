@@ -1,13 +1,18 @@
 <script setup lang="ts">
 /**
  * Admin Users tab (System section) - manages accounts and their per-page
- * permissions. Lists accounts in the shared DataTable with status/role badges,
- * and per-row actions to activate/deactivate, toggle admin, edit permissions,
- * set a password, and delete.
+ * permissions. Lists accounts in the shared DataTable with status/role badges and
+ * the Discord account each signs in with, and per-row actions to rename,
+ * activate/deactivate, toggle admin, edit permissions, set a password, link or
+ * unlink Discord, and delete.
+ *
+ * Discord links: "Discord Sign-up Link" makes a link for someone to make an
+ * account with their Discord account; an account's Discord dialog makes a link
+ * that links whoever opens it to that account. Each is shown once, when made.
  *
  * The seeded "admin" account is protected: its modify actions are hidden here
- * (it changes its own password via the topbar "Change Password" dialog), and the
- * backend rejects any such change too.
+ * (it changes its own password via the topbar "Change Password" dialog, and only
+ * it links its own Discord account), and the backend rejects any such change too.
  */
 import { computed, onMounted, ref } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
@@ -19,12 +24,14 @@ import ModalOverlay from '@/components/common/ModalOverlay.vue'
 import DataTable, { type DataColumn } from '@/components/common/ui/DataTable.vue'
 import { useUsersStore, PROTECTED_ADMIN } from '@/stores/users'
 import { useUiStore } from '@/stores/ui'
+import { useAuthStore } from '@/stores/auth'
 import { ADMIN_PERMISSIONS } from '@/lib/constants'
 import { formatServerTimestamp } from '@/lib/datetime'
-import type { User } from '@/api/client'
+import type { DiscordAccount, DiscordInvite, User } from '@/api/client'
 
 const users = useUsersStore()
 const ui = useUiStore()
+const auth = useAuthStore()
 
 /** Free-text filter on username. */
 const search = ref('')
@@ -44,6 +51,7 @@ async function copyRegistrationLink(): Promise<void> {
 
 const userColumns: DataColumn[] = [
   { key: 'username', label: 'Username', sortable: false },
+  { key: 'discord', label: 'Discord', sortable: false },
   { key: 'status', label: 'Status' },
   { key: 'role', label: 'Role' },
   { key: 'permissions', label: 'Permissions' },
@@ -54,6 +62,19 @@ const userColumns: DataColumn[] = [
 /** Whether a user is the protected bootstrap admin (no destructive actions). */
 function isProtected(u: User): boolean {
   return u.username === PROTECTED_ADMIN
+}
+
+/** Whether an account's Discord dialog is offered: the protected admin's to itself only. */
+function canManageDiscord(u: User): boolean {
+  if (isProtected(u) && auth.user?.username !== PROTECTED_ADMIN) {
+    return false
+  }
+  return users.discordSignIn || !!u.discord
+}
+
+/** A Discord account as the table shows it: its display name, then its username. */
+function discordName(d: DiscordAccount): string {
+  return d.displayName ? `${d.displayName} (@${d.username})` : `@${d.username}`
 }
 
 const displayedUsers = computed(() => {
@@ -106,6 +127,7 @@ function permissionSummary(u: User): string {
 // buttons (Edit + Delete) instead of five. Changes are collected as a draft and
 // applied together on Save (users.updateUser sends only what changed).
 const editUserId = ref<number | null>(null)
+const editUsername = ref('')
 const editActive = ref(false)
 const editAdmin = ref(false)
 const permDraft = ref<Set<string>>(new Set())
@@ -119,6 +141,7 @@ const editUser = computed(() => users.users.find((u) => u.id === editUserId.valu
 
 function openEdit(u: User): void {
   editUserId.value = u.id
+  editUsername.value = u.username
   editActive.value = u.isActive
   editAdmin.value = u.isAdmin
   permDraft.value = new Set(u.permissions)
@@ -143,6 +166,10 @@ async function saveUser(): Promise<void> {
   if (editUserId.value === null) {
     return
   }
+  if (!editUsername.value.trim()) {
+    editError.value = 'A username needs more than spaces.'
+    return
+  }
   // Password is optional; validate only when one is being set.
   if (editPassword.value || editConfirm.value) {
     if (editPassword.value.length < 8) {
@@ -157,7 +184,12 @@ async function saveUser(): Promise<void> {
   savingUser.value = true
   const ok = await users.updateUser(
     editUserId.value,
-    { isActive: editActive.value, isAdmin: editAdmin.value, permissions: [...permDraft.value] },
+    {
+      username: editUsername.value,
+      isActive: editActive.value,
+      isAdmin: editAdmin.value,
+      permissions: [...permDraft.value],
+    },
     editPassword.value || undefined,
   )
   savingUser.value = false
@@ -166,7 +198,67 @@ async function saveUser(): Promise<void> {
   }
 }
 
-onMounted(() => users.loadUsers())
+// -- Discord dialog -----------------------------------------------------------
+// With an account: the Discord account linked to it, a link that links one, and
+// unlinking. Without: a link for someone to sign up with Discord. A link is shown
+// once, when it is made; unlinking asks again inside the dialog.
+const discordOpen = ref(false)
+const discordUserId = ref<number | null>(null)
+const madeLink = ref<DiscordInvite | null>(null)
+const makingLink = ref(false)
+const confirmUnlink = ref(false)
+const unlinking = ref(false)
+
+/** The account the dialog is for (live from the store), null for a sign-up link. */
+const discordUser = computed(() =>
+  discordUserId.value === null
+    ? null
+    : (users.users.find((u) => u.id === discordUserId.value) ?? null),
+)
+
+function openDiscord(u: User | null): void {
+  discordUserId.value = u?.id ?? null
+  madeLink.value = null
+  confirmUnlink.value = false
+  discordOpen.value = true
+}
+
+function closeDiscord(): void {
+  discordOpen.value = false
+}
+
+async function makeLink(): Promise<void> {
+  makingLink.value = true
+  madeLink.value = await users.createDiscordInvite(discordUserId.value ?? undefined)
+  makingLink.value = false
+}
+
+async function copyLink(): Promise<void> {
+  if (!madeLink.value) {
+    return
+  }
+  try {
+    await navigator.clipboard.writeText(madeLink.value.url)
+    ui.notify('Link copied to clipboard', 'success')
+  } catch {
+    ui.notify('Copy the link from the box', 'info')
+  }
+}
+
+async function unlink(): Promise<void> {
+  if (discordUserId.value === null) {
+    return
+  }
+  unlinking.value = true
+  await users.unlinkDiscord(discordUserId.value)
+  unlinking.value = false
+  confirmUnlink.value = false
+}
+
+onMounted(() => {
+  void users.loadUsers()
+  void users.loadDiscordSignIn()
+})
 </script>
 
 <template>
@@ -182,12 +274,22 @@ onMounted(() => users.loadUsers())
         >
           <font-awesome-icon :icon="['fas', 'copy']" /> Copy Registration Link
         </button>
+        <button
+          v-if="users.discordSignIn"
+          type="button"
+          class="btn-action btn-sm"
+          title="Make a one-time link for someone to sign up with their Discord account"
+          @click="openDiscord(null)"
+        >
+          <font-awesome-icon :icon="['fab', 'discord']" /> Discord Sign-up Link
+        </button>
       </div>
 
       <p class="text-muted text-xs mb-12">
-        Accounts sign in with a username and password. New sign-ups (via the shared registration
-        link) start <strong>inactive</strong> - activate one here and grant the pages it should
-        access. Admins have full access to everything.
+        Accounts sign in with a username and password, a passkey, or a linked Discord account. New
+        sign-ups via the shared registration link start <strong>inactive</strong> - activate one
+        here and grant the pages it should access. A Discord sign-up link makes an active account
+        with no pages until you grant them. Admins have full access to everything.
       </p>
 
       <SearchInput
@@ -213,6 +315,12 @@ onMounted(() => users.loadUsers())
         <template #cell-username="{ row }">
           <span class="code-highlight">{{ row.username }}</span>
         </template>
+        <template #cell-discord="{ row }">
+          <span v-if="row.discord">
+            <font-awesome-icon :icon="['fab', 'discord']" /> {{ discordName(row.discord) }}
+          </span>
+          <span v-else class="text-muted">Not linked</span>
+        </template>
         <template #cell-status="{ row }">
           <span :class="row.isActive ? 'badge-active' : 'badge-inactive'">
             {{ row.isActive ? 'Active' : 'Inactive' }}
@@ -231,6 +339,15 @@ onMounted(() => users.loadUsers())
         </template>
         <template #cell-actions="{ row }">
           <div class="row-actions">
+            <button
+              v-if="canManageDiscord(row)"
+              type="button"
+              class="btn-view btn-sm"
+              title="Link or unlink this account's Discord account"
+              @click="openDiscord(row)"
+            >
+              <font-awesome-icon :icon="['fab', 'discord']" /> Discord
+            </button>
             <template v-if="isProtected(row)">
               <span class="text-muted text-xs">Protected account</span>
             </template>
@@ -276,6 +393,15 @@ onMounted(() => users.loadUsers())
 
       <!-- Account -->
       <div class="edit-section">
+        <FormField label="Username" html-for="edit-username">
+          <input
+            id="edit-username"
+            v-model="editUsername"
+            type="text"
+            maxlength="32"
+            autocomplete="off"
+          />
+        </FormField>
         <label class="perm-option">
           <input v-model="editActive" type="checkbox" /> Account active
         </label>
@@ -337,6 +463,121 @@ onMounted(() => users.loadUsers())
           <template v-else>Save Changes</template>
         </button>
       </div>
+    </ModalOverlay>
+
+    <!-- Discord: an account's link and unlink, or a sign-up link -->
+    <ModalOverlay
+      v-if="discordOpen"
+      aria-label="Discord sign-in"
+      box-style="max-width: 560px"
+      @close="closeDiscord"
+    >
+      <h3>
+        <font-awesome-icon :icon="['fab', 'discord']" />
+        <template v-if="discordUser">
+          Discord - <span class="code-highlight">{{ discordUser.username }}</span>
+        </template>
+        <template v-else>Sign Up with Discord</template>
+      </h3>
+
+      <!-- A link just made: shown this once. -->
+      <template v-if="madeLink">
+        <FormField label="The link - copy it now, it won't be shown again" html-for="discord-link">
+          <div class="copy-field">
+            <input
+              id="discord-link"
+              class="copy-field-input"
+              :value="madeLink.url"
+              readonly
+              @focus="($event.target as HTMLInputElement).select()"
+            />
+            <button type="button" class="btn-neutral" @click="copyLink">
+              <font-awesome-icon :icon="['fas', 'copy']" /> Copy
+            </button>
+          </div>
+        </FormField>
+        <p class="text-muted text-xs mb-12">
+          It works once, until {{ formatServerTimestamp(madeLink.expiresAt) }}. Whoever opens it
+          {{ discordUser ? 'signs in to this account' : 'gets an account' }}, so send it only to the
+          person it is for.
+        </p>
+        <div class="modal-actions">
+          <button type="button" class="btn-action" @click="closeDiscord">Done</button>
+        </div>
+      </template>
+
+      <!-- An account: its Discord account, a link to link one, unlinking. -->
+      <template v-else-if="discordUser">
+        <p v-if="discordUser.discord" class="mb-12">
+          Linked to <strong>{{ discordName(discordUser.discord) }}</strong> since
+          {{ formatServerTimestamp(discordUser.discord.linkedAt) }}.
+        </p>
+        <p v-else class="text-muted mb-12">No Discord account is linked.</p>
+        <p v-if="confirmUnlink && discordUser.discord" class="mb-12">
+          Unlink <strong>{{ discordName(discordUser.discord) }}</strong>? This account will no
+          longer sign in with Discord.
+        </p>
+        <p v-else-if="users.discordSignIn" class="text-muted text-xs mb-12">
+          A link lets the person who uses this account link their Discord account to it and sign in
+          with Discord. Whoever opens it is signed in to
+          <strong>{{ discordUser.username }}</strong>, so send it only to them. It works once, for a
+          day, and replaces a link made before.
+        </p>
+        <div class="modal-actions">
+          <template v-if="confirmUnlink && discordUser.discord">
+            <button
+              type="button"
+              class="btn-neutral"
+              :disabled="unlinking"
+              @click="confirmUnlink = false"
+            >
+              Keep It
+            </button>
+            <button type="button" class="btn-danger" :disabled="unlinking" @click="unlink">
+              <LoadingSpinner v-if="unlinking" label="Unlinking..." />
+              <template v-else>Unlink</template>
+            </button>
+          </template>
+          <template v-else>
+            <button type="button" class="btn-neutral" @click="closeDiscord">Close</button>
+            <button
+              v-if="discordUser.discord"
+              type="button"
+              class="btn-danger"
+              @click="confirmUnlink = true"
+            >
+              Unlink
+            </button>
+            <button
+              v-if="users.discordSignIn"
+              type="button"
+              class="btn-action"
+              :disabled="makingLink"
+              @click="makeLink"
+            >
+              <LoadingSpinner v-if="makingLink" label="Making..." />
+              <template v-else>Make Link</template>
+            </button>
+          </template>
+        </div>
+      </template>
+
+      <!-- A sign-up link. -->
+      <template v-else>
+        <p class="text-muted mb-12">
+          A link for someone to make an account with their Discord account and sign in with it. The
+          account is active, named after their Discord username (rename it under Edit), with no
+          pages until you grant them. The link works once, for a week, so send it only to the person
+          it is for.
+        </p>
+        <div class="modal-actions">
+          <button type="button" class="btn-neutral" @click="closeDiscord">Cancel</button>
+          <button type="button" class="btn-action" :disabled="makingLink" @click="makeLink">
+            <LoadingSpinner v-if="makingLink" label="Making..." />
+            <template v-else>Make Link</template>
+          </button>
+        </div>
+      </template>
     </ModalOverlay>
   </div>
 </template>

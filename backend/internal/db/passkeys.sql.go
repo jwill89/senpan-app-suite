@@ -9,6 +9,17 @@ import (
 	"context"
 )
 
+const countPasskeys = `-- name: CountPasskeys :one
+SELECT COUNT(*) FROM user_passkeys WHERE user_id = ?
+`
+
+func (q *Queries) CountPasskeys(ctx context.Context, userID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countPasskeys, userID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createPasskey = `-- name: CreatePasskey :one
 
 INSERT INTO user_passkeys (user_id, credential_id, credential, name) VALUES (?, ?, ?, ?)
